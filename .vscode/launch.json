@@ -1,0 +1,45 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Server",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-server",
+      "program": "${workspaceFolder}/InkAndRealm.Server/bin/Debug/net8.0/InkAndRealm.Server.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/InkAndRealm.Server",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    {
+      "name": "Launch Client",
+      "type": "blazorwasm",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/InkAndRealm.Client"
+    },
+    {
+      "name": "Launch Both (Server + Client)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-all",
+      "program": "${workspaceFolder}/InkAndRealm.Server/bin/Debug/net8.0/InkAndRealm.Server.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/InkAndRealm.Server",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  ]
+}
