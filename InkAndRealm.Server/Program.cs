@@ -1,3 +1,6 @@
+using InkAndRealm.Server.Data;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -7,6 +10,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen();
+builder.Services.AddDbContext<DemoMapContext>(options =>
+    options.UseInMemoryDatabase("InkAndRealmDemo"));
 
 var app = builder.Build();
 
