@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("InkAndRealm.Shared")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2fe31c932ee9558fc4b04afb9a9133f2052358f2")]
 [assembly: System.Reflection.AssemblyProductAttribute("InkAndRealm.Shared")]
 [assembly: System.Reflection.AssemblyTitleAttribute("InkAndRealm.Shared")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

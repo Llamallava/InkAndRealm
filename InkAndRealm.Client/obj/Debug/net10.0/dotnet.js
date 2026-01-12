@@ -5,7 +5,7 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
   "mainAssemblyName": "InkAndRealm.Client",
   "applicationEnvironment": "Development",
   "resources": {
-    "hash": "sha256-E+sMmz0k10oaeATcZvo8QBW22dGgqeLxD0zOULkpoOw=",
+    "hash": "sha256-VO+IRKEnaOjwDEBatOsVk2IGiOklYcqdGvCFOAx9Myg=",
     "jsModuleNative": [
       {
         "name": "dotnet.native.cs8mcre4gh.js"
@@ -1054,25 +1054,25 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
       },
       {
         "virtualPath": "InkAndRealm.Shared.wasm",
-        "name": "InkAndRealm.Shared.q8umgwksnz.wasm",
-        "integrity": "sha256-mhL+zweADgsf6qR+ba5eBYk0PFO0RrvPmbEDziA33hg="
+        "name": "InkAndRealm.Shared.0a72ecu0q9.wasm",
+        "integrity": "sha256-WO9ZEH3EkbIurQmxY7IFPBEwC1CazZ9gSSgaVh51MfY="
       },
       {
         "virtualPath": "InkAndRealm.Client.wasm",
-        "name": "InkAndRealm.Client.ewazez1gbh.wasm",
-        "integrity": "sha256-7mu2lVqmWX91NOUbE8fxrjnGUJCczmH+JEXgoLl/k3g="
+        "name": "InkAndRealm.Client.jfvvn9d8xd.wasm",
+        "integrity": "sha256-37v+iK+umVccT5qalqGa6OA/5OS9GMNJU4Egn/zo2JQ="
       }
     ],
     "pdb": [
       {
         "virtualPath": "InkAndRealm.Shared.pdb",
-        "name": "InkAndRealm.Shared.2qjd4g3meh.pdb",
-        "integrity": "sha256-Ghkzz0+wRIYidBfXqVozWc14pkT46rg2SeKAvAdsOsU="
+        "name": "InkAndRealm.Shared.ymeflp92d7.pdb",
+        "integrity": "sha256-2kDM44TPTKcXltkn/EhsPEXHKUHckThGuh100WbyxOA="
       },
       {
         "virtualPath": "InkAndRealm.Client.pdb",
-        "name": "InkAndRealm.Client.h698ywb2b4.pdb",
-        "integrity": "sha256-efKOoyV9pYMErVyeoDHLUdnsQOh13w7GOx2+crlZG38="
+        "name": "InkAndRealm.Client.avwx4ef97h.pdb",
+        "integrity": "sha256-ptDgqR3uzA1/Cp4Pc7B1Esxdlg0VbYrp8C8QTLE6eOQ="
       }
     ],
     "libraryInitializers": [

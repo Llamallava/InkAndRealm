@@ -1,8 +1,4 @@
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\InkAndRealm.Client.runtimeconfig.json
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.ewazez1gbh.wasm
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.h698ywb2b4.pdb
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.2qjd4g3meh.pdb
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.q8umgwksnz.wasm
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.AspNetCore.Authorization.mrojqw2yhh.wasm
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.AspNetCore.Components.5yorhp2rya.wasm
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.AspNetCore.Components.Authorization.7ilgpiasal.wasm
@@ -209,7 +205,6 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\w
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\dotnet.native.muve7a13r4.wasm
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\dotnet.runtime.0j6ezsi0n0.js
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\dotnet.runtime.js.map
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\dotnet.wgrxqdzr8n.js
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\icudt_CJK.tjcz0u77k5.dat
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\icudt_EFIGS.tptq2av103.dat
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\icudt_no_CJK.lfu7j35m59.dat
@@ -244,7 +239,6 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\w
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Runtime.Serialization.Xml.v8gymdawqg.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\blazor.webassembly.66stpp682q.js.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.ComponentModel.DataAnnotations.w951woxztj.wasm.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.ewazez1gbh.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.AspNetCore.Metadata.rci0o61dpz.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Net.Http.Json.f5ti54ia1a.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Diagnostics.Process.hgedtugxkh.wasm.gz
@@ -268,7 +262,6 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\w
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Security.Cryptography.OpenSsl.ml0tyz68i8.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Numerics.Vectors.tjoypuu8wa.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.Extensions.DependencyInjection.Abstractions.2omqzali0c.wasm.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.2qjd4g3meh.pdb.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.IO.Pipelines.pq56wwa14f.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.IO.Compression.ZipFile.nap78ewmdw.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.Extensions.Validation.iiwnap85de.wasm.gz
@@ -280,7 +273,6 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\w
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.ComponentModel.EventBasedAsync.xxfp6nuzvv.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Diagnostics.Debug.d3luf33vju.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Diagnostics.Tracing.d1w6x6c56c.wasm.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\dotnet.wgrxqdzr8n.js.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.AspNetCore.Components.WebAssembly.Authentication.tiukl52lgr.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Buffers.ffy4vk49sl.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.Win32.Registry.egcs66c38p.wasm.gz
@@ -337,7 +329,6 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\w
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Xml.XmlSerializer.h0uogtkh03.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.Extensions.Options.ConfigurationExtensions.fl4og0ucdr.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Transactions.3ezo8twol7.wasm.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.q8umgwksnz.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.Extensions.Configuration.Binder.fofnng4fh4.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.au65xu8d95.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Configuration.dfuzh9rwie.wasm.gz
@@ -359,7 +350,6 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\w
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Diagnostics.TextWriterTraceListener.p621ruagc5.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.Extensions.Diagnostics.Abstractions.dkgo23mh7v.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Xml.Serialization.pm5yw3aolk.wasm.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.h698ywb2b4.pdb.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Runtime.6bp69qbwkj.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\Microsoft.CSharp.aars8n89vy.wasm.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\System.Runtime.Intrinsics.bd7qf7pr2d.wasm.gz
@@ -1133,12 +1123,6 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\c
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\fvbqtt16as-{0}-tjcz0u77k5-tjcz0u77k5.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\2e8ceev7u7-{0}-tptq2av103-tptq2av103.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\mvn7vgmjic-{0}-lfu7j35m59-lfu7j35m59.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\i4kto9c6ue-{0}-q8umgwksnz-q8umgwksnz.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\4zaah81f8k-{0}-2qjd4g3meh-2qjd4g3meh.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\2m34fja8qb-{0}-ewazez1gbh-ewazez1gbh.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\mdhuguxyy5-{0}-h698ywb2b4-h698ywb2b4.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\73s83f0q9b-{0}-wgrxqdzr8n-wgrxqdzr8n.gz
-C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\e6q0kb677z-{0}-ozkvg0dgwa-ozkvg0dgwa.gz
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\staticwebassets.build.json
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\staticwebassets.build.json.cache
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\staticwebassets.development.json
@@ -1149,3 +1133,21 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\I
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\refint\InkAndRealm.Client.dll
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\InkAndRealm.Client.pdb
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\ref\InkAndRealm.Client.dll
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.0a72ecu0q9.wasm
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.ymeflp92d7.pdb
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.ymeflp92d7.pdb.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Shared.0a72ecu0q9.wasm.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\InkAndRealm.Client.sourcelink.json
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\r0pt20qot3-{0}-e0etpc6kne-e0etpc6kne.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\i4kto9c6ue-{0}-0a72ecu0q9-0a72ecu0q9.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\4zaah81f8k-{0}-ymeflp92d7-ymeflp92d7.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.avwx4ef97h.pdb
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.jfvvn9d8xd.wasm
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\dotnet.hyxznylidh.js
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.jfvvn9d8xd.wasm.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\dotnet.hyxznylidh.js.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\bin\Debug\net10.0\wwwroot\_framework\InkAndRealm.Client.avwx4ef97h.pdb.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\2m34fja8qb-{0}-jfvvn9d8xd-jfvvn9d8xd.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\mdhuguxyy5-{0}-avwx4ef97h-avwx4ef97h.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\73s83f0q9b-{0}-hyxznylidh-hyxznylidh.gz
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Client\obj\Debug\net10.0\compressed\e6q0kb677z-{0}-y2g6qk4twi-y2g6qk4twi.gz

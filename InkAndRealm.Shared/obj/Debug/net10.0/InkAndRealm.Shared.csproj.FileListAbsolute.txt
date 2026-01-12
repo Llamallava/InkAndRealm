@@ -9,3 +9,4 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\I
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\refint\InkAndRealm.Shared.dll
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.pdb
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\ref\InkAndRealm.Shared.dll
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.sourcelink.json

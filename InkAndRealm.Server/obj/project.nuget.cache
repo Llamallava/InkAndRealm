@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "rsJpuXoRSkE=",
+  "dgSpecHash": "ydXlYmSwESM=",
   "success": true,
   "projectFilePath": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Server\\InkAndRealm.Server.csproj",
   "expectedPackageFiles": [
@@ -29,6 +29,7 @@
     "C:\\Users\\Matthew\\.nuget\\packages\\microsoft.entityframeworkcore.abstractions\\10.0.1\\microsoft.entityframeworkcore.abstractions.10.0.1.nupkg.sha512",
     "C:\\Users\\Matthew\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\10.0.1\\microsoft.entityframeworkcore.analyzers.10.0.1.nupkg.sha512",
     "C:\\Users\\Matthew\\.nuget\\packages\\microsoft.entityframeworkcore.design\\10.0.1\\microsoft.entityframeworkcore.design.10.0.1.nupkg.sha512",
+    "C:\\Users\\Matthew\\.nuget\\packages\\microsoft.entityframeworkcore.inmemory\\10.0.1\\microsoft.entityframeworkcore.inmemory.10.0.1.nupkg.sha512",
     "C:\\Users\\Matthew\\.nuget\\packages\\microsoft.entityframeworkcore.relational\\10.0.1\\microsoft.entityframeworkcore.relational.10.0.1.nupkg.sha512",
     "C:\\Users\\Matthew\\.nuget\\packages\\microsoft.entityframeworkcore.sqlserver\\10.0.1\\microsoft.entityframeworkcore.sqlserver.10.0.1.nupkg.sha512",
     "C:\\Users\\Matthew\\.nuget\\packages\\microsoft.entityframeworkcore.tools\\10.0.1\\microsoft.entityframeworkcore.tools.10.0.1.nupkg.sha512",

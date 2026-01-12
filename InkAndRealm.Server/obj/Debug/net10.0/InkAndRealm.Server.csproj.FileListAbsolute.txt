@@ -219,3 +219,5 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Server\obj\Debug\net10.0\r
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Server\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Server\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Server\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Server\bin\Debug\net10.0\Microsoft.EntityFrameworkCore.InMemory.dll
+C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Server\obj\Debug\net10.0\InkAndRealm.Server.sourcelink.json
