@@ -2298,7 +2298,7 @@
       ]
     },
     "Microsoft.NET.Sdk.WebAssembly.Pack/10.0.1": {
-      "sha512": "8XSP0Wu0xpj3xr88WwW43GiklXXiM27n6V8CXk35wT1MjxCfmudQJYmLbirWiPiqU1vCIWTIczPpI40ivC3ruQ==",
+      "sha512": "5l5jXI7M1c5E9frcOkEGsfjppEeH6F3LCwfnyDE6mcYCDQCAC1S/Oh0itwYVKjXh6G4FdpxhnlMQ7g87f9mq2g==",
       "type": "package",
       "path": "microsoft.net.sdk.webassembly.pack/10.0.1",
       "hasTools": true,
@@ -2358,23 +2358,23 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\Matthew\\.nuget\\packages\\": {},
+    "C:\\Users\\User\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Client\\InkAndRealm.Client.csproj",
+      "projectUniqueName": "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Client\\InkAndRealm.Client.csproj",
       "projectName": "InkAndRealm.Client",
-      "projectPath": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Client\\InkAndRealm.Client.csproj",
-      "packagesPath": "C:\\Users\\Matthew\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Client\\obj\\",
+      "projectPath": "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Client\\InkAndRealm.Client.csproj",
+      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Client\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\Matthew\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -2390,8 +2390,8 @@
         "net10.0": {
           "targetAlias": "net10.0",
           "projectReferences": {
-            "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj": {
-              "projectPath": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj"
+            "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj": {
+              "projectPath": "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj"
             }
           }
         }
@@ -2464,12 +2464,6 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.NETCore.App.Runtime.Mono.browser-wasm",
-            "version": "[10.0.1, 10.0.1]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"

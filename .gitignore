@@ -1,0 +1,30 @@
+# Build outputs
+bin/
+obj/
+TestResults/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+
+# Rider/IntelliJ
+.idea/
+*.sln.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ASP.NET Core
+appsettings.*.json
+appsettings.Development.json
+
+# Blazor/Static web assets
+wwwroot/_framework/
+wwwroot/_content/

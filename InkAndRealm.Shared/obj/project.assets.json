@@ -8,23 +8,23 @@
     "net10.0": []
   },
   "packageFolders": {
-    "C:\\Users\\Matthew\\.nuget\\packages\\": {},
+    "C:\\Users\\User\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj",
+      "projectUniqueName": "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj",
       "projectName": "InkAndRealm.Shared",
-      "projectPath": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj",
-      "packagesPath": "C:\\Users\\Matthew\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Matthew\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\obj\\",
+      "projectPath": "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\InkAndRealm.Shared.csproj",
+      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\User\\source\\repos\\InkAndRealm\\InkAndRealm.Shared\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\Matthew\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
