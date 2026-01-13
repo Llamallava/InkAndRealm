@@ -10,8 +10,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen();
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException("Missing connection string: DefaultConnection.");
+}
+
 builder.Services.AddDbContext<DemoMapContext>(options =>
-    options.UseInMemoryDatabase("InkAndRealmDemo"));
+    options.UseSqlServer(connectionString));
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ClientCors", policy =>
@@ -23,6 +29,12 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<DemoMapContext>();
+    context.Database.EnsureCreated();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
