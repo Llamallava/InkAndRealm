@@ -9,23 +9,98 @@ public sealed class DemoMapContext : DbContext
     {
     }
 
+    public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<MapEntity> Maps => Set<MapEntity>();
-    public DbSet<TreeEntity> Trees => Set<TreeEntity>();
-}
+    public DbSet<FeatureEntity> Features => Set<FeatureEntity>();
+    public DbSet<FeaturePointEntity> FeaturePoints => Set<FeaturePointEntity>();
+    public DbSet<TownStructureEntity> TownStructures => Set<TownStructureEntity>();
+    public DbSet<FeatureRelationshipEntity> FeatureRelationships => Set<FeatureRelationshipEntity>();
 
-public sealed class MapEntity
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public List<TreeEntity> Trees { get; set; } = new();
-}
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<FeatureEntity>()
+            .HasDiscriminator<string>("FeatureType")
+            .HasValue<TitleFeatureEntity>("Title")
+            .HasValue<TreeFeatureEntity>("Tree")
+            .HasValue<HouseFeatureEntity>("House")
+            .HasValue<LandFeatureEntity>("Land")
+            .HasValue<WaterFeatureEntity>("Water")
+            .HasValue<BridgeFeatureEntity>("Bridge")
+            .HasValue<TownFeatureEntity>("Town")
+            .HasValue<CharacterFeatureEntity>("Character");
 
-public sealed class TreeEntity
-{
-    public int Id { get; set; }
-    public float X { get; set; }
-    public float Y { get; set; }
-    public string TreeType { get; set; } = "Oak";
-    public int MapEntityId { get; set; }
-    public MapEntity? Map { get; set; }
+        modelBuilder.Entity<MapEntity>()
+            .HasMany(map => map.Features)
+            .WithOne(feature => feature.Map)
+            .HasForeignKey(feature => feature.MapId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserEntity>()
+            .HasMany(user => user.Maps)
+            .WithOne(map => map.User)
+            .HasForeignKey(map => map.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<FeatureEntity>()
+            .HasMany(feature => feature.Points)
+            .WithOne(point => point.Feature)
+            .HasForeignKey(point => point.FeatureId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TownFeatureEntity>()
+            .HasMany(town => town.Structures)
+            .WithOne(structure => structure.Town)
+            .HasForeignKey(structure => structure.TownFeatureId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TreeFeatureEntity>()
+            .Property(feature => feature.TreeType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<HouseFeatureEntity>()
+            .Property(feature => feature.HouseType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<LandFeatureEntity>()
+            .Property(feature => feature.LandType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<LandFeatureEntity>()
+            .Property(feature => feature.ElevationType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<WaterFeatureEntity>()
+            .Property(feature => feature.WaterType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<BridgeFeatureEntity>()
+            .Property(feature => feature.BridgeType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<TownFeatureEntity>()
+            .Property(feature => feature.TownType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<TownStructureEntity>()
+            .Property(structure => structure.TownStructureType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<CharacterFeatureEntity>()
+            .Property(character => character.CharacterType)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<FeatureRelationshipEntity>()
+            .HasOne(relationship => relationship.SourceCharacter)
+            .WithMany(character => character.Relationships)
+            .HasForeignKey(relationship => relationship.SourceCharacterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<FeatureRelationshipEntity>()
+            .HasOne(relationship => relationship.TargetFeature)
+            .WithMany()
+            .HasForeignKey(relationship => relationship.TargetFeatureId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        base.OnModelCreating(modelBuilder);
+    }
 }

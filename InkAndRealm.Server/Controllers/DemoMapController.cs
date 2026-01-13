@@ -21,7 +21,8 @@ public sealed class DemoMapController : ControllerBase
     public async Task<ActionResult<MapDto>> GetDemoMap()
     {
         var map = await _context.Maps
-            .Include(m => m.Trees)
+            .Include(m => m.Features)
+            .ThenInclude(feature => feature.Points)
             .FirstOrDefaultAsync(m => m.Name == DemoMapName);
 
         if (map is null)
@@ -36,7 +37,8 @@ public sealed class DemoMapController : ControllerBase
     public async Task<ActionResult<MapDto>> AddTree([FromBody] TreeFeatureDto tree)
     {
         var map = await _context.Maps
-            .Include(m => m.Trees)
+            .Include(m => m.Features)
+            .ThenInclude(feature => feature.Points)
             .FirstOrDefaultAsync(m => m.Name == DemoMapName);
 
         if (map is null)
@@ -45,12 +47,21 @@ public sealed class DemoMapController : ControllerBase
             _context.Maps.Add(map);
         }
 
-        map.Trees.Add(new TreeEntity
+        var treeFeature = new TreeFeatureEntity
         {
-            X = tree.X,
-            Y = tree.Y,
-            TreeType = string.IsNullOrWhiteSpace(tree.TreeType) ? "Oak" : tree.TreeType
-        });
+            TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak,
+            Points =
+            {
+                new FeaturePointEntity
+                {
+                    X = tree.X,
+                    Y = tree.Y,
+                    SortOrder = 0
+                }
+            }
+        };
+
+        map.Features.Add(treeFeature);
 
         await _context.SaveChangesAsync();
         return Ok(ToDto(map));
@@ -62,13 +73,18 @@ public sealed class DemoMapController : ControllerBase
         {
             Id = map.Id,
             Name = map.Name,
-            Trees = map.Trees
-                .Select(tree => new TreeFeatureDto
+            Trees = map.Features
+                .OfType<TreeFeatureEntity>()
+                .Select(tree =>
                 {
-                    Id = tree.Id,
-                    X = tree.X,
-                    Y = tree.Y,
-                    TreeType = tree.TreeType
+                    var point = tree.Points.OrderBy(p => p.SortOrder).FirstOrDefault();
+                    return new TreeFeatureDto
+                    {
+                        Id = tree.Id,
+                        X = point?.X ?? 0f,
+                        Y = point?.Y ?? 0f,
+                        TreeType = tree.TreeType.ToString()
+                    };
                 })
                 .ToList()
         };

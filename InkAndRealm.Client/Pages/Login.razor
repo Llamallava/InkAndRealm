@@ -1,0 +1,91 @@
+@page "/login"
+@using InkAndRealm.Shared
+@inject HttpClient Http
+
+<h1>Account</h1>
+
+@if (currentUser is not null)
+{
+    <p>Signed in as <strong>@currentUser.Username</strong> (Id: @currentUser.UserId).</p>
+}
+
+<div class="row">
+    <div class="col-md-6">
+        <h2>Create account</h2>
+        <EditForm Model="registerRequest" OnSubmit="RegisterAsync">
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <InputText class="form-control" @bind-Value="registerRequest.Username" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText class="form-control" type="password" @bind-Value="registerRequest.Password" />
+            </div>
+            <button class="btn btn-primary" type="submit">Register</button>
+        </EditForm>
+        @if (!string.IsNullOrWhiteSpace(registerMessage))
+        {
+            <p class="mt-2">@registerMessage</p>
+        }
+    </div>
+    <div class="col-md-6">
+        <h2>Log in</h2>
+        <EditForm Model="loginRequest" OnSubmit="LoginAsync">
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <InputText class="form-control" @bind-Value="loginRequest.Username" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText class="form-control" type="password" @bind-Value="loginRequest.Password" />
+            </div>
+            <button class="btn btn-primary" type="submit">Log in</button>
+        </EditForm>
+        @if (!string.IsNullOrWhiteSpace(loginMessage))
+        {
+            <p class="mt-2">@loginMessage</p>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly RegisterRequest registerRequest = new();
+    private readonly LoginRequest loginRequest = new();
+    private string? registerMessage;
+    private string? loginMessage;
+    private AuthResponse? currentUser;
+
+    private async Task RegisterAsync()
+    {
+        registerMessage = null;
+        loginMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/auth/register", registerRequest);
+        if (response.IsSuccessStatusCode)
+        {
+            currentUser = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            registerMessage = currentUser is null ? "Registration succeeded." : $"Registered as {currentUser.Username}.";
+            registerRequest.Password = string.Empty;
+            return;
+        }
+
+        registerMessage = await response.Content.ReadAsStringAsync();
+    }
+
+    private async Task LoginAsync()
+    {
+        registerMessage = null;
+        loginMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/auth/login", loginRequest);
+        if (response.IsSuccessStatusCode)
+        {
+            currentUser = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            loginMessage = currentUser is null ? "Login succeeded." : $"Logged in as {currentUser.Username}.";
+            loginRequest.Password = string.Empty;
+            return;
+        }
+
+        loginMessage = await response.Content.ReadAsStringAsync();
+    }
+}
