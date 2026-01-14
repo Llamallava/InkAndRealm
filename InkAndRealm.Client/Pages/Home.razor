@@ -10,9 +10,9 @@
 <PageTitle>Ink & Realm Demo</PageTitle>
 
 <div class="container py-4">
-    <h1 class="mb-3">Ink & Realm: Tree Placement Demo</h1>
+    <h1 class="mb-3">Ink & Realm: Feature Placement Demo</h1>
     <p class="text-muted">
-        Click on the canvas to choose a tree location, then save it to the server.
+        Click on the canvas to choose a location, then save it to the server.
     </p>
 
     <div class="d-flex gap-3 align-items-start flex-wrap">
@@ -31,11 +31,25 @@
                 <div>@(_hasPending ? $"{_pendingX:0}, {_pendingY:0}" : "Click the canvas to select a position.")</div>
             </div>
 
+            <div class="mb-3">
+                <div><strong>Placement Type:</strong></div>
+                <div class="btn-group" role="group" aria-label="Feature placement selection">
+                    <button class="btn @( _placementType == PlacementType.Tree ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => SelectPlacement(PlacementType.Tree)">
+                        Tree
+                    </button>
+                    <button class="btn @( _placementType == PlacementType.House ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => SelectPlacement(PlacementType.House)">
+                        House
+                    </button>
+                </div>
+            </div>
+
             <div class="d-flex gap-2">
                 <button class="btn btn-primary"
                         disabled="@(!_hasPending || _isSaving || !IsLoggedIn)"
-                        @onclick="SaveTreeAsync">
-                    Save Tree
+                        @onclick="SavePlacementAsync">
+                    Save @_placementType
                 </button>
                 <button class="btn btn-outline-secondary"
                         disabled="@(_isLoading)"
@@ -55,6 +69,7 @@
 @code {
     private const string CanvasId = "map-demo-canvas";
     private List<TreeFeatureDto> _trees = new();
+    private List<HouseFeatureDto> _houses = new();
     private float _pendingX;
     private float _pendingY;
     private bool _hasPending;
@@ -62,6 +77,7 @@
     private bool _isSaving;
     private string _statusMessage = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
+    private PlacementType _placementType = PlacementType.Tree;
 
     protected override async Task OnInitializedAsync()
     {
@@ -86,7 +102,7 @@
         await DrawAsync();
     }
 
-    private async Task SaveTreeAsync()
+    private async Task SavePlacementAsync()
     {
         if (!_hasPending)
         {
@@ -100,30 +116,48 @@
         }
 
         _isSaving = true;
-        _statusMessage = "Saving tree to the server...";
+        _statusMessage = $"Saving {_placementType.ToString().ToLowerInvariant()} to the server...";
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/tree", new AddTreeRequest
+        HttpResponseMessage response;
+        if (_placementType == PlacementType.House)
         {
-            UserId = UserState.CurrentUser?.UserId,
-            Tree = new TreeFeatureDto
+            response = await Http.PostAsJsonAsync("api/demo-map/house", new AddHouseRequest
             {
-                X = _pendingX,
-                Y = _pendingY,
-                TreeType = "Oak"
-            }
-        });
+                UserId = UserState.CurrentUser?.UserId,
+                House = new HouseFeatureDto
+                {
+                    X = _pendingX,
+                    Y = _pendingY,
+                    HouseType = "Cottage"
+                }
+            });
+        }
+        else
+        {
+            response = await Http.PostAsJsonAsync("api/demo-map/tree", new AddTreeRequest
+            {
+                UserId = UserState.CurrentUser?.UserId,
+                Tree = new TreeFeatureDto
+                {
+                    X = _pendingX,
+                    Y = _pendingY,
+                    TreeType = "Oak"
+                }
+            });
+        }
 
         if (response.IsSuccessStatusCode)
         {
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
             _trees = map?.Trees ?? new List<TreeFeatureDto>();
-            _statusMessage = "Tree saved and loaded from the database.";
+            _houses = map?.Houses ?? new List<HouseFeatureDto>();
+            _statusMessage = $"{_placementType} saved and loaded from the database.";
             _hasPending = false;
             await DrawAsync();
         }
         else
         {
-            _statusMessage = "Failed to save the tree.";
+            _statusMessage = $"Failed to save the {_placementType.ToString().ToLowerInvariant()}.";
         }
 
         _isSaving = false;
@@ -142,6 +176,7 @@
 
         var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
+        _houses = map?.Houses ?? new List<HouseFeatureDto>();
 
         _statusMessage = "Map loaded from the database.";
         _isLoading = false;
@@ -149,7 +184,13 @@
 
     private async Task DrawAsync()
     {
-        await JS.InvokeVoidAsync("inkAndRealmDemo.drawTrees", CanvasId, _trees, _pendingX, _pendingY, _hasPending);
+        await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", CanvasId, _trees, _houses, _pendingX, _pendingY, _hasPending, _placementType.ToString());
+    }
+
+    private async Task SelectPlacement(PlacementType placementType)
+    {
+        _placementType = placementType;
+        await DrawAsync();
     }
 
     private string GetMapUrl()
@@ -171,5 +212,11 @@
     public void Dispose()
     {
         UserState.Changed -= OnUserChanged;
+    }
+
+    private enum PlacementType
+    {
+        Tree,
+        House
     }
 }

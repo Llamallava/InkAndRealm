@@ -87,6 +87,60 @@ public sealed class DemoMapController : ControllerBase
         return Ok(ToDto(map));
     }
 
+    [HttpPost("house")]
+    public async Task<ActionResult<MapDto>> AddHouse([FromBody] AddHouseRequest request)
+    {
+        if (request.UserId is null)
+        {
+            return Unauthorized("Log in to save map changes.");
+        }
+
+        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
+        if (!userExists)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        if (request.House is null)
+        {
+            return BadRequest("House data is required.");
+        }
+
+        var map = await _context.Maps
+            .Include(m => m.Features)
+            .ThenInclude(feature => feature.Points)
+            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == request.UserId.Value);
+
+        if (map is null)
+        {
+            map = new MapEntity
+            {
+                Name = DemoMapName,
+                UserId = request.UserId.Value
+            };
+            _context.Maps.Add(map);
+        }
+
+        var houseFeature = new HouseFeatureEntity
+        {
+            HouseType = Enum.TryParse<HouseType>(request.House.HouseType, out var houseType) ? houseType : HouseType.Cottage,
+            Points =
+            {
+                new FeaturePointEntity
+                {
+                    X = request.House.X,
+                    Y = request.House.Y,
+                    SortOrder = 0
+                }
+            }
+        };
+
+        map.Features.Add(houseFeature);
+
+        await _context.SaveChangesAsync();
+        return Ok(ToDto(map));
+    }
+
     private static MapDto ToDto(MapEntity map)
     {
         return new MapDto
@@ -104,6 +158,20 @@ public sealed class DemoMapController : ControllerBase
                         X = point?.X ?? 0f,
                         Y = point?.Y ?? 0f,
                         TreeType = tree.TreeType.ToString()
+                    };
+                })
+                .ToList(),
+            Houses = map.Features
+                .OfType<HouseFeatureEntity>()
+                .Select(house =>
+                {
+                    var point = house.Points.OrderBy(p => p.SortOrder).FirstOrDefault();
+                    return new HouseFeatureDto
+                    {
+                        Id = house.Id,
+                        X = point?.X ?? 0f,
+                        Y = point?.Y ?? 0f,
+                        HouseType = house.HouseType.ToString()
                     };
                 })
                 .ToList()

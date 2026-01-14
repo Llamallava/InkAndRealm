@@ -1,5 +1,5 @@
 window.inkAndRealmDemo = {
-    drawTrees: (canvasId, trees, pendingX, pendingY, hasPending) => {
+    drawMap: (canvasId, trees, houses, pendingX, pendingY, hasPending, pendingType) => {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             return;
@@ -36,16 +36,39 @@ window.inkAndRealmDemo = {
             ctx.fill();
         };
 
+        const drawHouse = (x, y, baseColor, roofColor) => {
+            ctx.fillStyle = baseColor;
+            ctx.fillRect(x - 10, y - 2, 20, 14);
+
+            ctx.beginPath();
+            ctx.fillStyle = roofColor;
+            ctx.moveTo(x - 12, y - 2);
+            ctx.lineTo(x, y - 14);
+            ctx.lineTo(x + 12, y - 2);
+            ctx.closePath();
+            ctx.fill();
+        };
+
         if (Array.isArray(trees)) {
             trees.forEach(tree => drawTree(tree.x, tree.y, "#4a8f5a"));
         }
 
+        if (Array.isArray(houses)) {
+            houses.forEach(house => drawHouse(house.x, house.y, "#d7b894", "#7f5a3b"));
+        }
+
         if (hasPending) {
-            drawTree(pendingX, pendingY, "#7bb661");
-            ctx.strokeStyle = "#2f5d39";
-            ctx.beginPath();
-            ctx.arc(pendingX, pendingY, 14, 0, Math.PI * 2);
-            ctx.stroke();
+            if (pendingType === "House") {
+                drawHouse(pendingX, pendingY, "#e3c9a8", "#9a6a42");
+                ctx.strokeStyle = "#6a4a2d";
+                ctx.strokeRect(pendingX - 14, pendingY - 18, 28, 26);
+            } else {
+                drawTree(pendingX, pendingY, "#7bb661");
+                ctx.strokeStyle = "#2f5d39";
+                ctx.beginPath();
+                ctx.arc(pendingX, pendingY, 14, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
     }
 };
