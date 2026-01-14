@@ -10,15 +10,3 @@ C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\r
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.pdb
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\ref\InkAndRealm.Shared.dll
 C:\Users\Matthew\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.sourcelink.json
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\bin\Debug\net10.0\InkAndRealm.Shared.deps.json
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\bin\Debug\net10.0\InkAndRealm.Shared.dll
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\bin\Debug\net10.0\InkAndRealm.Shared.pdb
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.AssemblyInfoInputs.cache
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.AssemblyInfo.cs
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.csproj.CoreCompileInputs.cache
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.sourcelink.json
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.dll
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\refint\InkAndRealm.Shared.dll
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\InkAndRealm.Shared.pdb
-C:\Users\User\source\repos\InkAndRealm\InkAndRealm.Shared\obj\Debug\net10.0\ref\InkAndRealm.Shared.dll

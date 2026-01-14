@@ -1,12 +1,14 @@
 @page "/login"
 @using InkAndRealm.Shared
+@using InkAndRealm.Client.State
 @inject HttpClient Http
+@inject UserState UserState
 
 <h1>Account</h1>
 
-@if (currentUser is not null)
+@if (UserState.CurrentUser is not null)
 {
-    <p>Signed in as <strong>@currentUser.Username</strong> (Id: @currentUser.UserId).</p>
+    <p>Signed in as <strong>@UserState.CurrentUser.Username</strong> (Id: @UserState.CurrentUser.UserId).</p>
 }
 
 <div class="row">
@@ -53,8 +55,6 @@
     private readonly LoginRequest loginRequest = new();
     private string? registerMessage;
     private string? loginMessage;
-    private AuthResponse? currentUser;
-
     private async Task RegisterAsync()
     {
         registerMessage = null;
@@ -63,8 +63,9 @@
         var response = await Http.PostAsJsonAsync("api/auth/register", registerRequest);
         if (response.IsSuccessStatusCode)
         {
-            currentUser = await response.Content.ReadFromJsonAsync<AuthResponse>();
-            registerMessage = currentUser is null ? "Registration succeeded." : $"Registered as {currentUser.Username}.";
+            var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            UserState.SetUser(user);
+            registerMessage = user is null ? "Registration succeeded." : $"Registered as {user.Username}.";
             registerRequest.Password = string.Empty;
             return;
         }
@@ -80,8 +81,9 @@
         var response = await Http.PostAsJsonAsync("api/auth/login", loginRequest);
         if (response.IsSuccessStatusCode)
         {
-            currentUser = await response.Content.ReadFromJsonAsync<AuthResponse>();
-            loginMessage = currentUser is null ? "Login succeeded." : $"Logged in as {currentUser.Username}.";
+            var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            UserState.SetUser(user);
+            loginMessage = user is null ? "Login succeeded." : $"Logged in as {user.Username}.";
             loginRequest.Password = string.Empty;
             return;
         }

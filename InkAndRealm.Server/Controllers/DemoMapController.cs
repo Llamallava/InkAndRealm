@@ -18,12 +18,12 @@ public sealed class DemoMapController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<MapDto>> GetDemoMap()
+    public async Task<ActionResult<MapDto>> GetDemoMap([FromQuery] int? userId)
     {
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Name == DemoMapName);
+            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == userId);
 
         if (map is null)
         {
@@ -34,28 +34,48 @@ public sealed class DemoMapController : ControllerBase
     }
 
     [HttpPost("tree")]
-    public async Task<ActionResult<MapDto>> AddTree([FromBody] TreeFeatureDto tree)
+    public async Task<ActionResult<MapDto>> AddTree([FromBody] AddTreeRequest request)
     {
+        if (request.UserId is null)
+        {
+            return Unauthorized("Log in to save map changes.");
+        }
+
+        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
+        if (!userExists)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        if (request.Tree is null)
+        {
+            return BadRequest("Tree data is required.");
+        }
+
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Name == DemoMapName);
+            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == request.UserId.Value);
 
         if (map is null)
         {
-            map = new MapEntity { Name = DemoMapName };
+            map = new MapEntity
+            {
+                Name = DemoMapName,
+                UserId = request.UserId.Value
+            };
             _context.Maps.Add(map);
         }
 
         var treeFeature = new TreeFeatureEntity
         {
-            TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak,
+            TreeType = Enum.TryParse<TreeType>(request.Tree.TreeType, out var treeType) ? treeType : TreeType.Oak,
             Points =
             {
                 new FeaturePointEntity
                 {
-                    X = tree.X,
-                    Y = tree.Y,
+                    X = request.Tree.X,
+                    Y = request.Tree.Y,
                     SortOrder = 0
                 }
             }

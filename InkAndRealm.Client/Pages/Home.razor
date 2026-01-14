@@ -1,8 +1,11 @@
 ﻿@page "/"
 @using System.Net.Http.Json
 @using InkAndRealm.Shared
+@using InkAndRealm.Client.State
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject UserState UserState
+@implements IDisposable
 
 <PageTitle>Ink & Realm Demo</PageTitle>
 
@@ -30,7 +33,7 @@
 
             <div class="d-flex gap-2">
                 <button class="btn btn-primary"
-                        disabled="@(!_hasPending || _isSaving)"
+                        disabled="@(!_hasPending || _isSaving || !IsLoggedIn)"
                         @onclick="SaveTreeAsync">
                     Save Tree
                 </button>
@@ -58,9 +61,11 @@
     private bool _isLoading;
     private bool _isSaving;
     private string _statusMessage = string.Empty;
+    private bool IsLoggedIn => UserState.CurrentUser is not null;
 
     protected override async Task OnInitializedAsync()
     {
+        UserState.Changed += OnUserChanged;
         await LoadMapAsync();
     }
 
@@ -88,14 +93,24 @@
             return;
         }
 
+        if (!IsLoggedIn)
+        {
+            _statusMessage = "Please log in to save trees to the map.";
+            return;
+        }
+
         _isSaving = true;
         _statusMessage = "Saving tree to the server...";
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/tree", new TreeFeatureDto
+        var response = await Http.PostAsJsonAsync("api/demo-map/tree", new AddTreeRequest
         {
-            X = _pendingX,
-            Y = _pendingY,
-            TreeType = "Oak"
+            UserId = UserState.CurrentUser?.UserId,
+            Tree = new TreeFeatureDto
+            {
+                X = _pendingX,
+                Y = _pendingY,
+                TreeType = "Oak"
+            }
         });
 
         if (response.IsSuccessStatusCode)
@@ -125,7 +140,7 @@
         _isLoading = true;
         _statusMessage = "Loading map from the server...";
 
-        var map = await Http.GetFromJsonAsync<MapDto>("api/demo-map");
+        var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
 
         _statusMessage = "Map loaded from the database.";
@@ -135,5 +150,26 @@
     private async Task DrawAsync()
     {
         await JS.InvokeVoidAsync("inkAndRealmDemo.drawTrees", CanvasId, _trees, _pendingX, _pendingY, _hasPending);
+    }
+
+    private string GetMapUrl()
+    {
+        var userId = UserState.CurrentUser?.UserId;
+        return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+    }
+
+    private void OnUserChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadMapAsync();
+            await DrawAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        UserState.Changed -= OnUserChanged;
     }
 }

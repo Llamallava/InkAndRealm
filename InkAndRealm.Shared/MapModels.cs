@@ -14,3 +14,9 @@ public sealed class TreeFeatureDto
     public float Y { get; set; }
     public string TreeType { get; set; } = "Oak";
 }
+
+public sealed class AddTreeRequest
+{
+    public int? UserId { get; set; }
+    public TreeFeatureDto Tree { get; set; } = new();
+}
