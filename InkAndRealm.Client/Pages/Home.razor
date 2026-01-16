@@ -5,14 +5,15 @@
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @inject UserState UserState
+@implements IDisposable
 
 <PageTitle>Ink & Realm</PageTitle>
 
 <div class="container py-4">
     <h1 class="mb-3">Ink & Realm</h1>
-    <p class="text-muted">Start by creating a new map to enter the editor.</p>
+    <p class="text-muted">Create a new map or pick one of your existing maps.</p>
 
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 mb-3">
         <button class="btn btn-primary"
                 disabled="@(!IsLoggedIn || _isCreating)"
                 @onclick="CreateMapAsync">
@@ -22,18 +23,52 @@
 
     @if (!IsLoggedIn)
     {
-        <div class="alert alert-warning mt-3">Log in to create or edit maps.</div>
+        <div class="alert alert-warning">Log in to create or edit maps.</div>
     }
-    else if (!string.IsNullOrWhiteSpace(_statusMessage))
+    else
     {
-        <div class="alert alert-info mt-3">@_statusMessage</div>
+        @if (_isLoading)
+        {
+            <div class="alert alert-info">Loading your maps...</div>
+        }
+        else if (_maps.Count == 0)
+        {
+            <div class="alert alert-info">No maps yet. Click New Map to get started.</div>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (var map in _maps)
+                {
+                    <button type="button"
+                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            @onclick="() => OpenMap(map.Id)">
+                        <span>@map.Name</span>
+                        <span class="badge bg-secondary">Map #@map.Id</span>
+                    </button>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_statusMessage))
+        {
+            <div class="alert alert-info mt-3">@_statusMessage</div>
+        }
     }
 </div>
 
 @code {
     private bool _isCreating;
+    private bool _isLoading;
     private string _statusMessage = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
+    private List<MapSummaryDto> _maps = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserState.Changed += OnUserChanged;
+        await LoadMapsAsync();
+    }
 
     private async Task CreateMapAsync()
     {
@@ -53,23 +88,64 @@
 
         if (response.IsSuccessStatusCode)
         {
-            Navigation.NavigateTo("/map-demo");
+            var map = await response.Content.ReadFromJsonAsync<MapDto>();
+            if (map is not null)
+            {
+                Navigation.NavigateTo($"/map-demo/{map.Id}");
+                return;
+            }
+
+            await LoadMapsAsync();
             return;
         }
 
-        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
-        {
-            Navigation.NavigateTo("/map-demo");
-            return;
-        }
-        else
-        {
-            var message = await response.Content.ReadAsStringAsync();
-            _statusMessage = string.IsNullOrWhiteSpace(message)
-                ? "Failed to create a new map."
-                : message;
-        }
+        var message = await response.Content.ReadAsStringAsync();
+        _statusMessage = string.IsNullOrWhiteSpace(message)
+            ? "Failed to create a new map."
+            : message;
 
         _isCreating = false;
+    }
+
+    private async Task LoadMapsAsync()
+    {
+        if (!IsLoggedIn)
+        {
+            _maps = new List<MapSummaryDto>();
+            _statusMessage = string.Empty;
+            return;
+        }
+
+        _isLoading = true;
+        _statusMessage = string.Empty;
+
+        var maps = await Http.GetFromJsonAsync<List<MapSummaryDto>>(GetMapsUrl());
+        _maps = maps ?? new List<MapSummaryDto>();
+        _isLoading = false;
+    }
+
+    private void OpenMap(int mapId)
+    {
+        Navigation.NavigateTo($"/map-demo/{mapId}");
+    }
+
+    private string GetMapsUrl()
+    {
+        var userId = UserState.CurrentUser?.UserId;
+        return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+    }
+
+    private void OnUserChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadMapsAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        UserState.Changed -= OnUserChanged;
     }
 }

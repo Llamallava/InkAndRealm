@@ -8,6 +8,12 @@ public sealed class MapDto
     public List<HouseFeatureDto> Houses { get; set; } = new();
 }
 
+public sealed class MapSummaryDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
 public sealed class TreeFeatureDto
 {
     public int Id { get; set; }
@@ -27,12 +33,14 @@ public sealed class HouseFeatureDto
 public sealed class AddTreeRequest
 {
     public int? UserId { get; set; }
+    public int MapId { get; set; }
     public TreeFeatureDto Tree { get; set; } = new();
 }
 
 public sealed class AddHouseRequest
 {
     public int? UserId { get; set; }
+    public int MapId { get; set; }
     public HouseFeatureDto House { get; set; } = new();
 }
 

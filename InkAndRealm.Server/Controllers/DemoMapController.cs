@@ -9,7 +9,7 @@ namespace InkAndRealm.Server.Controllers;
 [Route("api/demo-map")]
 public sealed class DemoMapController : ControllerBase
 {
-    private const string DemoMapName = "Demo Map";
+    private const string DefaultMapName = "Untitled Map";
     private readonly DemoMapContext _context;
 
     public DemoMapController(DemoMapContext context)
@@ -18,11 +18,38 @@ public sealed class DemoMapController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<MapDto>> GetDemoMap([FromQuery] int? userId)
+    public async Task<ActionResult<IReadOnlyList<MapSummaryDto>>> GetMaps([FromQuery] int? userId)
     {
         if (userId is null)
         {
-            return Ok(new MapDto { Name = DemoMapName });
+            return Ok(Array.Empty<MapSummaryDto>());
+        }
+
+        var userExists = await _context.Users.AnyAsync(user => user.Id == userId.Value);
+        if (!userExists)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        var maps = await _context.Maps
+            .Where(map => map.UserId == userId.Value)
+            .OrderBy(map => map.Id)
+            .Select(map => new MapSummaryDto
+            {
+                Id = map.Id,
+                Name = map.Name
+            })
+            .ToListAsync();
+
+        return Ok(maps);
+    }
+
+    [HttpGet("{mapId:int}")]
+    public async Task<ActionResult<MapDto>> GetMap([FromRoute] int mapId, [FromQuery] int? userId)
+    {
+        if (userId is null)
+        {
+            return Unauthorized("Log in to load maps.");
         }
 
         var userExists = await _context.Users.AnyAsync(user => user.Id == userId.Value);
@@ -34,11 +61,11 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == userId);
+            .FirstOrDefaultAsync(m => m.Id == mapId && m.UserId == userId.Value);
 
         if (map is null)
         {
-            return Ok(new MapDto { Name = DemoMapName });
+            return NotFound("Map not found.");
         }
 
         return Ok(ToDto(map));
@@ -58,19 +85,9 @@ public sealed class DemoMapController : ControllerBase
             return Unauthorized("Invalid user.");
         }
 
-        var map = await _context.Maps
-            .Include(m => m.Features)
-            .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == request.UserId.Value);
-
-        if (map is not null)
+        var map = new MapEntity
         {
-            return Conflict("Map already exists.");
-        }
-
-        map = new MapEntity
-        {
-            Name = DemoMapName,
+            Name = DefaultMapName,
             UserId = request.UserId.Value
         };
 
@@ -102,11 +119,11 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == request.UserId.Value);
+            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == request.UserId.Value);
 
         if (map is null)
         {
-            return BadRequest("Create a map before saving features.");
+            return NotFound("Map not found.");
         }
 
         var treeFeature = new TreeFeatureEntity
@@ -151,11 +168,11 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == request.UserId.Value);
+            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == request.UserId.Value);
 
         if (map is null)
         {
-            return BadRequest("Create a map before saving features.");
+            return NotFound("Map not found.");
         }
 
         var houseFeature = new HouseFeatureEntity

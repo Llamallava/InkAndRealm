@@ -1,4 +1,4 @@
-@page "/map-demo"
+@page "/map-demo/{MapId:int}"
 @using System.Net.Http.Json
 @using Microsoft.AspNetCore.Components.Web
 @using InkAndRealm.Shared
@@ -87,6 +87,7 @@
     private string _statusMessage = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
+    [Parameter] public int MapId { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -139,6 +140,7 @@
             response = await Http.PostAsJsonAsync("api/demo-map/house", new AddHouseRequest
             {
                 UserId = UserState.CurrentUser?.UserId,
+                MapId = MapId,
                 House = new HouseFeatureDto
                 {
                     X = _pendingX,
@@ -152,6 +154,7 @@
             response = await Http.PostAsJsonAsync("api/demo-map/tree", new AddTreeRequest
             {
                 UserId = UserState.CurrentUser?.UserId,
+                MapId = MapId,
                 Tree = new TreeFeatureDto
                 {
                     X = _pendingX,
@@ -199,6 +202,16 @@
             return;
         }
 
+        if (MapId <= 0)
+        {
+            _trees = new List<TreeFeatureDto>();
+            _houses = new List<HouseFeatureDto>();
+            _hasMap = false;
+            _statusMessage = "Select a map from Start.";
+            _isLoading = false;
+            return;
+        }
+
         var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
@@ -224,7 +237,7 @@
     private string GetMapUrl()
     {
         var userId = UserState.CurrentUser?.UserId;
-        return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+        return userId is null ? $"api/demo-map/{MapId}" : $"api/demo-map/{MapId}?userId={userId.Value}";
     }
 
     private void OnUserChanged()
