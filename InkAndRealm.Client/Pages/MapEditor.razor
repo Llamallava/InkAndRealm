@@ -1,0 +1,255 @@
+@page "/map-demo"
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Web
+@using InkAndRealm.Shared
+@using InkAndRealm.Client.State
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject UserState UserState
+@implements IDisposable
+
+<PageTitle>Ink & Realm Map Editor</PageTitle>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h1 class="mb-0">Map Editor</h1>
+        <button class="btn btn-outline-secondary" @onclick="GoHome">
+            Back to Start
+        </button>
+    </div>
+
+    <p class="text-muted">
+        Click on the canvas to choose a location, then save it to the server.
+    </p>
+
+    <div class="d-flex gap-3 align-items-start flex-wrap">
+        <div class="border rounded shadow-sm p-2 bg-white">
+            <canvas id="@CanvasId"
+                    width="640"
+                    height="360"
+                    class="border"
+                    @onmousedown="HandleCanvasClick">
+            </canvas>
+        </div>
+
+        <div class="flex-grow-1">
+            <div class="mb-3">
+                <div><strong>Selected Position:</strong></div>
+                <div>@(_hasPending ? $"{_pendingX:0}, {_pendingY:0}" : "Click the canvas to select a position.")</div>
+            </div>
+
+            <div class="mb-3">
+                <div><strong>Placement Type:</strong></div>
+                <div class="btn-group" role="group" aria-label="Feature placement selection">
+                    <button class="btn @( _placementType == PlacementType.Tree ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => SelectPlacement(PlacementType.Tree)">
+                        Tree
+                    </button>
+                    <button class="btn @( _placementType == PlacementType.House ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => SelectPlacement(PlacementType.House)">
+                        House
+                    </button>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary"
+                        disabled="@(!_hasPending || _isSaving || !IsLoggedIn || !_hasMap)"
+                        @onclick="SavePlacementAsync">
+                    Save @_placementType
+                </button>
+                <button class="btn btn-outline-secondary"
+                        disabled="@(_isLoading)"
+                        @onclick="ReloadAsync">
+                    Reload Map
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert alert-info mt-3">@_statusMessage</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private const string CanvasId = "map-demo-canvas";
+    private List<TreeFeatureDto> _trees = new();
+    private List<HouseFeatureDto> _houses = new();
+    private float _pendingX;
+    private float _pendingY;
+    private bool _hasPending;
+    private bool _isLoading;
+    private bool _isSaving;
+    private bool _hasMap;
+    private string _statusMessage = string.Empty;
+    private bool IsLoggedIn => UserState.CurrentUser is not null;
+    private PlacementType _placementType = PlacementType.Tree;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserState.Changed += OnUserChanged;
+        await LoadMapAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await DrawAsync();
+        }
+    }
+
+    private async Task HandleCanvasClick(MouseEventArgs args)
+    {
+        _pendingX = (float)args.OffsetX;
+        _pendingY = (float)args.OffsetY;
+        _hasPending = true;
+        _statusMessage = $"Selected {_pendingX:0}, {_pendingY:0}.";
+        await DrawAsync();
+    }
+
+    private async Task SavePlacementAsync()
+    {
+        if (!_hasPending)
+        {
+            return;
+        }
+
+        if (!IsLoggedIn)
+        {
+            _statusMessage = "Please log in to save features to the map.";
+            return;
+        }
+
+        if (!_hasMap)
+        {
+            _statusMessage = "Create a new map before saving features.";
+            return;
+        }
+
+        _isSaving = true;
+        _statusMessage = $"Saving {_placementType.ToString().ToLowerInvariant()} to the server...";
+
+        HttpResponseMessage response;
+        if (_placementType == PlacementType.House)
+        {
+            response = await Http.PostAsJsonAsync("api/demo-map/house", new AddHouseRequest
+            {
+                UserId = UserState.CurrentUser?.UserId,
+                House = new HouseFeatureDto
+                {
+                    X = _pendingX,
+                    Y = _pendingY,
+                    HouseType = "Cottage"
+                }
+            });
+        }
+        else
+        {
+            response = await Http.PostAsJsonAsync("api/demo-map/tree", new AddTreeRequest
+            {
+                UserId = UserState.CurrentUser?.UserId,
+                Tree = new TreeFeatureDto
+                {
+                    X = _pendingX,
+                    Y = _pendingY,
+                    TreeType = "Oak"
+                }
+            });
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var map = await response.Content.ReadFromJsonAsync<MapDto>();
+            _trees = map?.Trees ?? new List<TreeFeatureDto>();
+            _houses = map?.Houses ?? new List<HouseFeatureDto>();
+            _statusMessage = $"{_placementType} saved and loaded from the database.";
+            _hasPending = false;
+            await DrawAsync();
+        }
+        else
+        {
+            _statusMessage = $"Failed to save the {_placementType.ToString().ToLowerInvariant()}.";
+        }
+
+        _isSaving = false;
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadMapAsync();
+        await DrawAsync();
+    }
+
+    private async Task LoadMapAsync()
+    {
+        _isLoading = true;
+        _statusMessage = "Loading map from the server...";
+
+        if (!IsLoggedIn)
+        {
+            _trees = new List<TreeFeatureDto>();
+            _houses = new List<HouseFeatureDto>();
+            _hasMap = false;
+            _statusMessage = "Log in, then return to Start to create a map.";
+            _isLoading = false;
+            return;
+        }
+
+        var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
+        _trees = map?.Trees ?? new List<TreeFeatureDto>();
+        _houses = map?.Houses ?? new List<HouseFeatureDto>();
+        _hasMap = map?.Id > 0;
+
+        _statusMessage = _hasMap
+            ? "Map loaded from the database."
+            : "No map found. Return to Start and click New Map.";
+        _isLoading = false;
+    }
+
+    private async Task DrawAsync()
+    {
+        await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", CanvasId, _trees, _houses, _pendingX, _pendingY, _hasPending, _placementType.ToString());
+    }
+
+    private async Task SelectPlacement(PlacementType placementType)
+    {
+        _placementType = placementType;
+        await DrawAsync();
+    }
+
+    private string GetMapUrl()
+    {
+        var userId = UserState.CurrentUser?.UserId;
+        return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+    }
+
+    private void OnUserChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadMapAsync();
+            await DrawAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        UserState.Changed -= OnUserChanged;
+    }
+
+    private enum PlacementType
+    {
+        Tree,
+        House
+    }
+}

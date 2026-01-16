@@ -35,3 +35,8 @@ public sealed class AddHouseRequest
     public int? UserId { get; set; }
     public HouseFeatureDto House { get; set; } = new();
 }
+
+public sealed class CreateMapRequest
+{
+    public int? UserId { get; set; }
+}

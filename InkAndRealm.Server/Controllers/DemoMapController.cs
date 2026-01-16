@@ -20,6 +20,17 @@ public sealed class DemoMapController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<MapDto>> GetDemoMap([FromQuery] int? userId)
     {
+        if (userId is null)
+        {
+            return Ok(new MapDto { Name = DemoMapName });
+        }
+
+        var userExists = await _context.Users.AnyAsync(user => user.Id == userId.Value);
+        if (!userExists)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
@@ -29,6 +40,42 @@ public sealed class DemoMapController : ControllerBase
         {
             return Ok(new MapDto { Name = DemoMapName });
         }
+
+        return Ok(ToDto(map));
+    }
+
+    [HttpPost("new")]
+    public async Task<ActionResult<MapDto>> CreateMap([FromBody] CreateMapRequest request)
+    {
+        if (request.UserId is null)
+        {
+            return Unauthorized("Log in to create a new map.");
+        }
+
+        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
+        if (!userExists)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        var map = await _context.Maps
+            .Include(m => m.Features)
+            .ThenInclude(feature => feature.Points)
+            .FirstOrDefaultAsync(m => m.Name == DemoMapName && m.UserId == request.UserId.Value);
+
+        if (map is not null)
+        {
+            return Conflict("Map already exists.");
+        }
+
+        map = new MapEntity
+        {
+            Name = DemoMapName,
+            UserId = request.UserId.Value
+        };
+
+        _context.Maps.Add(map);
+        await _context.SaveChangesAsync();
 
         return Ok(ToDto(map));
     }
@@ -59,12 +106,7 @@ public sealed class DemoMapController : ControllerBase
 
         if (map is null)
         {
-            map = new MapEntity
-            {
-                Name = DemoMapName,
-                UserId = request.UserId.Value
-            };
-            _context.Maps.Add(map);
+            return BadRequest("Create a map before saving features.");
         }
 
         var treeFeature = new TreeFeatureEntity
@@ -113,12 +155,7 @@ public sealed class DemoMapController : ControllerBase
 
         if (map is null)
         {
-            map = new MapEntity
-            {
-                Name = DemoMapName,
-                UserId = request.UserId.Value
-            };
-            _context.Maps.Add(map);
+            return BadRequest("Create a map before saving features.");
         }
 
         var houseFeature = new HouseFeatureEntity
