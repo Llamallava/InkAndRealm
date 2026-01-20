@@ -84,6 +84,53 @@ window.inkAndRealmDemo = {
             }
         };
 
+        const drawPalm = (x, y, canopyColor, trunkColor, outlineColor) => {
+            ctx.fillStyle = trunkColor;
+            ctx.fillRect(x - 2, y + 2, 4, 16);
+
+            ctx.strokeStyle = canopyColor;
+            ctx.lineWidth = 3;
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(x, y + 2);
+            ctx.lineTo(x - 12, y - 6);
+            ctx.moveTo(x, y + 2);
+            ctx.lineTo(x - 4, y - 10);
+            ctx.moveTo(x, y + 2);
+            ctx.lineTo(x + 4, y - 10);
+            ctx.moveTo(x, y + 2);
+            ctx.lineTo(x + 12, y - 6);
+            ctx.stroke();
+
+            if (outlineColor) {
+                ctx.strokeStyle = outlineColor;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(x, y - 2, 12, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        };
+
+        const treeStylePalette = {
+            Oak: { canopy: "#4a8f5a", trunk: "#5c4b32", outline: null },
+            Pine: { canopy: "#3b7a4a", trunk: "#4c3c2a", outline: null },
+            Birch: { canopy: "#6aa84f", trunk: "#c9c0b0", outline: null },
+            Palm: { canopy: "#6f9f4a", trunk: "#7a5a3a", outline: null }
+        };
+
+        const getTreePalette = (styleKey, isStaged) => {
+            const base = treeStylePalette[styleKey] || treeStylePalette.Oak;
+            if (!isStaged) {
+                return base;
+            }
+
+            return {
+                canopy: "#7bb661",
+                trunk: "#6b5436",
+                outline: "#2f5d39"
+            };
+        };
+
         const drawHouse = (x, y, baseColor, roofColor, outlineColor) => {
             ctx.fillStyle = baseColor;
             ctx.fillRect(x - 10, y - 2, 20, 14);
@@ -105,13 +152,12 @@ window.inkAndRealmDemo = {
         const pointRenderers = {
             Tree: (feature) => {
                 const isStaged = !!feature.isStaged;
-                drawTree(
-                    feature.x,
-                    feature.y,
-                    isStaged ? "#7bb661" : "#4a8f5a",
-                    isStaged ? "#6b5436" : "#5c4b32",
-                    isStaged ? "#2f5d39" : null
-                );
+                const palette = getTreePalette(feature.styleKey, isStaged);
+                if (feature.styleKey === "Palm") {
+                    drawPalm(feature.x, feature.y, palette.canopy, palette.trunk, palette.outline);
+                } else {
+                    drawTree(feature.x, feature.y, palette.canopy, palette.trunk, palette.outline);
+                }
             },
             House: (feature) => {
                 const isStaged = !!feature.isStaged;

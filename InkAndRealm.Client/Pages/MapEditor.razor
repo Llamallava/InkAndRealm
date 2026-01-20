@@ -81,6 +81,28 @@
                 </div>
             </div>
 
+            <div class="mb-3">
+                <div><strong>Style:</strong></div>
+                @if (_placementType == PlacementType.Tree)
+                {
+                    <select class="form-select" @bind="_selectedTreeStyle">
+                        @foreach (var style in TreeStyles)
+                        {
+                            <option value="@style">@style</option>
+                        }
+                    </select>
+                }
+                else if (_placementType == PlacementType.House)
+                {
+                    <select class="form-select" @bind="_selectedHouseStyle">
+                        @foreach (var style in HouseStyles)
+                        {
+                            <option value="@style">@style</option>
+                        }
+                    </select>
+                }
+            </div>
+
             <div class="d-flex gap-2">
                 <button class="btn btn-primary"
                         disabled="@(PendingCount == 0 || _isSaving || !IsLoggedIn || !_hasMap)"
@@ -117,6 +139,8 @@
     private string _statusMessage = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
+    private string _selectedTreeStyle = "Oak";
+    private string _selectedHouseStyle = "Cottage";
     private MapToolType _activeTool = MapToolType.Point;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
@@ -126,6 +150,19 @@
     private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterStrokes.Count;
     [Parameter] public int MapId { get; set; }
     private const float BrushRadius = 18f;
+    private static readonly IReadOnlyList<string> TreeStyles = new List<string>
+    {
+        "Oak",
+        "Pine",
+        "Birch",
+        "Palm"
+    };
+    private static readonly IReadOnlyList<string> HouseStyles = new List<string>
+    {
+        "Cottage",
+        "Cabin",
+        "Manor"
+    };
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
     {
         new(MapToolType.Point, "Point", "Place one feature per click.", true),
@@ -226,7 +263,7 @@
             {
                 X = _lastX,
                 Y = _lastY,
-                HouseType = "Cottage"
+                HouseType = _selectedHouseStyle
             });
             _statusMessage = $"Placed house at {_lastX:0}, {_lastY:0} (unsaved).";
         }
@@ -236,7 +273,7 @@
             {
                 X = _lastX,
                 Y = _lastY,
-                TreeType = "Oak"
+                TreeType = _selectedTreeStyle
             });
             _statusMessage = $"Placed tree at {_lastX:0}, {_lastY:0} (unsaved).";
         }

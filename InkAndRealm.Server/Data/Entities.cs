@@ -125,7 +125,8 @@ public enum TreeType
 {
     Oak,
     Pine,
-    Birch
+    Birch,
+    Palm
 }
 
 public enum HouseType
