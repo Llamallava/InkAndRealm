@@ -1,5 +1,5 @@
 window.inkAndRealmDemo = {
-    drawMap: (canvasId, trees, houses, stagedTrees, stagedHouses, areaLayers, activeStroke) => {
+    drawMap: (canvasId, renderState) => {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             return;
@@ -67,25 +67,6 @@ window.inkAndRealmDemo = {
             ctx.restore();
         };
 
-        if (Array.isArray(areaLayers)) {
-            areaLayers.forEach(layer => {
-                if (!Array.isArray(layer.strokes)) {
-                    return;
-                }
-
-                const color = getLayerColor(layer.featureType);
-                layer.strokes.forEach(stroke => {
-                    const radius = stroke.radius && stroke.radius > 0 ? stroke.radius : 18;
-                    drawStroke(stroke.points, radius, color, 0.85);
-                });
-            });
-        }
-
-        if (activeStroke && Array.isArray(activeStroke.points)) {
-            const radius = activeStroke.radius && activeStroke.radius > 0 ? activeStroke.radius : 18;
-            drawStroke(activeStroke.points, radius, "#7fb7d9", 0.6);
-        }
-
         const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {
             ctx.fillStyle = trunkColor;
             ctx.fillRect(x - 3, y + 6, 6, 10);
@@ -121,20 +102,62 @@ window.inkAndRealmDemo = {
             }
         };
 
-        if (Array.isArray(trees)) {
-            trees.forEach(tree => drawTree(tree.x, tree.y, "#4a8f5a", "#5c4b32"));
+        const pointRenderers = {
+            Tree: (feature) => {
+                const isStaged = !!feature.isStaged;
+                drawTree(
+                    feature.x,
+                    feature.y,
+                    isStaged ? "#7bb661" : "#4a8f5a",
+                    isStaged ? "#6b5436" : "#5c4b32",
+                    isStaged ? "#2f5d39" : null
+                );
+            },
+            House: (feature) => {
+                const isStaged = !!feature.isStaged;
+                drawHouse(
+                    feature.x,
+                    feature.y,
+                    isStaged ? "#e3c9a8" : "#d7b894",
+                    isStaged ? "#9a6a42" : "#7f5a3b",
+                    isStaged ? "#6a4a2d" : null
+                );
+            }
+        };
+
+        if (renderState && Array.isArray(renderState.areaLayers)) {
+            renderState.areaLayers.forEach(layer => {
+                if (!Array.isArray(layer.strokes)) {
+                    return;
+                }
+
+                const color = getLayerColor(layer.featureType);
+                layer.strokes.forEach(stroke => {
+                    const radius = stroke.radius && stroke.radius > 0 ? stroke.radius : 18;
+                    drawStroke(stroke.points, radius, color, 0.85);
+                });
+            });
         }
 
-        if (Array.isArray(houses)) {
-            houses.forEach(house => drawHouse(house.x, house.y, "#d7b894", "#7f5a3b"));
+        if (renderState && renderState.activeStroke && Array.isArray(renderState.activeStroke.points)) {
+            const radius = renderState.activeStroke.radius && renderState.activeStroke.radius > 0
+                ? renderState.activeStroke.radius
+                : 18;
+            drawStroke(renderState.activeStroke.points, radius, "#7fb7d9", 0.6);
         }
 
-        if (Array.isArray(stagedTrees)) {
-            stagedTrees.forEach(tree => drawTree(tree.x, tree.y, "#7bb661", "#6b5436", "#2f5d39"));
+        if (renderState && Array.isArray(renderState.pointFeatures)) {
+            renderState.pointFeatures.forEach(feature => {
+                if (!feature || !feature.featureType) {
+                    return;
+                }
+
+                const renderer = pointRenderers[feature.featureType];
+                if (renderer) {
+                    renderer(feature);
+                }
+            });
         }
 
-        if (Array.isArray(stagedHouses)) {
-            stagedHouses.forEach(house => drawHouse(house.x, house.y, "#e3c9a8", "#9a6a42", "#6a4a2d"));
-        }
     }
 };

@@ -78,3 +78,19 @@ public sealed class MapPointDto
     public float X { get; set; }
     public float Y { get; set; }
 }
+
+public sealed class MapRenderStateDto
+{
+    public List<MapPointFeatureDto> PointFeatures { get; set; } = new();
+    public List<AreaLayerDto> AreaLayers { get; set; } = new();
+    public AreaStrokeDto? ActiveStroke { get; set; }
+}
+
+public sealed class MapPointFeatureDto
+{
+    public string FeatureType { get; set; } = string.Empty;
+    public float X { get; set; }
+    public float Y { get; set; }
+    public string StyleKey { get; set; } = string.Empty;
+    public bool IsStaged { get; set; }
+}

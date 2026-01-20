@@ -348,15 +348,8 @@
 
     private async Task DrawAsync()
     {
-        await JS.InvokeVoidAsync(
-            "inkAndRealmDemo.drawMap",
-            CanvasId,
-            _trees,
-            _houses,
-            _stagedTrees,
-            _stagedHouses,
-            _areaLayers,
-            _activeStroke);
+        var renderState = BuildRenderState();
+        await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", CanvasId, renderState);
     }
 
     private Task SelectPlacement(PlacementType placementType)
@@ -497,6 +490,66 @@
         _stagedHouses.Clear();
         _stagedWaterStrokes.Clear();
         _hasLastPlacement = false;
+    }
+
+    private MapRenderStateDto BuildRenderState()
+    {
+        var pointFeatures = new List<MapPointFeatureDto>();
+
+        foreach (var tree in _trees)
+        {
+            pointFeatures.Add(new MapPointFeatureDto
+            {
+                FeatureType = "Tree",
+                X = tree.X,
+                Y = tree.Y,
+                StyleKey = tree.TreeType,
+                IsStaged = false
+            });
+        }
+
+        foreach (var house in _houses)
+        {
+            pointFeatures.Add(new MapPointFeatureDto
+            {
+                FeatureType = "House",
+                X = house.X,
+                Y = house.Y,
+                StyleKey = house.HouseType,
+                IsStaged = false
+            });
+        }
+
+        foreach (var tree in _stagedTrees)
+        {
+            pointFeatures.Add(new MapPointFeatureDto
+            {
+                FeatureType = "Tree",
+                X = tree.X,
+                Y = tree.Y,
+                StyleKey = tree.TreeType,
+                IsStaged = true
+            });
+        }
+
+        foreach (var house in _stagedHouses)
+        {
+            pointFeatures.Add(new MapPointFeatureDto
+            {
+                FeatureType = "House",
+                X = house.X,
+                Y = house.Y,
+                StyleKey = house.HouseType,
+                IsStaged = true
+            });
+        }
+
+        return new MapRenderStateDto
+        {
+            PointFeatures = pointFeatures,
+            AreaLayers = new List<AreaLayerDto>(_areaLayers),
+            ActiveStroke = _activeStroke
+        };
     }
 
     private enum PlacementType
