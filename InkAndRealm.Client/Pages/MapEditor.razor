@@ -122,7 +122,8 @@
     private AreaLayerDto? _activeAreaLayer;
     private AreaStrokeDto? _activeStroke;
     private bool _isDrawing;
-    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count;
+    private readonly List<AreaStrokeDto> _stagedWaterStrokes = new();
+    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterStrokes.Count;
     [Parameter] public int MapId { get; set; }
     private const float BrushRadius = 18f;
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
@@ -271,7 +272,8 @@
             UserId = UserState.CurrentUser?.UserId,
             MapId = MapId,
             AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
-            AddedHouses = new List<HouseFeatureDto>(_stagedHouses)
+            AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
+            AddedWaterStrokes = new List<AreaStrokeDto>(_stagedWaterStrokes)
         };
 
         var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
@@ -281,8 +283,10 @@
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
             _trees = map?.Trees ?? new List<TreeFeatureDto>();
             _houses = map?.Houses ?? new List<HouseFeatureDto>();
+            LoadAreaLayers(map);
             _stagedTrees.Clear();
             _stagedHouses.Clear();
+            _stagedWaterStrokes.Clear();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             await DrawAsync();
         }
@@ -310,6 +314,7 @@
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
             _hasMap = false;
+            ResetAreaLayers();
             ClearStaged();
             _statusMessage = "Log in, then return to Start to create a map.";
             _isLoading = false;
@@ -321,6 +326,7 @@
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
             _hasMap = false;
+            ResetAreaLayers();
             ClearStaged();
             _statusMessage = "Select a map from Start.";
             _isLoading = false;
@@ -331,6 +337,7 @@
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
         _hasMap = map?.Id > 0;
+        LoadAreaLayers(map);
         ClearStaged();
 
         _statusMessage = _hasMap
@@ -384,6 +391,24 @@
         }
     }
 
+    private void LoadAreaLayers(MapDto? map)
+    {
+        _areaLayers.Clear();
+        if (map?.AreaLayers is not null && map.AreaLayers.Count > 0)
+        {
+            _areaLayers.AddRange(map.AreaLayers);
+        }
+
+        EnsureAreaLayers();
+    }
+
+    private void ResetAreaLayers()
+    {
+        _areaLayers.Clear();
+        _activeAreaLayer = null;
+        EnsureAreaLayers();
+    }
+
     private void StartBrushStroke(MouseEventArgs args)
     {
         EnsureAreaLayers();
@@ -432,6 +457,7 @@
         if (_activeStroke.Points.Count > 0)
         {
             _activeAreaLayer.Strokes.Add(_activeStroke);
+            _stagedWaterStrokes.Add(_activeStroke);
             _statusMessage = $"Painted {_activeAreaLayer.FeatureType} layer.";
         }
 
@@ -469,6 +495,7 @@
     {
         _stagedTrees.Clear();
         _stagedHouses.Clear();
+        _stagedWaterStrokes.Clear();
         _hasLastPlacement = false;
     }
 

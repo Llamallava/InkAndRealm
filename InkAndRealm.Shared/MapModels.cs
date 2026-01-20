@@ -51,6 +51,7 @@ public sealed class MapEditsRequest
     public int MapId { get; set; }
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
+    public List<AreaStrokeDto> AddedWaterStrokes { get; set; } = new();
 }
 
 public sealed class CreateMapRequest

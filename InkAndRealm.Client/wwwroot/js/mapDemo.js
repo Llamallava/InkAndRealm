@@ -75,13 +75,15 @@ window.inkAndRealmDemo = {
 
                 const color = getLayerColor(layer.featureType);
                 layer.strokes.forEach(stroke => {
-                    drawStroke(stroke.points, stroke.radius, color, 0.85);
+                    const radius = stroke.radius && stroke.radius > 0 ? stroke.radius : 18;
+                    drawStroke(stroke.points, radius, color, 0.85);
                 });
             });
         }
 
         if (activeStroke && Array.isArray(activeStroke.points)) {
-            drawStroke(activeStroke.points, activeStroke.radius, "#7fb7d9", 0.6);
+            const radius = activeStroke.radius && activeStroke.radius > 0 ? activeStroke.radius : 18;
+            drawStroke(activeStroke.points, radius, "#7fb7d9", 0.6);
         }
 
         const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {

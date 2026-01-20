@@ -10,6 +10,7 @@ namespace InkAndRealm.Server.Controllers;
 public sealed class DemoMapController : ControllerBase
 {
     private const string DefaultMapName = "Untitled Map";
+    private const float DefaultBrushRadius = 18f;
     private readonly DemoMapContext _context;
 
     public DemoMapController(DemoMapContext context)
@@ -147,6 +148,16 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.AddedWaterStrokes is not null && request.AddedWaterStrokes.Count > 0)
+        {
+            foreach (var stroke in request.AddedWaterStrokes)
+            {
+                map.Features.Add(CreateWaterFeature(stroke));
+            }
+
+            hasChanges = true;
+        }
+
         if (hasChanges)
         {
             await _context.SaveChangesAsync();
@@ -259,8 +270,49 @@ public sealed class DemoMapController : ControllerBase
         };
     }
 
+    private static WaterFeatureEntity CreateWaterFeature(AreaStrokeDto stroke)
+    {
+        var feature = new WaterFeatureEntity
+        {
+            WaterType = WaterType.Lake
+        };
+
+        if (stroke?.Points is not null)
+        {
+            for (var i = 0; i < stroke.Points.Count; i += 1)
+            {
+                var point = stroke.Points[i];
+                feature.Points.Add(new FeaturePointEntity
+                {
+                    X = point.X,
+                    Y = point.Y,
+                    SortOrder = i
+                });
+            }
+        }
+
+        return feature;
+    }
+
     private static MapDto ToDto(MapEntity map)
     {
+        var waterStrokes = map.Features
+            .OfType<WaterFeatureEntity>()
+            .Select(feature => new AreaStrokeDto
+            {
+                Tool = "Brush",
+                Radius = DefaultBrushRadius,
+                Points = feature.Points
+                    .OrderBy(point => point.SortOrder)
+                    .Select(point => new MapPointDto
+                    {
+                        X = point.X,
+                        Y = point.Y
+                    })
+                    .ToList()
+            })
+            .ToList();
+
         return new MapDto
         {
             Id = map.Id,
@@ -292,7 +344,18 @@ public sealed class DemoMapController : ControllerBase
                         HouseType = house.HouseType.ToString()
                     };
                 })
-                .ToList()
+                .ToList(),
+            AreaLayers = waterStrokes.Count == 0
+                ? new List<AreaLayerDto>()
+                : new List<AreaLayerDto>
+                {
+                    new AreaLayerDto
+                    {
+                        LayerKey = "water",
+                        FeatureType = "Water",
+                        Strokes = waterStrokes
+                    }
+                }
         };
     }
 }
