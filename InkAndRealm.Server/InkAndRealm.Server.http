@@ -1,6 +1,0 @@
-@InkAndRealm.Server_HostAddress = http://localhost:5072
-
-GET {{InkAndRealm.Server_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
