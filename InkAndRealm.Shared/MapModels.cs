@@ -44,6 +44,14 @@ public sealed class AddHouseRequest
     public HouseFeatureDto House { get; set; } = new();
 }
 
+public sealed class MapEditsRequest
+{
+    public int? UserId { get; set; }
+    public int MapId { get; set; }
+    public List<TreeFeatureDto> AddedTrees { get; set; } = new();
+    public List<HouseFeatureDto> AddedHouses { get; set; } = new();
+}
+
 public sealed class CreateMapRequest
 {
     public int? UserId { get; set; }

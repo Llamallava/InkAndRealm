@@ -97,6 +97,64 @@ public sealed class DemoMapController : ControllerBase
         return Ok(ToDto(map));
     }
 
+    [HttpPost("edits")]
+    public async Task<ActionResult<MapDto>> ApplyEdits([FromBody] MapEditsRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest("Edit payload is required.");
+        }
+
+        if (request.UserId is null)
+        {
+            return Unauthorized("Log in to save map changes.");
+        }
+
+        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
+        if (!userExists)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        var map = await _context.Maps
+            .Include(m => m.Features)
+            .ThenInclude(feature => feature.Points)
+            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == request.UserId.Value);
+
+        if (map is null)
+        {
+            return NotFound("Map not found.");
+        }
+
+        var hasChanges = false;
+        if (request.AddedTrees is not null && request.AddedTrees.Count > 0)
+        {
+            foreach (var tree in request.AddedTrees)
+            {
+                map.Features.Add(CreateTreeFeature(tree));
+            }
+
+            hasChanges = true;
+        }
+
+        if (request.AddedHouses is not null && request.AddedHouses.Count > 0)
+        {
+            foreach (var house in request.AddedHouses)
+            {
+                map.Features.Add(CreateHouseFeature(house));
+            }
+
+            hasChanges = true;
+        }
+
+        if (hasChanges)
+        {
+            await _context.SaveChangesAsync();
+        }
+
+        return Ok(ToDto(map));
+    }
+
     [HttpPost("tree")]
     public async Task<ActionResult<MapDto>> AddTree([FromBody] AddTreeRequest request)
     {
@@ -126,21 +184,7 @@ public sealed class DemoMapController : ControllerBase
             return NotFound("Map not found.");
         }
 
-        var treeFeature = new TreeFeatureEntity
-        {
-            TreeType = Enum.TryParse<TreeType>(request.Tree.TreeType, out var treeType) ? treeType : TreeType.Oak,
-            Points =
-            {
-                new FeaturePointEntity
-                {
-                    X = request.Tree.X,
-                    Y = request.Tree.Y,
-                    SortOrder = 0
-                }
-            }
-        };
-
-        map.Features.Add(treeFeature);
+        map.Features.Add(CreateTreeFeature(request.Tree));
 
         await _context.SaveChangesAsync();
         return Ok(ToDto(map));
@@ -175,24 +219,44 @@ public sealed class DemoMapController : ControllerBase
             return NotFound("Map not found.");
         }
 
-        var houseFeature = new HouseFeatureEntity
+        map.Features.Add(CreateHouseFeature(request.House));
+
+        await _context.SaveChangesAsync();
+        return Ok(ToDto(map));
+    }
+
+    private static TreeFeatureEntity CreateTreeFeature(TreeFeatureDto tree)
+    {
+        return new TreeFeatureEntity
         {
-            HouseType = Enum.TryParse<HouseType>(request.House.HouseType, out var houseType) ? houseType : HouseType.Cottage,
+            TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak,
             Points =
             {
                 new FeaturePointEntity
                 {
-                    X = request.House.X,
-                    Y = request.House.Y,
+                    X = tree.X,
+                    Y = tree.Y,
                     SortOrder = 0
                 }
             }
         };
+    }
 
-        map.Features.Add(houseFeature);
-
-        await _context.SaveChangesAsync();
-        return Ok(ToDto(map));
+    private static HouseFeatureEntity CreateHouseFeature(HouseFeatureDto house)
+    {
+        return new HouseFeatureEntity
+        {
+            HouseType = Enum.TryParse<HouseType>(house.HouseType, out var houseType) ? houseType : HouseType.Cottage,
+            Points =
+            {
+                new FeaturePointEntity
+                {
+                    X = house.X,
+                    Y = house.Y,
+                    SortOrder = 0
+                }
+            }
+        };
     }
 
     private static MapDto ToDto(MapEntity map)

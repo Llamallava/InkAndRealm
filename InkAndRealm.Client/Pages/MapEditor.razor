@@ -20,7 +20,7 @@
     </div>
 
     <p class="text-muted">
-        Click on the canvas to choose a location, then save it to the server.
+        Click on the canvas to place the selected feature. Changes stay local until you save all.
     </p>
 
     <div class="d-flex gap-3 align-items-start flex-wrap">
@@ -35,8 +35,13 @@
 
         <div class="flex-grow-1">
             <div class="mb-3">
-                <div><strong>Selected Position:</strong></div>
-                <div>@(_hasPending ? $"{_pendingX:0}, {_pendingY:0}" : "Click the canvas to select a position.")</div>
+                <div><strong>Last Placement:</strong></div>
+                <div>@(_hasLastPlacement ? $"{_lastX:0}, {_lastY:0}" : "Click the canvas to place a feature.")</div>
+            </div>
+
+            <div class="mb-3">
+                <div><strong>Unsaved Items:</strong></div>
+                <div>@PendingCount</div>
             </div>
 
             <div class="mb-3">
@@ -55,9 +60,9 @@
 
             <div class="d-flex gap-2">
                 <button class="btn btn-primary"
-                        disabled="@(!_hasPending || _isSaving || !IsLoggedIn || !_hasMap)"
-                        @onclick="SavePlacementAsync">
-                    Save @_placementType
+                        disabled="@(PendingCount == 0 || _isSaving || !IsLoggedIn || !_hasMap)"
+                        @onclick="SaveEditsAsync">
+                    Save All
                 </button>
                 <button class="btn btn-outline-secondary"
                         disabled="@(_isLoading)"
@@ -78,15 +83,18 @@
     private const string CanvasId = "map-demo-canvas";
     private List<TreeFeatureDto> _trees = new();
     private List<HouseFeatureDto> _houses = new();
-    private float _pendingX;
-    private float _pendingY;
-    private bool _hasPending;
+    private readonly List<TreeFeatureDto> _stagedTrees = new();
+    private readonly List<HouseFeatureDto> _stagedHouses = new();
+    private float _lastX;
+    private float _lastY;
+    private bool _hasLastPlacement;
     private bool _isLoading;
     private bool _isSaving;
     private bool _hasMap;
     private string _statusMessage = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
+    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count;
     [Parameter] public int MapId { get; set; }
 
     protected override async Task OnInitializedAsync()
@@ -105,16 +113,37 @@
 
     private async Task HandleCanvasClick(MouseEventArgs args)
     {
-        _pendingX = (float)args.OffsetX;
-        _pendingY = (float)args.OffsetY;
-        _hasPending = true;
-        _statusMessage = $"Selected {_pendingX:0}, {_pendingY:0}.";
+        _lastX = (float)args.OffsetX;
+        _lastY = (float)args.OffsetY;
+        _hasLastPlacement = true;
+
+        if (_placementType == PlacementType.House)
+        {
+            _stagedHouses.Add(new HouseFeatureDto
+            {
+                X = _lastX,
+                Y = _lastY,
+                HouseType = "Cottage"
+            });
+            _statusMessage = $"Placed house at {_lastX:0}, {_lastY:0} (unsaved).";
+        }
+        else
+        {
+            _stagedTrees.Add(new TreeFeatureDto
+            {
+                X = _lastX,
+                Y = _lastY,
+                TreeType = "Oak"
+            });
+            _statusMessage = $"Placed tree at {_lastX:0}, {_lastY:0} (unsaved).";
+        }
+
         await DrawAsync();
     }
 
-    private async Task SavePlacementAsync()
+    private async Task SaveEditsAsync()
     {
-        if (!_hasPending)
+        if (PendingCount == 0)
         {
             return;
         }
@@ -132,50 +161,32 @@
         }
 
         _isSaving = true;
-        _statusMessage = $"Saving {_placementType.ToString().ToLowerInvariant()} to the server...";
+        var pendingCount = PendingCount;
+        _statusMessage = $"Saving {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}...";
 
-        HttpResponseMessage response;
-        if (_placementType == PlacementType.House)
+        var request = new MapEditsRequest
         {
-            response = await Http.PostAsJsonAsync("api/demo-map/house", new AddHouseRequest
-            {
-                UserId = UserState.CurrentUser?.UserId,
-                MapId = MapId,
-                House = new HouseFeatureDto
-                {
-                    X = _pendingX,
-                    Y = _pendingY,
-                    HouseType = "Cottage"
-                }
-            });
-        }
-        else
-        {
-            response = await Http.PostAsJsonAsync("api/demo-map/tree", new AddTreeRequest
-            {
-                UserId = UserState.CurrentUser?.UserId,
-                MapId = MapId,
-                Tree = new TreeFeatureDto
-                {
-                    X = _pendingX,
-                    Y = _pendingY,
-                    TreeType = "Oak"
-                }
-            });
-        }
+            UserId = UserState.CurrentUser?.UserId,
+            MapId = MapId,
+            AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
+            AddedHouses = new List<HouseFeatureDto>(_stagedHouses)
+        };
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
 
         if (response.IsSuccessStatusCode)
         {
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
             _trees = map?.Trees ?? new List<TreeFeatureDto>();
             _houses = map?.Houses ?? new List<HouseFeatureDto>();
-            _statusMessage = $"{_placementType} saved and loaded from the database.";
-            _hasPending = false;
+            _stagedTrees.Clear();
+            _stagedHouses.Clear();
+            _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             await DrawAsync();
         }
         else
         {
-            _statusMessage = $"Failed to save the {_placementType.ToString().ToLowerInvariant()}.";
+            _statusMessage = "Failed to save changes.";
         }
 
         _isSaving = false;
@@ -197,6 +208,7 @@
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
             _hasMap = false;
+            ClearStaged();
             _statusMessage = "Log in, then return to Start to create a map.";
             _isLoading = false;
             return;
@@ -207,6 +219,7 @@
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
             _hasMap = false;
+            ClearStaged();
             _statusMessage = "Select a map from Start.";
             _isLoading = false;
             return;
@@ -216,6 +229,7 @@
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
         _hasMap = map?.Id > 0;
+        ClearStaged();
 
         _statusMessage = _hasMap
             ? "Map loaded from the database."
@@ -225,13 +239,13 @@
 
     private async Task DrawAsync()
     {
-        await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", CanvasId, _trees, _houses, _pendingX, _pendingY, _hasPending, _placementType.ToString());
+        await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", CanvasId, _trees, _houses, _stagedTrees, _stagedHouses);
     }
 
-    private async Task SelectPlacement(PlacementType placementType)
+    private Task SelectPlacement(PlacementType placementType)
     {
         _placementType = placementType;
-        await DrawAsync();
+        return Task.CompletedTask;
     }
 
     private string GetMapUrl()
@@ -258,6 +272,13 @@
     public void Dispose()
     {
         UserState.Changed -= OnUserChanged;
+    }
+
+    private void ClearStaged()
+    {
+        _stagedTrees.Clear();
+        _stagedHouses.Clear();
+        _hasLastPlacement = false;
     }
 
     private enum PlacementType

@@ -1,5 +1,5 @@
 window.inkAndRealmDemo = {
-    drawMap: (canvasId, trees, houses, pendingX, pendingY, hasPending, pendingType) => {
+    drawMap: (canvasId, trees, houses, stagedTrees, stagedHouses) => {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             return;
@@ -26,17 +26,24 @@ window.inkAndRealmDemo = {
             ctx.stroke();
         }
 
-        const drawTree = (x, y, color) => {
-            ctx.fillStyle = "#5c4b32";
+        const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {
+            ctx.fillStyle = trunkColor;
             ctx.fillRect(x - 3, y + 6, 6, 10);
 
             ctx.beginPath();
-            ctx.fillStyle = color;
+            ctx.fillStyle = canopyColor;
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.fill();
+
+            if (outlineColor) {
+                ctx.strokeStyle = outlineColor;
+                ctx.beginPath();
+                ctx.arc(x, y, 12, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         };
 
-        const drawHouse = (x, y, baseColor, roofColor) => {
+        const drawHouse = (x, y, baseColor, roofColor, outlineColor) => {
             ctx.fillStyle = baseColor;
             ctx.fillRect(x - 10, y - 2, 20, 14);
 
@@ -47,28 +54,27 @@ window.inkAndRealmDemo = {
             ctx.lineTo(x + 12, y - 2);
             ctx.closePath();
             ctx.fill();
+
+            if (outlineColor) {
+                ctx.strokeStyle = outlineColor;
+                ctx.strokeRect(x - 12, y - 16, 24, 28);
+            }
         };
 
         if (Array.isArray(trees)) {
-            trees.forEach(tree => drawTree(tree.x, tree.y, "#4a8f5a"));
+            trees.forEach(tree => drawTree(tree.x, tree.y, "#4a8f5a", "#5c4b32"));
         }
 
         if (Array.isArray(houses)) {
             houses.forEach(house => drawHouse(house.x, house.y, "#d7b894", "#7f5a3b"));
         }
 
-        if (hasPending) {
-            if (pendingType === "House") {
-                drawHouse(pendingX, pendingY, "#e3c9a8", "#9a6a42");
-                ctx.strokeStyle = "#6a4a2d";
-                ctx.strokeRect(pendingX - 14, pendingY - 18, 28, 26);
-            } else {
-                drawTree(pendingX, pendingY, "#7bb661");
-                ctx.strokeStyle = "#2f5d39";
-                ctx.beginPath();
-                ctx.arc(pendingX, pendingY, 14, 0, Math.PI * 2);
-                ctx.stroke();
-            }
+        if (Array.isArray(stagedTrees)) {
+            stagedTrees.forEach(tree => drawTree(tree.x, tree.y, "#7bb661", "#6b5436", "#2f5d39"));
+        }
+
+        if (Array.isArray(stagedHouses)) {
+            stagedHouses.forEach(house => drawHouse(house.x, house.y, "#e3c9a8", "#9a6a42", "#6a4a2d"));
         }
     }
 };
