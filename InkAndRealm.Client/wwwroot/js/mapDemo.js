@@ -1,5 +1,5 @@
 window.inkAndRealmDemo = {
-    drawMap: (canvasId, trees, houses, stagedTrees, stagedHouses) => {
+    drawMap: (canvasId, trees, houses, stagedTrees, stagedHouses, areaLayers, activeStroke) => {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             return;
@@ -24,6 +24,64 @@ window.inkAndRealmDemo = {
             ctx.moveTo(0, y);
             ctx.lineTo(canvas.width, y);
             ctx.stroke();
+        }
+
+        const getLayerColor = (featureType) => {
+            switch (featureType) {
+                case "Water":
+                    return "#7fb7d9";
+                case "Land":
+                    return "#9bc97c";
+                default:
+                    return "#c9d8b6";
+            }
+        };
+
+        const drawStroke = (points, radius, color, alpha = 1) => {
+            if (!Array.isArray(points) || points.length === 0) {
+                return;
+            }
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = radius * 2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = color;
+
+            if (points.length === 1) {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(points[0].x, points[0].y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i += 1) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.stroke();
+            ctx.restore();
+        };
+
+        if (Array.isArray(areaLayers)) {
+            areaLayers.forEach(layer => {
+                if (!Array.isArray(layer.strokes)) {
+                    return;
+                }
+
+                const color = getLayerColor(layer.featureType);
+                layer.strokes.forEach(stroke => {
+                    drawStroke(stroke.points, stroke.radius, color, 0.85);
+                });
+            });
+        }
+
+        if (activeStroke && Array.isArray(activeStroke.points)) {
+            drawStroke(activeStroke.points, activeStroke.radius, "#7fb7d9", 0.6);
         }
 
         const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {

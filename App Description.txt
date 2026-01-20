@@ -1,0 +1,62 @@
+Ink & Realm is a fantasy map planner. The user will generate maps and populate them with Features. The user can save maps to their account and create new ones or modify previously saved ones. 
+Features are:
+1)	Land
+a)	Grass
+i)	Dry
+ii)	Lush
+b)	Dirt
+i)	Coarse
+ii)	Mud
+c)	Sand
+d)	Rock
+e)	Farmland
+f)	Tree
+i)	Oak
+ii)	Pine
+iii)	Palm
+iv)	Willow
+2)	Highs and Lows
+a)	Mountains
+b)	Hills
+c)	Valleys
+d)	Ravines
+3)	Water
+a)	Rivers
+b)	Lakes
+c)	Ponds
+4)	Houses
+a)	Homes
+b)	Farm houses
+c)	Taverns
+d)	Inns
+e)	Barns
+f)	Outposts
+5)	Towns
+a)	Villages
+b)	Cities
+c)	Castles
+6)	Bridges
+7)	Characters
+a)	Commoner
+b)	Farmer
+c)	Noble
+d)	Knight
+e)	Mercenary 
+
+There are many many Features that could exist, as it is all up to creativity of what you imagine could exist in a fantasy world. To avoid making the scope too large, the Features shown above are all the Features that will be guaranteed to be in the app.
+
+One more Feature that is not in that list is the Title Feature. The Title Feature allows you to give a Feature or group of Features a visible name on the map. A usage case for this would be applying a Title to a tree. This could signify importance to the Feature, because the Title will be visible on the map. A Title can also be applied to a group. Using the Polygon Tool (described below) you could highlight a large number of trees and apply a title to all of them. This could signify importance to the whole area.
+Titles have an optional 2nd field, which is a description. The description does not appear on the map, as its intended purpose is for the user to list details about the Feature(s) for future reference.
+
+Features will exist in different styles. Not every tree you place will look the same, and not every bridge you place, or every house. In the Features list above, you can see the different available styles. Such as the Styles for Characters or Trees
+
+A variety of tools will be available to use to draw Features on your map.
+-	Point Tool: For individual placement of Features
+-	Brush Tool: Place a blot of Features wherever you draw
+-	Polygon Tool: Draw out an exact area to be filled with a Feature
+-	Eraser Tool: Click on a Feature to have it be removed from the map
+-	Edit Tool: Click on an existing Feature and modify its location.
+-	Duplicate Tool: Click on an existing Feature and create another identical instance of it
+-	Undo Tool: Undo the last edit or placement that occurred
+
+Characters represent people on the map. Characters will have special text fields for Name, Background, Occupation, and Personality. Once a Character Feature has been placed on the map, you can use the Edit Tool on it to modify these four fields. The Title Feature cannot be applied to Characters, as the Characters are already designed to store that information. Characters act to add more life to your map and the text fields they contain are meant to provide any viewer with the traits that a given Character might have. Seeing a Character on a map can provide the viewer with much context. You can see that someone might live at this location (which could be shocking depending on the location), but having the text fields allows for further development. Say you have a Farmer Character placed on a field of Farmland with a Barn. Your average viewer will probably be able to recognize this Character as a random farmer, and nothing more. But now you click on him, and you see his details. His name is John, his father was a farmer and John inherited the farm from him after he passed, he is a farmer and merchant who frequently travels to the city and sells his crops, and he has a silly sense of humor and talkative personality and frequently chats with and interacts with his customers. Does this feel like a random unknown character anymore? You have to click on him and learn all about him, which being able to have this for dozens and dozens of characters on a map, can really expand your world and make the viewer/editor feel more invested. 

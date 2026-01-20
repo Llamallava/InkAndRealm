@@ -1,0 +1,60 @@
+1.	Users must be able to create an account or sign in to an existing account
+a.	Click “Sign in” on the main menu
+i.	Click on “Create New Account”
+1.	Enter standard sign in details
+ii.	If you already have an account, enter your details
+2.	Users must be able to create a map
+a.	Click “Generate New Map” on the main menu
+i.	Repeat until you are given a map that you want to start with
+3.	Users must be able to edit a map
+a.	Click on “Edit” on the main menu
+i.	Click on one of your maps to open it in editing mode
+4.	Users must be able to use different tools to place Features on a map
+a.	Select a generic Feature from the list
+i.	Pick a style
+ii.	Select the Point Tool
+1.	Click on a location on the map to place your selected Feature
+iii.	Select the Brush Tool
+1.	Click on a location and move your mouse to place many of your selected Feature in a path behind your mouse
+iv.	Select the Polygon Tool
+1.	Click on a location on the map to place a dot. Click on at least 2 other locations to form a shape (with the dots as the vertices). Upon the shape being completed, the entire area will be filled in with you selected Feature
+v.	Select the Eraser Tool
+1.	Click on a Feature that is already on the map, and it will be removed.
+vi.	Select the Edit Tool
+1.	Click on a Feature that is already on the map and adjust its position
+2.	Click on a Character or Title Feature, and adjust their position, and also edit their associated text fields
+vii.	Select the Duplicate Tool
+1.	Click on a Feature that is already on the map, and an exact copy will be created next to it. 
+2.	Click on a Character or Title Feature and an exact copy will be created, including their associated text fields
+viii.	Select the Undo Tool
+1.	Click on the Undo Tool button, and the last change you have made will be undone
+b.	Select the Title Feature
+i.	Select the Point Tool
+1.	Click on a Feature that is already on the map to apply a title to it
+2.	Edit the name of the Title
+ii.	Select the Polygon Tool
+1.	Draw out a shape with the Polygon Tool (as described above), and a Title will be applied to the selected area
+2.	Edit the name of the Title
+c.	Select the Character Feature
+i.	Select a style
+ii.	Select the Point Tool
+1.	 Click on a point on the map to place the Character
+iii.	Select the Edit Tool and click on your Character
+1.	Edit the Name field
+2.	Edit the Background field
+3.	Edit the Occupation field
+4.	Edit the Personality field
+5.	Click “Add Relationship”
+a.	Click another Feature on the map
+5.	User must be able to view the Character Relation Tree
+a.	Click “Character Tree”
+6.	Users must be able to save their map to their account
+a.	Whilst editing, click on the “Save” button in the corner
+i.	Give your map a name
+ii.	Click Confirm
+7.	Users must be able to share their maps via a code
+a.	Click “Share” 
+i.	Copy the code associated with the map and share with another user outside of the app
+8.	Users must be able to view maps made by others
+a.	Click “View” from the main menu
+b.	Paste in a map code

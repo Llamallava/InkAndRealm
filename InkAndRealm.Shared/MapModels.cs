@@ -6,6 +6,7 @@ public sealed class MapDto
     public string Name { get; set; } = string.Empty;
     public List<TreeFeatureDto> Trees { get; set; } = new();
     public List<HouseFeatureDto> Houses { get; set; } = new();
+    public List<AreaLayerDto> AreaLayers { get; set; } = new();
 }
 
 public sealed class MapSummaryDto
@@ -55,4 +56,24 @@ public sealed class MapEditsRequest
 public sealed class CreateMapRequest
 {
     public int? UserId { get; set; }
+}
+
+public sealed class AreaLayerDto
+{
+    public string LayerKey { get; set; } = string.Empty;
+    public string FeatureType { get; set; } = string.Empty;
+    public List<AreaStrokeDto> Strokes { get; set; } = new();
+}
+
+public sealed class AreaStrokeDto
+{
+    public string Tool { get; set; } = "Brush";
+    public float Radius { get; set; }
+    public List<MapPointDto> Points { get; set; } = new();
+}
+
+public sealed class MapPointDto
+{
+    public float X { get; set; }
+    public float Y { get; set; }
 }

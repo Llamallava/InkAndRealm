@@ -1,5 +1,6 @@
 @page "/map-demo/{MapId:int}"
 @using System.Net.Http.Json
+@using System.Linq
 @using Microsoft.AspNetCore.Components.Web
 @using InkAndRealm.Shared
 @using InkAndRealm.Client.State
@@ -29,7 +30,10 @@
                     width="640"
                     height="360"
                     class="border"
-                    @onmousedown="HandleCanvasClick">
+                    @onmousedown="HandlePointerDown"
+                    @onmousemove="HandlePointerMove"
+                    @onmouseup="HandlePointerUp"
+                    @onmouseleave="HandlePointerLeave">
             </canvas>
         </div>
 
@@ -42,6 +46,25 @@
             <div class="mb-3">
                 <div><strong>Unsaved Items:</strong></div>
                 <div>@PendingCount</div>
+            </div>
+
+            <div class="mb-3">
+                <div><strong>Active Tool:</strong></div>
+                <div class="btn-group flex-wrap" role="group" aria-label="Tool selection">
+                    @foreach (var tool in ToolDefinitions)
+                    {
+                        <button class="btn @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="() => SelectTool(tool.Tool)">
+                            @tool.Label
+                        </button>
+                    }
+                </div>
+                <div class="form-text">@ActiveToolSummary</div>
+            </div>
+
+            <div class="mb-3">
+                <div><strong>Active Area Layer:</strong></div>
+                <div>@ActiveAreaLayerLabel (fixed for now)</div>
             </div>
 
             <div class="mb-3">
@@ -94,12 +117,34 @@
     private string _statusMessage = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
+    private MapToolType _activeTool = MapToolType.Point;
+    private readonly List<AreaLayerDto> _areaLayers = new();
+    private AreaLayerDto? _activeAreaLayer;
+    private AreaStrokeDto? _activeStroke;
+    private bool _isDrawing;
     private int PendingCount => _stagedTrees.Count + _stagedHouses.Count;
     [Parameter] public int MapId { get; set; }
+    private const float BrushRadius = 18f;
+    private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
+    {
+        new(MapToolType.Point, "Point", "Place one feature per click.", true),
+        new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", true),
+        new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", false),
+        new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", false),
+        new(MapToolType.Edit, "Edit", "Move or update an existing feature.", false),
+        new(MapToolType.Duplicate, "Duplicate", "Clone an existing feature.", false),
+        new(MapToolType.Undo, "Undo", "Undo the most recent change.", false)
+    };
+    private ToolDefinition ActiveToolDefinition => ToolDefinitions.First(tool => tool.Tool == _activeTool);
+    private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
+        ? ActiveToolDefinition.Description
+        : $"{ActiveToolDefinition.Description} (coming soon).";
+    private string ActiveAreaLayerLabel => _activeAreaLayer?.FeatureType ?? "None";
 
     protected override async Task OnInitializedAsync()
     {
         UserState.Changed += OnUserChanged;
+        EnsureAreaLayers();
         await LoadMapAsync();
     }
 
@@ -111,7 +156,64 @@
         }
     }
 
-    private async Task HandleCanvasClick(MouseEventArgs args)
+    private async Task HandlePointerDown(MouseEventArgs args)
+    {
+        if (!ActiveToolDefinition.IsImplemented)
+        {
+            _statusMessage = $"{ActiveToolDefinition.Label} tool is not available yet.";
+            return;
+        }
+
+        if (_activeTool == MapToolType.Point)
+        {
+            await HandlePointToolAsync(args);
+            return;
+        }
+
+        if (_activeTool == MapToolType.Brush)
+        {
+            StartBrushStroke(args);
+            await DrawAsync();
+            return;
+        }
+
+        _statusMessage = $"{ActiveToolDefinition.Label} tool is not available yet.";
+    }
+
+    private async Task HandlePointerMove(MouseEventArgs args)
+    {
+        if (!_isDrawing || _activeTool != MapToolType.Brush || _activeStroke is null)
+        {
+            return;
+        }
+
+        AddBrushPoint((float)args.OffsetX, (float)args.OffsetY);
+        await DrawAsync();
+    }
+
+    private async Task HandlePointerUp(MouseEventArgs args)
+    {
+        if (!_isDrawing || _activeTool != MapToolType.Brush)
+        {
+            return;
+        }
+
+        CommitBrushStroke();
+        await DrawAsync();
+    }
+
+    private async Task HandlePointerLeave(MouseEventArgs args)
+    {
+        if (!_isDrawing || _activeTool != MapToolType.Brush)
+        {
+            return;
+        }
+
+        CommitBrushStroke();
+        await DrawAsync();
+    }
+
+    private async Task HandlePointToolAsync(MouseEventArgs args)
     {
         _lastX = (float)args.OffsetX;
         _lastY = (float)args.OffsetY;
@@ -239,13 +341,102 @@
 
     private async Task DrawAsync()
     {
-        await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", CanvasId, _trees, _houses, _stagedTrees, _stagedHouses);
+        await JS.InvokeVoidAsync(
+            "inkAndRealmDemo.drawMap",
+            CanvasId,
+            _trees,
+            _houses,
+            _stagedTrees,
+            _stagedHouses,
+            _areaLayers,
+            _activeStroke);
     }
 
     private Task SelectPlacement(PlacementType placementType)
     {
         _placementType = placementType;
         return Task.CompletedTask;
+    }
+
+    private void SelectTool(MapToolType tool)
+    {
+        _activeTool = tool;
+        _statusMessage = ActiveToolDefinition.IsImplemented
+            ? $"{ActiveToolDefinition.Label} tool selected."
+            : $"{ActiveToolDefinition.Label} tool is not available yet.";
+    }
+
+    private void EnsureAreaLayers()
+    {
+        if (_areaLayers.Count == 0)
+        {
+            var layer = new AreaLayerDto
+            {
+                LayerKey = "water",
+                FeatureType = "Water"
+            };
+            _areaLayers.Add(layer);
+            _activeAreaLayer = layer;
+        }
+        else if (_activeAreaLayer is null)
+        {
+            _activeAreaLayer = _areaLayers[0];
+        }
+    }
+
+    private void StartBrushStroke(MouseEventArgs args)
+    {
+        EnsureAreaLayers();
+        _isDrawing = true;
+        _activeStroke = new AreaStrokeDto
+        {
+            Tool = "Brush",
+            Radius = BrushRadius
+        };
+        AddBrushPoint((float)args.OffsetX, (float)args.OffsetY);
+        _statusMessage = $"Painting {_activeAreaLayer?.FeatureType ?? "area"}...";
+    }
+
+    private void AddBrushPoint(float x, float y)
+    {
+        if (_activeStroke is null)
+        {
+            return;
+        }
+
+        if (_activeStroke.Points.Count == 0)
+        {
+            _activeStroke.Points.Add(new MapPointDto { X = x, Y = y });
+            return;
+        }
+
+        var last = _activeStroke.Points[^1];
+        var dx = x - last.X;
+        var dy = y - last.Y;
+        var minDistance = _activeStroke.Radius * 0.5f;
+        if ((dx * dx) + (dy * dy) >= minDistance * minDistance)
+        {
+            _activeStroke.Points.Add(new MapPointDto { X = x, Y = y });
+        }
+    }
+
+    private void CommitBrushStroke()
+    {
+        if (_activeStroke is null || _activeAreaLayer is null)
+        {
+            _activeStroke = null;
+            _isDrawing = false;
+            return;
+        }
+
+        if (_activeStroke.Points.Count > 0)
+        {
+            _activeAreaLayer.Strokes.Add(_activeStroke);
+            _statusMessage = $"Painted {_activeAreaLayer.FeatureType} layer.";
+        }
+
+        _activeStroke = null;
+        _isDrawing = false;
     }
 
     private string GetMapUrl()
@@ -286,4 +477,17 @@
         Tree,
         House
     }
+
+    private enum MapToolType
+    {
+        Point,
+        Brush,
+        Polygon,
+        Eraser,
+        Edit,
+        Duplicate,
+        Undo
+    }
+
+    private sealed record ToolDefinition(MapToolType Tool, string Label, string Description, bool IsImplemented);
 }
