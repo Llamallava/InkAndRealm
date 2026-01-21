@@ -2,6 +2,7 @@ using InkAndRealm.Server.Data;
 using InkAndRealm.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System;
 
 namespace InkAndRealm.Server.Controllers;
 
@@ -9,6 +10,7 @@ namespace InkAndRealm.Server.Controllers;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
+    private const int SessionDays = 14;
     private readonly DemoMapContext _context;
 
     public AuthController(DemoMapContext context)
@@ -47,10 +49,13 @@ public sealed class AuthController : ControllerBase
         _context.Users.Add(userEntity);
         await _context.SaveChangesAsync();
 
+        var session = await CreateSessionAsync(userEntity.Id);
+
         return Ok(new AuthResponse
         {
             UserId = userEntity.Id,
-            Username = userEntity.Username
+            Username = userEntity.Username,
+            SessionToken = session.Token
         });
     }
 
@@ -75,10 +80,28 @@ public sealed class AuthController : ControllerBase
             return Unauthorized("Invalid username or password.");
         }
 
+        var session = await CreateSessionAsync(userEntity.Id);
+
         return Ok(new AuthResponse
         {
             UserId = userEntity.Id,
-            Username = userEntity.Username
+            Username = userEntity.Username,
+            SessionToken = session.Token
         });
+    }
+
+    private async Task<SessionEntity> CreateSessionAsync(int userId)
+    {
+        var session = new SessionEntity
+        {
+            UserId = userId,
+            Token = Guid.NewGuid().ToString("N"),
+            CreatedUtc = DateTime.UtcNow,
+            ExpiresUtc = DateTime.UtcNow.AddDays(SessionDays)
+        };
+
+        _context.Sessions.Add(session);
+        await _context.SaveChangesAsync();
+        return session;
     }
 }

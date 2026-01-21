@@ -34,6 +34,7 @@ public sealed class HouseFeatureDto
 public sealed class AddTreeRequest
 {
     public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
     public int MapId { get; set; }
     public TreeFeatureDto Tree { get; set; } = new();
 }
@@ -41,6 +42,7 @@ public sealed class AddTreeRequest
 public sealed class AddHouseRequest
 {
     public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
     public int MapId { get; set; }
     public HouseFeatureDto House { get; set; } = new();
 }
@@ -48,6 +50,7 @@ public sealed class AddHouseRequest
 public sealed class MapEditsRequest
 {
     public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
     public int MapId { get; set; }
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
@@ -57,6 +60,7 @@ public sealed class MapEditsRequest
 public sealed class CreateMapRequest
 {
     public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
 }
 
 public sealed class AreaLayerDto

@@ -2,6 +2,7 @@ using InkAndRealm.Server.Data;
 using InkAndRealm.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System;
 
 namespace InkAndRealm.Server.Controllers;
 
@@ -19,21 +20,21 @@ public sealed class DemoMapController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<MapSummaryDto>>> GetMaps([FromQuery] int? userId)
+    public async Task<ActionResult<IReadOnlyList<MapSummaryDto>>> GetMaps([FromQuery] int? userId, [FromQuery] string? sessionToken)
     {
-        if (userId is null)
+        if (userId is null && string.IsNullOrWhiteSpace(sessionToken))
         {
             return Ok(Array.Empty<MapSummaryDto>());
         }
 
-        var userExists = await _context.Users.AnyAsync(user => user.Id == userId.Value);
-        if (!userExists)
+        var user = await ResolveUserAsync(sessionToken, userId);
+        if (user is null)
         {
             return Unauthorized("Invalid user.");
         }
 
         var maps = await _context.Maps
-            .Where(map => map.UserId == userId.Value)
+            .Where(map => map.UserId == user.Id)
             .OrderBy(map => map.Id)
             .Select(map => new MapSummaryDto
             {
@@ -46,15 +47,15 @@ public sealed class DemoMapController : ControllerBase
     }
 
     [HttpGet("{mapId:int}")]
-    public async Task<ActionResult<MapDto>> GetMap([FromRoute] int mapId, [FromQuery] int? userId)
+    public async Task<ActionResult<MapDto>> GetMap([FromRoute] int mapId, [FromQuery] int? userId, [FromQuery] string? sessionToken)
     {
-        if (userId is null)
+        if (userId is null && string.IsNullOrWhiteSpace(sessionToken))
         {
             return Unauthorized("Log in to load maps.");
         }
 
-        var userExists = await _context.Users.AnyAsync(user => user.Id == userId.Value);
-        if (!userExists)
+        var user = await ResolveUserAsync(sessionToken, userId);
+        if (user is null)
         {
             return Unauthorized("Invalid user.");
         }
@@ -62,7 +63,7 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Id == mapId && m.UserId == userId.Value);
+            .FirstOrDefaultAsync(m => m.Id == mapId && m.UserId == user.Id);
 
         if (map is null)
         {
@@ -75,13 +76,13 @@ public sealed class DemoMapController : ControllerBase
     [HttpPost("new")]
     public async Task<ActionResult<MapDto>> CreateMap([FromBody] CreateMapRequest request)
     {
-        if (request.UserId is null)
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
         {
             return Unauthorized("Log in to create a new map.");
         }
 
-        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
-        if (!userExists)
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
         {
             return Unauthorized("Invalid user.");
         }
@@ -89,7 +90,7 @@ public sealed class DemoMapController : ControllerBase
         var map = new MapEntity
         {
             Name = DefaultMapName,
-            UserId = request.UserId.Value
+            UserId = user.Id
         };
 
         _context.Maps.Add(map);
@@ -106,13 +107,13 @@ public sealed class DemoMapController : ControllerBase
             return BadRequest("Edit payload is required.");
         }
 
-        if (request.UserId is null)
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
         {
             return Unauthorized("Log in to save map changes.");
         }
 
-        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
-        if (!userExists)
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
         {
             return Unauthorized("Invalid user.");
         }
@@ -120,7 +121,7 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == request.UserId.Value);
+            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
 
         if (map is null)
         {
@@ -169,13 +170,13 @@ public sealed class DemoMapController : ControllerBase
     [HttpPost("tree")]
     public async Task<ActionResult<MapDto>> AddTree([FromBody] AddTreeRequest request)
     {
-        if (request.UserId is null)
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
         {
             return Unauthorized("Log in to save map changes.");
         }
 
-        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
-        if (!userExists)
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
         {
             return Unauthorized("Invalid user.");
         }
@@ -188,7 +189,7 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == request.UserId.Value);
+            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
 
         if (map is null)
         {
@@ -204,13 +205,13 @@ public sealed class DemoMapController : ControllerBase
     [HttpPost("house")]
     public async Task<ActionResult<MapDto>> AddHouse([FromBody] AddHouseRequest request)
     {
-        if (request.UserId is null)
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
         {
             return Unauthorized("Log in to save map changes.");
         }
 
-        var userExists = await _context.Users.AnyAsync(user => user.Id == request.UserId.Value);
-        if (!userExists)
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
         {
             return Unauthorized("Invalid user.");
         }
@@ -223,7 +224,7 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
-            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == request.UserId.Value);
+            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
 
         if (map is null)
         {
@@ -357,5 +358,25 @@ public sealed class DemoMapController : ControllerBase
                     }
                 }
         };
+    }
+
+    private async Task<UserEntity?> ResolveUserAsync(string? sessionToken, int? userId)
+    {
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+        {
+            var now = DateTime.UtcNow;
+            return await _context.Sessions
+                .Where(session => session.Token == sessionToken
+                    && (session.ExpiresUtc == null || session.ExpiresUtc > now))
+                .Select(session => session.User)
+                .FirstOrDefaultAsync();
+        }
+
+        if (userId is null)
+        {
+            return null;
+        }
+
+        return await _context.Users.FirstOrDefaultAsync(user => user.Id == userId.Value);
     }
 }

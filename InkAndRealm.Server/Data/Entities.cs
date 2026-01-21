@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System;
 
 namespace InkAndRealm.Server.Data;
 
@@ -10,6 +11,18 @@ public sealed class UserEntity
     public string UsernameNormalized { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public List<MapEntity> Maps { get; set; } = new();
+    public List<SessionEntity> Sessions { get; set; } = new();
+}
+
+[Index(nameof(Token), IsUnique = true)]
+public sealed class SessionEntity
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public UserEntity? User { get; set; }
+    public string Token { get; set; } = string.Empty;
+    public DateTime CreatedUtc { get; set; }
+    public DateTime? ExpiresUtc { get; set; }
 }
 
 public sealed class MapEntity

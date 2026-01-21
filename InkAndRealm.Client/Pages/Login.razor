@@ -64,7 +64,7 @@
         if (response.IsSuccessStatusCode)
         {
             var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
-            UserState.SetUser(user);
+            await UserState.SetUserAsync(user);
             registerMessage = user is null ? "Registration succeeded." : $"Registered as {user.Username}.";
             registerRequest.Password = string.Empty;
             return;
@@ -82,7 +82,7 @@
         if (response.IsSuccessStatusCode)
         {
             var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
-            UserState.SetUser(user);
+            await UserState.SetUserAsync(user);
             loginMessage = user is null ? "Login succeeded." : $"Logged in as {user.Username}.";
             loginRequest.Password = string.Empty;
             return;

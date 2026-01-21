@@ -16,4 +16,5 @@ public sealed class AuthResponse
 {
     public int UserId { get; set; }
     public string Username { get; set; } = string.Empty;
+    public string SessionToken { get; set; } = string.Empty;
 }
