@@ -6,25 +6,42 @@ window.inkAndRealmDemo = {
         }
 
         const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const getNumber = (value, fallback) => (Number.isFinite(value) ? value : fallback);
+        const viewState = renderState && renderState.viewState ? renderState.viewState : null;
+        const zoom = viewState ? Math.max(0.25, Math.min(getNumber(viewState.zoom, 1), 4)) : 1;
+        const viewX = viewState ? getNumber(viewState.viewX, 0) : 0;
+        const viewY = viewState ? getNumber(viewState.viewY, 0) : 0;
+        const mapWidth = viewState ? getNumber(viewState.mapWidth, canvas.width) : canvas.width;
+        const mapHeight = viewState ? getNumber(viewState.mapHeight, canvas.height) : canvas.height;
 
-        ctx.fillStyle = "#f5f1e8";
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#e9e2d6";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        ctx.setTransform(zoom, 0, 0, zoom, -viewX * zoom, -viewY * zoom);
+
+        ctx.fillStyle = "#f5f1e8";
+        ctx.fillRect(0, 0, mapWidth, mapHeight);
+
         ctx.strokeStyle = "#e1ddd4";
-        ctx.lineWidth = 1;
-        for (let x = 0; x <= canvas.width; x += 40) {
+        ctx.lineWidth = 1 / zoom;
+        for (let x = 0; x <= mapWidth; x += 40) {
             ctx.beginPath();
             ctx.moveTo(x, 0);
-            ctx.lineTo(x, canvas.height);
+            ctx.lineTo(x, mapHeight);
             ctx.stroke();
         }
-        for (let y = 0; y <= canvas.height; y += 40) {
+        for (let y = 0; y <= mapHeight; y += 40) {
             ctx.beginPath();
             ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
+            ctx.lineTo(mapWidth, y);
             ctx.stroke();
         }
+
+        ctx.strokeStyle = "#c9c2b6";
+        ctx.lineWidth = 2 / zoom;
+        ctx.strokeRect(0, 0, mapWidth, mapHeight);
 
         const getLayerColor = (featureType) => {
             switch (featureType) {
@@ -207,3 +224,4 @@ window.inkAndRealmDemo = {
 
     }
 };
+

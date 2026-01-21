@@ -88,6 +88,7 @@ public sealed class MapRenderStateDto
     public List<MapPointFeatureDto> PointFeatures { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public AreaStrokeDto? ActiveStroke { get; set; }
+    public MapViewStateDto ViewState { get; set; } = new();
 }
 
 public sealed class MapPointFeatureDto
@@ -97,4 +98,13 @@ public sealed class MapPointFeatureDto
     public float Y { get; set; }
     public string StyleKey { get; set; } = string.Empty;
     public bool IsStaged { get; set; }
+}
+
+public sealed class MapViewStateDto
+{
+    public float ViewX { get; set; }
+    public float ViewY { get; set; }
+    public float Zoom { get; set; } = 1f;
+    public float MapWidth { get; set; }
+    public float MapHeight { get; set; }
 }

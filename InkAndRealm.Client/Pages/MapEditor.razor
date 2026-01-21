@@ -31,10 +31,13 @@
                     width="640"
                     height="360"
                     class="border"
+                    style="touch-action:none;"
                     @onmousedown="HandlePointerDown"
                     @onmousemove="HandlePointerMove"
                     @onmouseup="HandlePointerUp"
-                    @onmouseleave="HandlePointerLeave">
+                    @onmouseleave="HandlePointerLeave"
+                    @onwheel="HandleWheel"
+                    @onwheel:preventDefault="true">
             </canvas>
         </div>
 
@@ -42,6 +45,11 @@
             <div class="mb-3">
                 <div><strong>Last Placement:</strong></div>
                 <div>@(_hasLastPlacement ? $"{_lastX:0}, {_lastY:0}" : "Click the canvas to place a feature.")</div>
+            </div>
+
+            <div class="mb-3">
+                <div><strong>View:</strong></div>
+                <div>@($"Zoom {_zoom * 100:0}% | Origin {_viewX:0}, {_viewY:0}")</div>
             </div>
 
             <div class="mb-3">
@@ -131,9 +139,23 @@
     private List<HouseFeatureDto> _houses = new();
     private readonly List<TreeFeatureDto> _stagedTrees = new();
     private readonly List<HouseFeatureDto> _stagedHouses = new();
+    private const float MapWidth = 2000f;
+    private const float MapHeight = 1200f;
+    private const float MinZoom = 0.5f;
+    private const float MaxZoom = 3f;
+    private const float CanvasWidth = 640f;
+    private const float CanvasHeight = 360f;
     private float _lastX;
     private float _lastY;
     private bool _hasLastPlacement;
+    private float _viewX;
+    private float _viewY;
+    private float _zoom = 1f;
+    private bool _isPanning;
+    private float _panStartX;
+    private float _panStartY;
+    private float _panOriginX;
+    private float _panOriginY;
     private bool _isLoading;
     private bool _isSaving;
     private bool _hasMap;
@@ -166,6 +188,7 @@
     };
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
     {
+        new(MapToolType.Pointer, "Pointer", "Pan the map without placing items.", true),
         new(MapToolType.Point, "Point", "Place one feature per click.", true),
         new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", true),
         new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", false),
@@ -203,6 +226,12 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Pointer)
+        {
+            StartPan(args);
+            return;
+        }
+
         if (_activeTool == MapToolType.Point)
         {
             await HandlePointToolAsync(args);
@@ -211,8 +240,11 @@
 
         if (_activeTool == MapToolType.Brush)
         {
-            StartBrushStroke(args);
-            await DrawAsync();
+            if (TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                StartBrushStroke(mapX, mapY);
+                await DrawAsync();
+            }
             return;
         }
 
@@ -221,17 +253,35 @@
 
     private async Task HandlePointerMove(MouseEventArgs args)
     {
+        if (_isPanning && _activeTool == MapToolType.Pointer)
+        {
+            UpdatePan(args);
+            await DrawAsync();
+            return;
+        }
+
         if (!_isDrawing || _activeTool != MapToolType.Brush || _activeStroke is null)
         {
             return;
         }
 
-        AddBrushPoint((float)args.OffsetX, (float)args.OffsetY);
+        if (!TryGetMapPoint(args, out var mapX, out var mapY))
+        {
+            return;
+        }
+
+        AddBrushPoint(mapX, mapY);
         await DrawAsync();
     }
 
     private async Task HandlePointerUp(MouseEventArgs args)
     {
+        if (_isPanning && _activeTool == MapToolType.Pointer)
+        {
+            _isPanning = false;
+            return;
+        }
+
         if (!_isDrawing || _activeTool != MapToolType.Brush)
         {
             return;
@@ -243,6 +293,12 @@
 
     private async Task HandlePointerLeave(MouseEventArgs args)
     {
+        if (_isPanning && _activeTool == MapToolType.Pointer)
+        {
+            _isPanning = false;
+            return;
+        }
+
         if (!_isDrawing || _activeTool != MapToolType.Brush)
         {
             return;
@@ -252,10 +308,79 @@
         await DrawAsync();
     }
 
+    private async Task HandleWheel(WheelEventArgs args)
+    {
+        var zoomFactor = args.DeltaY < 0 ? 1.1f : 0.9f;
+        var newZoom = Math.Clamp(_zoom * zoomFactor, MinZoom, MaxZoom);
+        if (Math.Abs(newZoom - _zoom) < 0.001f)
+        {
+            return;
+        }
+
+        var before = ScreenToMap((float)args.OffsetX, (float)args.OffsetY);
+        _zoom = newZoom;
+        _viewX = before.X - ((float)args.OffsetX / _zoom);
+        _viewY = before.Y - ((float)args.OffsetY / _zoom);
+        ClampView();
+        await DrawAsync();
+    }
+
+    private void StartPan(MouseEventArgs args)
+    {
+        _isPanning = true;
+        _panStartX = (float)args.OffsetX;
+        _panStartY = (float)args.OffsetY;
+        _panOriginX = _viewX;
+        _panOriginY = _viewY;
+        _statusMessage = "Panning map...";
+    }
+
+    private void UpdatePan(MouseEventArgs args)
+    {
+        var dx = ((float)args.OffsetX - _panStartX) / _zoom;
+        var dy = ((float)args.OffsetY - _panStartY) / _zoom;
+        _viewX = _panOriginX - dx;
+        _viewY = _panOriginY - dy;
+        ClampView();
+    }
+
+    private (float X, float Y) ScreenToMap(float screenX, float screenY)
+    {
+        return (_viewX + (screenX / _zoom), _viewY + (screenY / _zoom));
+    }
+
+    private bool TryGetMapPoint(MouseEventArgs args, out float mapX, out float mapY)
+    {
+        var (rawX, rawY) = ScreenToMap((float)args.OffsetX, (float)args.OffsetY);
+        if (rawX < 0 || rawX > MapWidth || rawY < 0 || rawY > MapHeight)
+        {
+            mapX = 0;
+            mapY = 0;
+            return false;
+        }
+
+        mapX = Math.Clamp(rawX, 0, MapWidth);
+        mapY = Math.Clamp(rawY, 0, MapHeight);
+        return true;
+    }
+
+    private void ClampView()
+    {
+        var maxX = Math.Max(0f, MapWidth - (CanvasWidth / _zoom));
+        var maxY = Math.Max(0f, MapHeight - (CanvasHeight / _zoom));
+        _viewX = Math.Clamp(_viewX, 0f, maxX);
+        _viewY = Math.Clamp(_viewY, 0f, maxY);
+    }
+
     private async Task HandlePointToolAsync(MouseEventArgs args)
     {
-        _lastX = (float)args.OffsetX;
-        _lastY = (float)args.OffsetY;
+        if (!TryGetMapPoint(args, out var mapX, out var mapY))
+        {
+            return;
+        }
+
+        _lastX = mapX;
+        _lastY = mapY;
         _hasLastPlacement = true;
 
         if (_placementType == PlacementType.House)
@@ -441,7 +566,7 @@
         EnsureAreaLayers();
     }
 
-    private void StartBrushStroke(MouseEventArgs args)
+    private void StartBrushStroke(float mapX, float mapY)
     {
         EnsureAreaLayers();
         _isDrawing = true;
@@ -450,7 +575,7 @@
             Tool = "Brush",
             Radius = BrushRadius
         };
-        AddBrushPoint((float)args.OffsetX, (float)args.OffsetY);
+        AddBrushPoint(mapX, mapY);
         _statusMessage = $"Painting {_activeAreaLayer?.FeatureType ?? "area"}...";
     }
 
@@ -593,7 +718,15 @@
         {
             PointFeatures = pointFeatures,
             AreaLayers = new List<AreaLayerDto>(_areaLayers),
-            ActiveStroke = _activeStroke
+            ActiveStroke = _activeStroke,
+            ViewState = new MapViewStateDto
+            {
+                ViewX = _viewX,
+                ViewY = _viewY,
+                Zoom = _zoom,
+                MapWidth = MapWidth,
+                MapHeight = MapHeight
+            }
         };
     }
 
@@ -605,6 +738,7 @@
 
     private enum MapToolType
     {
+        Pointer,
         Point,
         Brush,
         Polygon,
@@ -616,3 +750,13 @@
 
     private sealed record ToolDefinition(MapToolType Tool, string Label, string Description, bool IsImplemented);
 }
+
+
+
+
+
+
+
+
+
+
