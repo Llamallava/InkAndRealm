@@ -13,7 +13,7 @@
 
 <PageTitle>Ink & Realm Map Editor</PageTitle>
 
-<div class="container py-4">
+<div class="container-fluid map-editor-page py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h1 class="mb-0">Map Editor</h1>
         <button class="btn btn-outline-secondary" @onclick="GoHome">
@@ -21,27 +21,68 @@
         </button>
     </div>
 
-    <p class="text-muted">
+    <p class="text-muted map-editor-instructions">
         Click on the canvas to place the selected feature. Changes stay local until you save all.
     </p>
 
-    <div class="d-flex gap-3 align-items-start flex-wrap">
-        <div class="border rounded shadow-sm p-2 bg-white">
-            <canvas id="@CanvasId"
-                    width="640"
-                    height="360"
-                    class="border"
-                    style="touch-action:none;"
-                    @onmousedown="HandlePointerDown"
-                    @onmousemove="HandlePointerMove"
-                    @onmouseup="HandlePointerUp"
-                    @onmouseleave="HandlePointerLeave"
-                    @onwheel="HandleWheel"
-                    @onwheel:preventDefault="true">
-            </canvas>
-        </div>
+    <div class="map-editor-layout">
+        <section class="map-editor-canvas-zone">
+            <div class="map-editor-canvas-card">
+                <div class="map-editor-canvas-shell">
+                    <canvas id="@CanvasId"
+                            width="1000"
+                            height="600"
+                            class="map-editor-canvas"
+                            style="touch-action:none;"
+                            @onmousedown="HandlePointerDown"
+                            @onmousemove="HandlePointerMove"
+                            @onmouseup="HandlePointerUp"
+                            @onmouseleave="HandlePointerLeave"
+                            @onwheel="HandleWheel"
+                            @onwheel:preventDefault="true">
+                    </canvas>
+                    <div class="map-editor-toolbox">
+                        <div class="btn-group-vertical" role="group" aria-label="Tool selection">
+                            @foreach (var tool in ToolDefinitions)
+                            {
+                                <button class="btn btn-sm @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
+                                        @onclick="() => SelectTool(tool.Tool)">
+                                    @tool.Label
+                                </button>
+                            }
+                        </div>
+                        <div class="map-editor-tool-section">
+                            <div class="small text-muted">Placement</div>
+                            <div class="btn-group-vertical" role="group" aria-label="Feature placement selection">
+                                @foreach (var placement in PlacementDefinitions)
+                                {
+                                    <button class="btn btn-sm @(_placementType == placement.PlacementType ? "btn-primary" : "btn-outline-primary")"
+                                            @onclick="() => SelectPlacement(placement.PlacementType)">
+                                        @placement.Label
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        <div class="map-editor-tool-section">
+                            <div class="small text-muted">@ActiveStyleDefinition.MenuLabel</div>
+                            <select class="form-select form-select-sm" @bind="SelectedPlacementStyle">
+                                @foreach (var style in ActiveStyleDefinition.Styles)
+                                {
+                                    <option value="@style">@style</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="map-editor-tool-summary">
+                            <div class="small text-muted">Active Tool</div>
+                            <div class="fw-semibold">@ActiveToolDefinition.Label</div>
+                            <div class="small text-muted">@ActiveToolSummary</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-        <div class="flex-grow-1">
+        <aside class="map-editor-panel">
             <div class="mb-3">
                 <div><strong>Last Placement:</strong></div>
                 <div>@(_hasLastPlacement ? $"{_lastX:0}, {_lastY:0}" : "Click the canvas to place a feature.")</div>
@@ -58,58 +99,8 @@
             </div>
 
             <div class="mb-3">
-                <div><strong>Active Tool:</strong></div>
-                <div class="btn-group flex-wrap" role="group" aria-label="Tool selection">
-                    @foreach (var tool in ToolDefinitions)
-                    {
-                        <button class="btn @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="() => SelectTool(tool.Tool)">
-                            @tool.Label
-                        </button>
-                    }
-                </div>
-                <div class="form-text">@ActiveToolSummary</div>
-            </div>
-
-            <div class="mb-3">
                 <div><strong>Active Area Layer:</strong></div>
                 <div>@ActiveAreaLayerLabel (fixed for now)</div>
-            </div>
-
-            <div class="mb-3">
-                <div><strong>Placement Type:</strong></div>
-                <div class="btn-group" role="group" aria-label="Feature placement selection">
-                    <button class="btn @( _placementType == PlacementType.Tree ? "btn-primary" : "btn-outline-primary")"
-                            @onclick="() => SelectPlacement(PlacementType.Tree)">
-                        Tree
-                    </button>
-                    <button class="btn @( _placementType == PlacementType.House ? "btn-primary" : "btn-outline-primary")"
-                            @onclick="() => SelectPlacement(PlacementType.House)">
-                        House
-                    </button>
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <div><strong>Style:</strong></div>
-                @if (_placementType == PlacementType.Tree)
-                {
-                    <select class="form-select" @bind="_selectedTreeStyle">
-                        @foreach (var style in TreeStyles)
-                        {
-                            <option value="@style">@style</option>
-                        }
-                    </select>
-                }
-                else if (_placementType == PlacementType.House)
-                {
-                    <select class="form-select" @bind="_selectedHouseStyle">
-                        @foreach (var style in HouseStyles)
-                        {
-                            <option value="@style">@style</option>
-                        }
-                    </select>
-                }
             </div>
 
             <div class="d-flex gap-2">
@@ -129,7 +120,7 @@
             {
                 <div class="alert alert-info mt-3">@_statusMessage</div>
             }
-        </div>
+        </aside>
     </div>
 </div>
 
@@ -143,8 +134,10 @@
     private const float MapHeight = 1200f;
     private const float MinZoom = 0.5f;
     private const float MaxZoom = 3f;
-    private const float CanvasWidth = 640f;
-    private const float CanvasHeight = 360f;
+    private const float CanvasWidth = 1000f;
+    private const float CanvasHeight = 600f;
+    private float _canvasClientWidth = CanvasWidth;
+    private float _canvasClientHeight = CanvasHeight;
     private float _lastX;
     private float _lastY;
     private bool _hasLastPlacement;
@@ -162,8 +155,11 @@
     private string _statusMessage = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
-    private string _selectedTreeStyle = "Oak";
-    private string _selectedHouseStyle = "Cottage";
+    private readonly Dictionary<PlacementType, string> _selectedStyleByPlacement = new()
+    {
+        { PlacementType.Tree, "Oak" },
+        { PlacementType.House, "Cottage" }
+    };
     private MapToolType _activeTool = MapToolType.Point;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
@@ -186,6 +182,16 @@
         "Cabin",
         "Manor"
     };
+    private static readonly IReadOnlyList<PlacementDefinition> PlacementDefinitions = new List<PlacementDefinition>
+    {
+        new(PlacementType.Tree, "Tree"),
+        new(PlacementType.House, "House")
+    };
+    private static readonly IReadOnlyList<FeatureStyleDefinition> FeatureStyleDefinitions = new List<FeatureStyleDefinition>
+    {
+        new(PlacementType.Tree, "Tree Style", TreeStyles),
+        new(PlacementType.House, "House Style", HouseStyles)
+    };
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
     {
         new(MapToolType.Pointer, "Pointer", "Pan the map without placing items.", true),
@@ -202,6 +208,13 @@
         ? ActiveToolDefinition.Description
         : $"{ActiveToolDefinition.Description} (coming soon).";
     private string ActiveAreaLayerLabel => _activeAreaLayer?.FeatureType ?? "None";
+    private FeatureStyleDefinition ActiveStyleDefinition
+        => FeatureStyleDefinitions.First(definition => definition.PlacementType == _placementType);
+    private string SelectedPlacementStyle
+    {
+        get => GetStyleForPlacement(_placementType);
+        set => _selectedStyleByPlacement[_placementType] = value;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -214,6 +227,7 @@
     {
         if (firstRender)
         {
+            await UpdateCanvasClientSizeAsync();
             await DrawAsync();
         }
     }
@@ -346,7 +360,9 @@
 
     private (float X, float Y) ScreenToMap(float screenX, float screenY)
     {
-        return (_viewX + (screenX / _zoom), _viewY + (screenY / _zoom));
+        var scaleX = GetCanvasScaleX();
+        var scaleY = GetCanvasScaleY();
+        return (_viewX + ((screenX * scaleX) / _zoom), _viewY + ((screenY * scaleY) / _zoom));
     }
 
     private bool TryGetMapPoint(MouseEventArgs args, out float mapX, out float mapY)
@@ -383,13 +399,14 @@
         _lastY = mapY;
         _hasLastPlacement = true;
 
+        var selectedStyle = GetStyleForPlacement(_placementType);
         if (_placementType == PlacementType.House)
         {
             _stagedHouses.Add(new HouseFeatureDto
             {
                 X = _lastX,
                 Y = _lastY,
-                HouseType = _selectedHouseStyle
+                HouseType = selectedStyle
             });
             _statusMessage = $"Placed house at {_lastX:0}, {_lastY:0} (unsaved).";
         }
@@ -399,7 +416,7 @@
             {
                 X = _lastX,
                 Y = _lastY,
-                TreeType = _selectedTreeStyle
+                TreeType = selectedStyle
             });
             _statusMessage = $"Placed tree at {_lastX:0}, {_lastY:0} (unsaved).";
         }
@@ -662,6 +679,37 @@
         _hasLastPlacement = false;
     }
 
+    private async Task UpdateCanvasClientSizeAsync()
+    {
+        var size = await JS.InvokeAsync<CanvasClientSize?>("inkAndRealmDemo.getCanvasClientSize", CanvasId);
+        if (size is null || size.Width <= 0 || size.Height <= 0)
+        {
+            _canvasClientWidth = CanvasWidth;
+            _canvasClientHeight = CanvasHeight;
+            return;
+        }
+
+        _canvasClientWidth = size.Width;
+        _canvasClientHeight = size.Height;
+    }
+
+    private string GetStyleForPlacement(PlacementType placementType)
+    {
+        return _selectedStyleByPlacement.TryGetValue(placementType, out var style)
+            ? style
+            : string.Empty;
+    }
+
+    private float GetCanvasScaleX()
+    {
+        return _canvasClientWidth > 0 ? (CanvasWidth / _canvasClientWidth) : 1f;
+    }
+
+    private float GetCanvasScaleY()
+    {
+        return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
+    }
+
     private MapRenderStateDto BuildRenderState()
     {
         var pointFeatures = new List<MapPointFeatureDto>();
@@ -749,6 +797,9 @@
     }
 
     private sealed record ToolDefinition(MapToolType Tool, string Label, string Description, bool IsImplemented);
+    private sealed record PlacementDefinition(PlacementType PlacementType, string Label);
+    private sealed record FeatureStyleDefinition(PlacementType PlacementType, string MenuLabel, IReadOnlyList<string> Styles);
+    private sealed record CanvasClientSize(float Width, float Height);
 }
 
 

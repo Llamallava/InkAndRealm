@@ -113,3 +113,93 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+.map-editor-page {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.map-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.map-editor-canvas-zone {
+    min-width: 0;
+}
+
+.map-editor-canvas-card {
+    background: #ffffff;
+    border-radius: 0.75rem;
+    border: 1px solid #d9dee5;
+    padding: 1rem;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.map-editor-canvas-shell {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    border: 1px solid #dfe4ea;
+    background: #f5f1e8;
+}
+
+.map-editor-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.map-editor-toolbox {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 0.75rem;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+    max-width: 200px;
+    pointer-events: auto;
+}
+
+.map-editor-tool-section {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.map-editor-toolbox .btn {
+    text-align: left;
+}
+
+.map-editor-tool-summary {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.map-editor-panel {
+    background: #ffffff;
+    border-radius: 0.75rem;
+    border: 1px solid #d9dee5;
+    padding: 1.25rem;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+}
+
+.map-editor-instructions {
+    max-width: 720px;
+}
+
+@media (max-width: 1200px) {
+    .map-editor-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .map-editor-panel {
+        order: 2;
+    }
+}

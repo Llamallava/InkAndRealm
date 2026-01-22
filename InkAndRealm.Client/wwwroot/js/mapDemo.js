@@ -222,6 +222,18 @@ window.inkAndRealmDemo = {
             });
         }
 
+    },
+    getCanvasClientSize: (canvasId) => {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) {
+            return null;
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        return {
+            width: rect.width,
+            height: rect.height
+        };
     }
 };
 
