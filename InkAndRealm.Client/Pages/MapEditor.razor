@@ -163,6 +163,9 @@
     private float _panStartY;
     private float _panOriginX;
     private float _panOriginY;
+    private bool _isPanCandidate;
+    private float _panCandidateStartX;
+    private float _panCandidateStartY;
     private bool _isLoading;
     private bool _isSaving;
     private bool _hasMap;
@@ -184,12 +187,13 @@
     private readonly HashSet<int> _activeStrokeCells = new();
     private readonly Dictionary<int, bool[]> _layerMasks = new();
     private readonly List<AreaStrokeDto> _stagedWaterStrokes = new();
-    private const float AreaMaskCellSize = 1f;
+    private const float AreaMaskCellSize = 0.5f;
     private readonly int _maskWidth = (int)Math.Ceiling(MapWidth / AreaMaskCellSize);
     private readonly int _maskHeight = (int)Math.Ceiling(MapHeight / AreaMaskCellSize);
     private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterStrokes.Count;
     [Parameter] public int MapId { get; set; }
     private const float BrushRadius = 18f;
+    private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
     {
         "Oak",
@@ -270,7 +274,7 @@
 
         if (_activeTool == MapToolType.Point)
         {
-            await HandlePointToolAsync(args);
+            BeginPanCandidate(args);
             return;
         }
 
@@ -289,10 +293,23 @@
 
     private async Task HandlePointerMove(MouseEventArgs args)
     {
-        if (_isPanning && _activeTool == MapToolType.Pointer)
+        if (_isPanning && (_activeTool == MapToolType.Pointer || _activeTool == MapToolType.Point))
         {
             UpdatePan(args);
             await DrawAsync();
+            return;
+        }
+
+        if (_isPanCandidate && _activeTool == MapToolType.Point)
+        {
+            var dx = (float)args.OffsetX - _panCandidateStartX;
+            var dy = (float)args.OffsetY - _panCandidateStartY;
+            if ((dx * dx) + (dy * dy) >= (PanDragThreshold * PanDragThreshold))
+            {
+                StartPanFromCandidate();
+                UpdatePan(args);
+                await DrawAsync();
+            }
             return;
         }
 
@@ -312,9 +329,17 @@
 
     private async Task HandlePointerUp(MouseEventArgs args)
     {
-        if (_isPanning && _activeTool == MapToolType.Pointer)
+        if (_isPanning && (_activeTool == MapToolType.Pointer || _activeTool == MapToolType.Point))
         {
             _isPanning = false;
+            _isPanCandidate = false;
+            return;
+        }
+
+        if (_isPanCandidate && _activeTool == MapToolType.Point)
+        {
+            _isPanCandidate = false;
+            await HandlePointToolAsync(args);
             return;
         }
 
@@ -329,9 +354,10 @@
 
     private async Task HandlePointerLeave(MouseEventArgs args)
     {
-        if (_isPanning && _activeTool == MapToolType.Pointer)
+        if ((_isPanning || _isPanCandidate) && (_activeTool == MapToolType.Pointer || _activeTool == MapToolType.Point))
         {
             _isPanning = false;
+            _isPanCandidate = false;
             return;
         }
 
@@ -368,6 +394,24 @@
         _panStartY = (float)args.OffsetY;
         _panOriginX = _viewX;
         _panOriginY = _viewY;
+        _statusMessage = "Panning map...";
+    }
+
+    private void BeginPanCandidate(MouseEventArgs args)
+    {
+        _isPanCandidate = true;
+        _panCandidateStartX = (float)args.OffsetX;
+        _panCandidateStartY = (float)args.OffsetY;
+    }
+
+    private void StartPanFromCandidate()
+    {
+        _isPanning = true;
+        _panStartX = _panCandidateStartX;
+        _panStartY = _panCandidateStartY;
+        _panOriginX = _viewX;
+        _panOriginY = _viewY;
+        _isPanCandidate = false;
         _statusMessage = "Panning map...";
     }
 
