@@ -66,6 +66,7 @@ public sealed class CreateMapRequest
 public sealed class AreaLayerDto
 {
     public string LayerKey { get; set; } = string.Empty;
+    public int LayerIndex { get; set; }
     public string FeatureType { get; set; } = string.Empty;
     public List<AreaStrokeDto> Strokes { get; set; } = new();
 }
@@ -74,6 +75,7 @@ public sealed class AreaStrokeDto
 {
     public string Tool { get; set; } = "Brush";
     public float Radius { get; set; }
+    public int LayerIndex { get; set; }
     public List<MapPointDto> Points { get; set; } = new();
 }
 
@@ -88,6 +90,7 @@ public sealed class MapRenderStateDto
     public List<MapPointFeatureDto> PointFeatures { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public AreaStrokeDto? ActiveStroke { get; set; }
+    public List<AreaStrokeDto> ActiveStrokes { get; set; } = new();
     public MapViewStateDto ViewState { get; set; } = new();
 }
 

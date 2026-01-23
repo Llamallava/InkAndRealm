@@ -99,8 +99,22 @@
             </div>
 
             <div class="mb-3">
-                <div><strong>Active Area Layer:</strong></div>
-                <div>@ActiveAreaLayerLabel (fixed for now)</div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div><strong>Layers:</strong></div>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="AddAreaLayer">
+                        Add Layer
+                    </button>
+                </div>
+                <div class="btn-group-vertical w-100 mt-2" role="group" aria-label="Area layers">
+                    @for (var i = 0; i < _areaLayers.Count; i += 1)
+                    {
+                        var layer = _areaLayers[i];
+                        <button class="btn btn-sm @(_activeAreaLayer == layer ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="() => SelectAreaLayer(layer)">
+                            @GetLayerLabel(layer, i)
+                        </button>
+                    }
+                </div>
             </div>
 
             <div class="d-flex gap-2">
@@ -163,9 +177,16 @@
     private MapToolType _activeTool = MapToolType.Point;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
-    private AreaStrokeDto? _activeStroke;
+    private readonly List<AreaStrokeDto> _activeStrokes = new();
+    private AreaStrokeDto? _currentStroke;
     private bool _isDrawing;
+    private MapPointDto? _lastBrushInputPoint;
+    private readonly HashSet<int> _activeStrokeCells = new();
+    private readonly Dictionary<int, bool[]> _layerMasks = new();
     private readonly List<AreaStrokeDto> _stagedWaterStrokes = new();
+    private const float AreaMaskCellSize = 1f;
+    private readonly int _maskWidth = (int)Math.Ceiling(MapWidth / AreaMaskCellSize);
+    private readonly int _maskHeight = (int)Math.Ceiling(MapHeight / AreaMaskCellSize);
     private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterStrokes.Count;
     [Parameter] public int MapId { get; set; }
     private const float BrushRadius = 18f;
@@ -207,7 +228,7 @@
     private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
         ? ActiveToolDefinition.Description
         : $"{ActiveToolDefinition.Description} (coming soon).";
-    private string ActiveAreaLayerLabel => _activeAreaLayer?.FeatureType ?? "None";
+    private string ActiveAreaLayerLabel => _activeAreaLayer is null ? "None" : GetLayerLabel(_activeAreaLayer);
     private FeatureStyleDefinition ActiveStyleDefinition
         => FeatureStyleDefinitions.First(definition => definition.PlacementType == _placementType);
     private string SelectedPlacementStyle
@@ -220,6 +241,7 @@
     {
         UserState.Changed += OnUserChanged;
         EnsureAreaLayers();
+        RebuildLayerMasks();
         await LoadMapAsync();
     }
 
@@ -274,7 +296,7 @@
             return;
         }
 
-        if (!_isDrawing || _activeTool != MapToolType.Brush || _activeStroke is null)
+        if (!_isDrawing || _activeTool != MapToolType.Brush)
         {
             return;
         }
@@ -553,7 +575,8 @@
         {
             var layer = new AreaLayerDto
             {
-                LayerKey = "water",
+                LayerKey = "water-0",
+                LayerIndex = 0,
                 FeatureType = "Water"
             };
             _areaLayers.Add(layer);
@@ -561,7 +584,7 @@
         }
         else if (_activeAreaLayer is null)
         {
-            _activeAreaLayer = _areaLayers[0];
+            _activeAreaLayer = _areaLayers.OrderBy(layer => layer.LayerIndex).First();
         }
     }
 
@@ -573,7 +596,9 @@
             _areaLayers.AddRange(map.AreaLayers);
         }
 
+        NormalizeAreaLayers();
         EnsureAreaLayers();
+        RebuildLayerMasks();
     }
 
     private void ResetAreaLayers()
@@ -581,61 +606,118 @@
         _areaLayers.Clear();
         _activeAreaLayer = null;
         EnsureAreaLayers();
+        RebuildLayerMasks();
+    }
+
+    private void NormalizeAreaLayers()
+    {
+        if (_areaLayers.Count == 0)
+        {
+            return;
+        }
+
+        _areaLayers.Sort((left, right) =>
+        {
+            var indexCompare = left.LayerIndex.CompareTo(right.LayerIndex);
+            return indexCompare != 0 ? indexCompare : string.CompareOrdinal(left.LayerKey, right.LayerKey);
+        });
+    }
+
+    private void AddAreaLayer()
+    {
+        var nextIndex = GetNextLayerIndex();
+        var layer = new AreaLayerDto
+        {
+            LayerKey = $"water-{nextIndex}",
+            LayerIndex = nextIndex,
+            FeatureType = "Water"
+        };
+        _areaLayers.Add(layer);
+        NormalizeAreaLayers();
+        _activeAreaLayer = layer;
+        GetLayerMask(layer);
+        _statusMessage = $"{GetLayerLabel(layer)} created.";
+    }
+
+    private void SelectAreaLayer(AreaLayerDto layer)
+    {
+        _activeAreaLayer = layer;
+        _statusMessage = $"{GetLayerLabel(layer)} selected.";
+    }
+
+    private int GetNextLayerIndex()
+    {
+        return _areaLayers.Count == 0 ? 0 : _areaLayers.Max(layer => layer.LayerIndex) + 1;
+    }
+
+    private string GetLayerLabel(AreaLayerDto layer, int fallbackIndex = 0)
+    {
+        var index = layer.LayerIndex >= 0 ? layer.LayerIndex : fallbackIndex;
+        return $"Layer {index + 1}";
     }
 
     private void StartBrushStroke(float mapX, float mapY)
     {
         EnsureAreaLayers();
         _isDrawing = true;
-        _activeStroke = new AreaStrokeDto
-        {
-            Tool = "Brush",
-            Radius = BrushRadius
-        };
-        AddBrushPoint(mapX, mapY);
+        _activeStrokes.Clear();
+        _currentStroke = null;
+        _activeStrokeCells.Clear();
+        _lastBrushInputPoint = new MapPointDto { X = mapX, Y = mapY };
+        TryAddBrushSegment(mapX, mapY, mapX, mapY);
         _statusMessage = $"Painting {_activeAreaLayer?.FeatureType ?? "area"}...";
     }
 
     private void AddBrushPoint(float x, float y)
     {
-        if (_activeStroke is null)
+        if (_activeAreaLayer is null)
         {
             return;
         }
 
-        if (_activeStroke.Points.Count == 0)
+        if (_lastBrushInputPoint is null)
         {
-            _activeStroke.Points.Add(new MapPointDto { X = x, Y = y });
+            _lastBrushInputPoint = new MapPointDto { X = x, Y = y };
+            TryAddBrushSegment(x, y, x, y);
             return;
         }
 
-        var last = _activeStroke.Points[^1];
-        var dx = x - last.X;
-        var dy = y - last.Y;
-        var minDistance = _activeStroke.Radius * 0.5f;
-        if ((dx * dx) + (dy * dy) >= minDistance * minDistance)
-        {
-            _activeStroke.Points.Add(new MapPointDto { X = x, Y = y });
-        }
+        TryAddBrushSegment(_lastBrushInputPoint.X, _lastBrushInputPoint.Y, x, y);
+        _lastBrushInputPoint.X = x;
+        _lastBrushInputPoint.Y = y;
     }
 
     private void CommitBrushStroke()
     {
-        if (_activeStroke is null || _activeAreaLayer is null)
+        if (_activeAreaLayer is null)
         {
-            _activeStroke = null;
+            _currentStroke = null;
             _isDrawing = false;
             return;
         }
 
-        if (_activeStroke.Points.Count > 0)
+        var committed = 0;
+        foreach (var stroke in _activeStrokes)
         {
-            _activeAreaLayer.Strokes.Add(_activeStroke);
-            _stagedWaterStrokes.Add(_activeStroke);
-            _statusMessage = $"Painted {_activeAreaLayer.FeatureType} layer.";
+            if (stroke.Points.Count == 0)
+            {
+                continue;
+            }
+
+            _activeAreaLayer.Strokes.Add(stroke);
+            _stagedWaterStrokes.Add(stroke);
+            StampStrokeToMask(stroke, GetLayerMask(_activeAreaLayer));
+            committed += 1;
         }
 
-        _activeStroke = null;
+        _statusMessage = committed > 0
+            ? $"Painted {_activeAreaLayer.FeatureType} layer."
+            : $"Nothing new to add on {GetLayerLabel(_activeAreaLayer)}.";
+
+        _activeStrokes.Clear();
+        _currentStroke = null;
+        _lastBrushInputPoint = null;
+        _activeStrokeCells.Clear();
         _isDrawing = false;
     }
 
@@ -710,6 +792,181 @@
         return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
     }
 
+    private void TryAddBrushSegment(float startX, float startY, float endX, float endY)
+    {
+        if (_activeAreaLayer is null)
+        {
+            return;
+        }
+
+        var radius = BrushRadius;
+        var layerMask = GetLayerMask(_activeAreaLayer);
+        if (!HasNewCoverageSegment(startX, startY, endX, endY, radius, layerMask))
+        {
+            _currentStroke = null;
+            return;
+        }
+
+        if (_currentStroke is null)
+        {
+            _currentStroke = new AreaStrokeDto
+            {
+                Tool = "Brush",
+                Radius = BrushRadius,
+                LayerIndex = _activeAreaLayer.LayerIndex
+            };
+            _activeStrokes.Add(_currentStroke);
+        }
+
+        var shouldAddPoint = true;
+        if (_currentStroke.Points.Count > 0)
+        {
+            var last = _currentStroke.Points[^1];
+            var deltaX = endX - last.X;
+            var deltaY = endY - last.Y;
+            var minDistance = BrushRadius * 0.5f;
+            shouldAddPoint = (deltaX * deltaX) + (deltaY * deltaY) >= (minDistance * minDistance);
+        }
+
+        if (_currentStroke.Points.Count == 0)
+        {
+            _currentStroke.Points.Add(new MapPointDto { X = startX, Y = startY });
+        }
+
+        if (shouldAddPoint)
+        {
+            _currentStroke.Points.Add(new MapPointDto { X = endX, Y = endY });
+        }
+
+        MarkCoverageSegment(startX, startY, endX, endY, radius, layerMask);
+    }
+
+    private bool HasNewCoverageSegment(float startX, float startY, float endX, float endY, float radius, bool[] layerMask)
+    {
+        foreach (var index in GetMaskCellsForSegment(startX, startY, endX, endY, radius))
+        {
+            if (!layerMask[index] && !_activeStrokeCells.Contains(index))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void MarkCoverageSegment(float startX, float startY, float endX, float endY, float radius, bool[] layerMask)
+    {
+        foreach (var index in GetMaskCellsForSegment(startX, startY, endX, endY, radius))
+        {
+            if (layerMask[index])
+            {
+                continue;
+            }
+
+            _activeStrokeCells.Add(index);
+        }
+    }
+
+    private IEnumerable<int> GetMaskCellsForSegment(float startX, float startY, float endX, float endY, float radius)
+    {
+        var expandedRadius = radius + (AreaMaskCellSize * 0.5f);
+        var minX = Math.Clamp((int)MathF.Floor((MathF.Min(startX, endX) - expandedRadius) / AreaMaskCellSize), 0, _maskWidth - 1);
+        var maxX = Math.Clamp((int)MathF.Floor((MathF.Max(startX, endX) + expandedRadius) / AreaMaskCellSize), 0, _maskWidth - 1);
+        var minY = Math.Clamp((int)MathF.Floor((MathF.Min(startY, endY) - expandedRadius) / AreaMaskCellSize), 0, _maskHeight - 1);
+        var maxY = Math.Clamp((int)MathF.Floor((MathF.Max(startY, endY) + expandedRadius) / AreaMaskCellSize), 0, _maskHeight - 1);
+        var radiusSquared = expandedRadius * expandedRadius;
+
+        for (var gridY = minY; gridY <= maxY; gridY += 1)
+        {
+            var centerY = (gridY + 0.5f) * AreaMaskCellSize;
+            for (var gridX = minX; gridX <= maxX; gridX += 1)
+            {
+                var centerX = (gridX + 0.5f) * AreaMaskCellSize;
+                var distanceSquared = DistanceSquaredToSegment(centerX, centerY, startX, startY, endX, endY);
+                if (distanceSquared <= radiusSquared)
+                {
+                    yield return (gridY * _maskWidth) + gridX;
+                }
+            }
+        }
+    }
+
+    private void RebuildLayerMasks()
+    {
+        _layerMasks.Clear();
+        foreach (var layer in _areaLayers)
+        {
+            var mask = GetLayerMask(layer);
+            foreach (var stroke in layer.Strokes)
+            {
+                StampStrokeToMask(stroke, mask);
+            }
+        }
+    }
+
+    private bool[] GetLayerMask(AreaLayerDto layer)
+    {
+        if (!_layerMasks.TryGetValue(layer.LayerIndex, out var mask))
+        {
+            mask = new bool[_maskWidth * _maskHeight];
+            _layerMasks[layer.LayerIndex] = mask;
+        }
+
+        return mask;
+    }
+
+    private void StampStrokeToMask(AreaStrokeDto stroke, bool[] mask)
+    {
+        if (stroke.Points.Count == 0)
+        {
+            return;
+        }
+
+        var radius = stroke.Radius > 0 ? stroke.Radius : BrushRadius;
+        for (var i = 0; i < stroke.Points.Count; i += 1)
+        {
+            var point = stroke.Points[i];
+            if (i == 0)
+            {
+                StampSegmentToMask(point.X, point.Y, point.X, point.Y, radius, mask);
+                continue;
+            }
+
+            var prev = stroke.Points[i - 1];
+            StampSegmentToMask(prev.X, prev.Y, point.X, point.Y, radius, mask);
+        }
+    }
+
+    private void StampSegmentToMask(float startX, float startY, float endX, float endY, float radius, bool[] mask)
+    {
+        foreach (var index in GetMaskCellsForSegment(startX, startY, endX, endY, radius))
+        {
+            mask[index] = true;
+        }
+    }
+
+    private static float DistanceSquaredToSegment(float px, float py, float ax, float ay, float bx, float by)
+    {
+        var abx = bx - ax;
+        var aby = by - ay;
+        var apx = px - ax;
+        var apy = py - ay;
+        var abLenSquared = (abx * abx) + (aby * aby);
+
+        if (abLenSquared <= 0.0001f)
+        {
+            return (apx * apx) + (apy * apy);
+        }
+
+        var t = ((apx * abx) + (apy * aby)) / abLenSquared;
+        t = Math.Clamp(t, 0f, 1f);
+        var closestX = ax + (abx * t);
+        var closestY = ay + (aby * t);
+        var dx = px - closestX;
+        var dy = py - closestY;
+        return (dx * dx) + (dy * dy);
+    }
+
     private MapRenderStateDto BuildRenderState()
     {
         var pointFeatures = new List<MapPointFeatureDto>();
@@ -765,8 +1022,11 @@
         return new MapRenderStateDto
         {
             PointFeatures = pointFeatures,
-            AreaLayers = new List<AreaLayerDto>(_areaLayers),
-            ActiveStroke = _activeStroke,
+            AreaLayers = _areaLayers
+                .OrderBy(layer => layer.LayerIndex)
+                .ToList(),
+            ActiveStroke = null,
+            ActiveStrokes = new List<AreaStrokeDto>(_activeStrokes),
             ViewState = new MapViewStateDto
             {
                 ViewX = _viewX,

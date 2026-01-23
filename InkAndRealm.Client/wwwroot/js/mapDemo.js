@@ -188,21 +188,131 @@ window.inkAndRealmDemo = {
             }
         };
 
+        const layerCanvases = new Map();
         if (renderState && Array.isArray(renderState.areaLayers)) {
-            renderState.areaLayers.forEach(layer => {
+            const layers = renderState.areaLayers
+                .slice()
+                .sort((left, right) => (left.layerIndex ?? 0) - (right.layerIndex ?? 0));
+            layers.forEach(layer => {
                 if (!Array.isArray(layer.strokes)) {
                     return;
                 }
 
                 const color = getLayerColor(layer.featureType);
+                const layerCanvas = document.createElement("canvas");
+                layerCanvas.width = mapWidth;
+                layerCanvas.height = mapHeight;
+                const layerCtx = layerCanvas.getContext("2d");
+                if (!layerCtx) {
+                    return;
+                }
+
+                layerCtx.clearRect(0, 0, mapWidth, mapHeight);
                 layer.strokes.forEach(stroke => {
                     const radius = stroke.radius && stroke.radius > 0 ? stroke.radius : 18;
-                    drawStroke(stroke.points, radius, color, 0.85);
+                    if (!Array.isArray(stroke.points) || stroke.points.length === 0) {
+                        return;
+                    }
+
+                    layerCtx.save();
+                    layerCtx.lineWidth = radius * 2;
+                    layerCtx.lineCap = "round";
+                    layerCtx.lineJoin = "round";
+                    layerCtx.strokeStyle = color;
+                    layerCtx.globalAlpha = 1;
+
+                    if (stroke.points.length === 1) {
+                        layerCtx.fillStyle = color;
+                        layerCtx.beginPath();
+                        layerCtx.arc(stroke.points[0].x, stroke.points[0].y, radius, 0, Math.PI * 2);
+                        layerCtx.fill();
+                    } else {
+                        layerCtx.beginPath();
+                        layerCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                        for (let i = 1; i < stroke.points.length; i += 1) {
+                            layerCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+                        }
+                        layerCtx.stroke();
+                    }
+                    layerCtx.restore();
                 });
+
+                ctx.save();
+                ctx.globalAlpha = 0.85;
+                ctx.drawImage(layerCanvas, 0, 0);
+                ctx.restore();
+
+                const layerIndex = Number.isFinite(layer.layerIndex) ? layer.layerIndex : 0;
+                layerCanvases.set(layerIndex, layerCanvas);
             });
         }
 
-        if (renderState && renderState.activeStroke && Array.isArray(renderState.activeStroke.points)) {
+        if (renderState && Array.isArray(renderState.activeStrokes)) {
+            const activeByLayer = new Map();
+            renderState.activeStrokes.forEach(stroke => {
+                if (!stroke || !Array.isArray(stroke.points) || stroke.points.length === 0) {
+                    return;
+                }
+
+                const layerIndex = Number.isFinite(stroke.layerIndex) ? stroke.layerIndex : 0;
+                if (!activeByLayer.has(layerIndex)) {
+                    activeByLayer.set(layerIndex, []);
+                }
+                activeByLayer.get(layerIndex).push(stroke);
+            });
+
+            activeByLayer.forEach((strokes, layerIndex) => {
+                const previewCanvas = document.createElement("canvas");
+                previewCanvas.width = mapWidth;
+                previewCanvas.height = mapHeight;
+                const previewCtx = previewCanvas.getContext("2d");
+                if (!previewCtx) {
+                    return;
+                }
+
+                strokes.forEach(stroke => {
+                    const radius = stroke.radius && stroke.radius > 0 ? stroke.radius : 18;
+                    if (!Array.isArray(stroke.points) || stroke.points.length === 0) {
+                        return;
+                    }
+
+                    previewCtx.save();
+                    previewCtx.lineWidth = radius * 2;
+                    previewCtx.lineCap = "round";
+                    previewCtx.lineJoin = "round";
+                    previewCtx.strokeStyle = "#7fb7d9";
+                    previewCtx.globalAlpha = 1;
+
+                    if (stroke.points.length === 1) {
+                        previewCtx.fillStyle = "#7fb7d9";
+                        previewCtx.beginPath();
+                        previewCtx.arc(stroke.points[0].x, stroke.points[0].y, radius, 0, Math.PI * 2);
+                        previewCtx.fill();
+                    } else {
+                        previewCtx.beginPath();
+                        previewCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                        for (let i = 1; i < stroke.points.length; i += 1) {
+                            previewCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+                        }
+                        previewCtx.stroke();
+                    }
+                    previewCtx.restore();
+                });
+
+                const existingLayer = layerCanvases.get(layerIndex);
+                if (existingLayer) {
+                    previewCtx.save();
+                    previewCtx.globalCompositeOperation = "destination-out";
+                    previewCtx.drawImage(existingLayer, 0, 0);
+                    previewCtx.restore();
+                }
+
+                ctx.save();
+                ctx.globalAlpha = 0.6;
+                ctx.drawImage(previewCanvas, 0, 0);
+                ctx.restore();
+            });
+        } else if (renderState && renderState.activeStroke && Array.isArray(renderState.activeStroke.points)) {
             const radius = renderState.activeStroke.radius && renderState.activeStroke.radius > 0
                 ? renderState.activeStroke.radius
                 : 18;

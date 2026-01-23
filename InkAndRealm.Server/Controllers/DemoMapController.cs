@@ -275,7 +275,8 @@ public sealed class DemoMapController : ControllerBase
     {
         var feature = new WaterFeatureEntity
         {
-            WaterType = WaterType.Lake
+            WaterType = WaterType.Lake,
+            ZIndex = stroke?.LayerIndex ?? 0
         };
 
         if (stroke?.Points is not null)
@@ -303,6 +304,7 @@ public sealed class DemoMapController : ControllerBase
             {
                 Tool = "Brush",
                 Radius = DefaultBrushRadius,
+                LayerIndex = feature.ZIndex,
                 Points = feature.Points
                     .OrderBy(point => point.SortOrder)
                     .Select(point => new MapPointDto
@@ -311,6 +313,18 @@ public sealed class DemoMapController : ControllerBase
                         Y = point.Y
                     })
                     .ToList()
+            })
+            .ToList();
+
+        var waterLayers = waterStrokes
+            .GroupBy(stroke => stroke.LayerIndex)
+            .OrderBy(group => group.Key)
+            .Select(group => new AreaLayerDto
+            {
+                LayerKey = $"water-{group.Key}",
+                LayerIndex = group.Key,
+                FeatureType = "Water",
+                Strokes = group.ToList()
             })
             .ToList();
 
@@ -346,17 +360,7 @@ public sealed class DemoMapController : ControllerBase
                     };
                 })
                 .ToList(),
-            AreaLayers = waterStrokes.Count == 0
-                ? new List<AreaLayerDto>()
-                : new List<AreaLayerDto>
-                {
-                    new AreaLayerDto
-                    {
-                        LayerKey = "water",
-                        FeatureType = "Water",
-                        Strokes = waterStrokes
-                    }
-                }
+            AreaLayers = waterLayers
         };
     }
 
