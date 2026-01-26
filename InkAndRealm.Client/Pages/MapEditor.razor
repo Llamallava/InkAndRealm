@@ -185,11 +185,16 @@
     private readonly List<MapPointDto> _activePolygonPoints = new();
     private readonly List<AreaPolygonDto> _waterPolygons = new();
     private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
+    private readonly Dictionary<int, AreaPolygonDto> _editedWaterPolygons = new();
     private AreaPolygonDto? _editingPolygon;
+    private List<MapPointDto>? _editingOriginalPoints;
     private int _editingPointIndex = -1;
     private int _editingEdgeIndex = -1;
     private bool _isDraggingEditPoint;
-    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterPolygons.Count;
+    private int PendingCount => _stagedTrees.Count
+        + _stagedHouses.Count
+        + _stagedWaterPolygons.Count
+        + _editedWaterPolygons.Count;
     [Parameter] public int MapId { get; set; }
     private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
@@ -326,6 +331,9 @@
             if (polygon is not null)
             {
                 _editingPolygon = polygon;
+                _editingOriginalPoints = polygon.Points
+                    .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                    .ToList();
 
                 var edgeIndex = FindEdgeIndex(polygon, mapX, mapY, hitRadius);
                 if (edgeIndex >= 0)
@@ -351,7 +359,7 @@
 
             if (_editingPolygon is not null)
             {
-                ClearEditSelection();
+                ClearEditSelection(false);
                 _statusMessage = "Edit selection cleared.";
                 await DrawAsync();
             }
@@ -448,7 +456,8 @@
         {
             if (_editingPolygon is not null)
             {
-                ClearEditSelection();
+                TrackEditedPolygon(_editingPolygon);
+                ClearEditSelection(true);
                 _statusMessage = "Polygon edit confirmed.";
                 await DrawAsync();
             }
@@ -665,7 +674,10 @@
             MapId = MapId,
             AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
             AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
-            AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons)
+            AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons),
+            UpdatedWaterPolygons = _editedWaterPolygons.Values
+                .Select(ClonePolygon)
+                .ToList()
         };
 
         var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
@@ -680,11 +692,12 @@
             {
                 _waterPolygons.AddRange(map.AreaPolygons);
             }
+            _editedWaterPolygons.Clear();
             LoadAreaLayers(map);
             _stagedTrees.Clear();
             _stagedHouses.Clear();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
-            ClearEditSelection();
+            ClearEditSelection(true);
             await DrawAsync();
         }
         else
@@ -740,6 +753,7 @@
         {
             _waterPolygons.AddRange(map.AreaPolygons);
         }
+        _editedWaterPolygons.Clear();
         _hasMap = map?.Id > 0;
         LoadAreaLayers(map);
         ClearStaged();
@@ -767,7 +781,7 @@
         _activeTool = tool;
         if (tool != MapToolType.Edit && _editingPolygon is not null)
         {
-            ClearEditSelection();
+            ClearEditSelection(false);
             _ = InvokeAsync(DrawAsync);
         }
         _statusMessage = ActiveToolDefinition.IsImplemented
@@ -913,8 +927,9 @@
         _stagedTrees.Clear();
         _stagedHouses.Clear();
         _stagedWaterPolygons.Clear();
+        _editedWaterPolygons.Clear();
         _activePolygonPoints.Clear();
-        ClearEditSelection();
+        ClearEditSelection(false);
         _hasLastPlacement = false;
     }
 
@@ -949,12 +964,43 @@
         return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
     }
 
-    private void ClearEditSelection()
+    private void ClearEditSelection(bool keepChanges)
     {
+        if (!keepChanges && _editingPolygon is not null && _editingOriginalPoints is not null)
+        {
+            _editingPolygon.Points = _editingOriginalPoints
+                .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                .ToList();
+        }
+
         _editingPolygon = null;
+        _editingOriginalPoints = null;
         _editingPointIndex = -1;
         _editingEdgeIndex = -1;
         _isDraggingEditPoint = false;
+    }
+
+    private void TrackEditedPolygon(AreaPolygonDto polygon)
+    {
+        if (polygon.Id <= 0)
+        {
+            return;
+        }
+
+        _editedWaterPolygons[polygon.Id] = ClonePolygon(polygon);
+    }
+
+    private static AreaPolygonDto ClonePolygon(AreaPolygonDto polygon)
+    {
+        return new AreaPolygonDto
+        {
+            Id = polygon.Id,
+            FeatureType = polygon.FeatureType,
+            LayerIndex = polygon.LayerIndex,
+            Points = polygon.Points
+                .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                .ToList()
+        };
     }
 
     private AreaPolygonDto? FindPolygonAtPoint(float mapX, float mapY)

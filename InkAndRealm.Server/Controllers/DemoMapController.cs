@@ -158,6 +158,43 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.UpdatedWaterPolygons is not null && request.UpdatedWaterPolygons.Count > 0)
+        {
+            foreach (var polygon in request.UpdatedWaterPolygons)
+            {
+                if (polygon is null || polygon.Id <= 0)
+                {
+                    continue;
+                }
+
+                var feature = map.Features
+                    .OfType<WaterFeatureEntity>()
+                    .FirstOrDefault(existing => existing.Id == polygon.Id);
+                if (feature is null)
+                {
+                    continue;
+                }
+
+                feature.ZIndex = polygon.LayerIndex;
+                feature.Points.Clear();
+                if (polygon.Points is not null)
+                {
+                    for (var i = 0; i < polygon.Points.Count; i += 1)
+                    {
+                        var point = polygon.Points[i];
+                        feature.Points.Add(new FeaturePointEntity
+                        {
+                            X = point.X,
+                            Y = point.Y,
+                            SortOrder = i
+                        });
+                    }
+                }
+
+                hasChanges = true;
+            }
+        }
+
         if (hasChanges)
         {
             await _context.SaveChangesAsync();
@@ -301,6 +338,7 @@ public sealed class DemoMapController : ControllerBase
             .OfType<WaterFeatureEntity>()
             .Select(feature => new AreaPolygonDto
             {
+                Id = feature.Id,
                 FeatureType = "Water",
                 LayerIndex = feature.ZIndex,
                 Points = feature.Points

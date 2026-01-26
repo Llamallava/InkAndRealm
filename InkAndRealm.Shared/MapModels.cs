@@ -56,6 +56,7 @@ public sealed class MapEditsRequest
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
     public List<AreaPolygonDto> AddedWaterPolygons { get; set; } = new();
+    public List<AreaPolygonDto> UpdatedWaterPolygons { get; set; } = new();
 }
 
 public sealed class CreateMapRequest
@@ -73,6 +74,7 @@ public sealed class AreaLayerDto
 
 public sealed class AreaPolygonDto
 {
+    public int Id { get; set; }
     public string FeatureType { get; set; } = string.Empty;
     public int LayerIndex { get; set; }
     public List<MapPointDto> Points { get; set; } = new();
