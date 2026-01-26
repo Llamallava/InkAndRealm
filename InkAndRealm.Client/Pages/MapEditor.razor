@@ -38,6 +38,8 @@
                             @onmousemove="HandlePointerMove"
                             @onmouseup="HandlePointerUp"
                             @onmouseleave="HandlePointerLeave"
+                            @oncontextmenu="HandleContextMenu"
+                            @oncontextmenu:preventDefault="true"
                             @onwheel="HandleWheel"
                             @onwheel:preventDefault="true">
                     </canvas>
@@ -183,14 +185,16 @@
     private readonly List<AreaStrokeDto> _activeStrokes = new();
     private AreaStrokeDto? _currentStroke;
     private bool _isDrawing;
+    private readonly List<MapPointDto> _activePolygonPoints = new();
     private MapPointDto? _lastBrushInputPoint;
     private readonly HashSet<int> _activeStrokeCells = new();
     private readonly Dictionary<int, bool[]> _layerMasks = new();
     private readonly List<AreaStrokeDto> _stagedWaterStrokes = new();
+    private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
     private const float AreaMaskCellSize = 0.5f;
     private readonly int _maskWidth = (int)Math.Ceiling(MapWidth / AreaMaskCellSize);
     private readonly int _maskHeight = (int)Math.Ceiling(MapHeight / AreaMaskCellSize);
-    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterStrokes.Count;
+    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterStrokes.Count + _stagedWaterPolygons.Count;
     [Parameter] public int MapId { get; set; }
     private const float BrushRadius = 18f;
     private const float PanDragThreshold = 6f;
@@ -222,7 +226,7 @@
         new(MapToolType.Pointer, "Pointer", "Pan the map without placing items.", true),
         new(MapToolType.Point, "Point", "Place one feature per click.", true),
         new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", true),
-        new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", false),
+        new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", true),
         new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", false),
         new(MapToolType.Edit, "Edit", "Move or update an existing feature.", false),
         new(MapToolType.Duplicate, "Duplicate", "Clone an existing feature.", false),
@@ -283,6 +287,23 @@
             if (TryGetMapPoint(args, out var mapX, out var mapY))
             {
                 StartBrushStroke(mapX, mapY);
+                await DrawAsync();
+            }
+            return;
+        }
+
+        if (_activeTool == MapToolType.Polygon)
+        {
+            if (args.Button != 0)
+            {
+                return;
+            }
+
+            if (TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                EnsureAreaLayers();
+                _activePolygonPoints.Add(new MapPointDto { X = mapX, Y = mapY });
+                _statusMessage = $"Polygon point added ({_activePolygonPoints.Count}).";
                 await DrawAsync();
             }
             return;
@@ -349,6 +370,44 @@
         }
 
         CommitBrushStroke();
+        await DrawAsync();
+    }
+
+    private async Task HandleContextMenu(MouseEventArgs args)
+    {
+        if (_activeTool != MapToolType.Polygon)
+        {
+            return;
+        }
+
+        if (_activePolygonPoints.Count < 3)
+        {
+            _activePolygonPoints.Clear();
+            _statusMessage = "Polygon cleared (need at least 3 points).";
+            await DrawAsync();
+            return;
+        }
+
+        EnsureAreaLayers();
+        var layer = _activeAreaLayer;
+        if (layer is null)
+        {
+            _statusMessage = "Select a layer before placing polygons.";
+            return;
+        }
+
+        var polygon = new AreaPolygonDto
+        {
+            FeatureType = layer.FeatureType,
+            LayerIndex = layer.LayerIndex,
+            Points = _activePolygonPoints
+                .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                .ToList()
+        };
+
+        _stagedWaterPolygons.Add(polygon);
+        _activePolygonPoints.Clear();
+        _statusMessage = $"Polygon placed on {GetLayerLabel(layer)} (unsaved).";
         await DrawAsync();
     }
 
@@ -634,6 +693,7 @@
 
     private void LoadAreaLayers(MapDto? map)
     {
+        var desiredLayerIndex = _activeAreaLayer?.LayerIndex;
         _areaLayers.Clear();
         if (map?.AreaLayers is not null && map.AreaLayers.Count > 0)
         {
@@ -641,6 +701,16 @@
         }
 
         NormalizeAreaLayers();
+        if (_areaLayers.Count > 0)
+        {
+            _activeAreaLayer = desiredLayerIndex is null
+                ? null
+                : _areaLayers.FirstOrDefault(layer => layer.LayerIndex == desiredLayerIndex.Value);
+        }
+        else
+        {
+            _activeAreaLayer = null;
+        }
         EnsureAreaLayers();
         RebuildLayerMasks();
     }
@@ -802,6 +872,8 @@
         _stagedTrees.Clear();
         _stagedHouses.Clear();
         _stagedWaterStrokes.Clear();
+        _stagedWaterPolygons.Clear();
+        _activePolygonPoints.Clear();
         _hasLastPlacement = false;
     }
 
@@ -1069,8 +1141,21 @@
             AreaLayers = _areaLayers
                 .OrderBy(layer => layer.LayerIndex)
                 .ToList(),
+            AreaPolygons = _stagedWaterPolygons
+                .OrderBy(polygon => polygon.LayerIndex)
+                .ToList(),
             ActiveStroke = null,
             ActiveStrokes = new List<AreaStrokeDto>(_activeStrokes),
+            ActivePolygon = _activePolygonPoints.Count >= 1
+                ? new AreaPolygonDto
+                {
+                    FeatureType = _activeAreaLayer?.FeatureType ?? "Water",
+                    LayerIndex = _activeAreaLayer?.LayerIndex ?? 0,
+                    Points = _activePolygonPoints
+                        .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                        .ToList()
+                }
+                : null,
             ViewState = new MapViewStateDto
             {
                 ViewX = _viewX,

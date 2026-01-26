@@ -79,6 +79,13 @@ public sealed class AreaStrokeDto
     public List<MapPointDto> Points { get; set; } = new();
 }
 
+public sealed class AreaPolygonDto
+{
+    public string FeatureType { get; set; } = string.Empty;
+    public int LayerIndex { get; set; }
+    public List<MapPointDto> Points { get; set; } = new();
+}
+
 public sealed class MapPointDto
 {
     public float X { get; set; }
@@ -89,8 +96,11 @@ public sealed class MapRenderStateDto
 {
     public List<MapPointFeatureDto> PointFeatures { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
+    public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
     public AreaStrokeDto? ActiveStroke { get; set; }
     public List<AreaStrokeDto> ActiveStrokes { get; set; } = new();
+    public AreaPolygonDto? ActivePolygon { get; set; }
+    public List<AreaPolygonDto> ActivePolygons { get; set; } = new();
     public MapViewStateDto ViewState { get; set; } = new();
 }
 

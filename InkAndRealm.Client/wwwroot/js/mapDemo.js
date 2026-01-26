@@ -54,6 +54,7 @@ window.inkAndRealmDemo = {
             }
         };
 
+        /*
         const drawStroke = (points, radius, color, alpha = 1) => {
             if (!Array.isArray(points) || points.length === 0) {
                 return;
@@ -82,6 +83,47 @@ window.inkAndRealmDemo = {
             }
             ctx.stroke();
             ctx.restore();
+        };
+        */
+
+        const drawSmoothPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null) => {
+            if (!Array.isArray(points) || points.length < 3) {
+                return;
+            }
+
+            const getMidpoint = (left, right) => ({
+                x: (left.x + right.x) / 2,
+                y: (left.y + right.y) / 2
+            });
+
+            targetCtx.save();
+            targetCtx.globalAlpha = alpha;
+            targetCtx.fillStyle = color;
+            if (strokeColor) {
+                targetCtx.strokeStyle = strokeColor;
+                targetCtx.lineWidth = 1 / zoom;
+            }
+
+            const last = points[points.length - 1];
+            const first = points[0];
+            const start = getMidpoint(last, first);
+
+            targetCtx.beginPath();
+            targetCtx.moveTo(start.x, start.y);
+
+            for (let i = 0; i < points.length; i += 1) {
+                const current = points[i];
+                const next = points[(i + 1) % points.length];
+                const mid = getMidpoint(current, next);
+                targetCtx.quadraticCurveTo(current.x, current.y, mid.x, mid.y);
+            }
+
+            targetCtx.closePath();
+            targetCtx.fill();
+            if (strokeColor) {
+                targetCtx.stroke();
+            }
+            targetCtx.restore();
         };
 
         const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {
@@ -188,6 +230,7 @@ window.inkAndRealmDemo = {
             }
         };
 
+        /*
         const layerCanvases = new Map();
         if (renderState && Array.isArray(renderState.areaLayers)) {
             const layers = renderState.areaLayers
@@ -246,7 +289,50 @@ window.inkAndRealmDemo = {
                 layerCanvases.set(layerIndex, layerCanvas);
             });
         }
+        */
 
+        const layerCanvases = new Map();
+        if (renderState && Array.isArray(renderState.areaPolygons)) {
+            const polygonsByLayer = new Map();
+            renderState.areaPolygons.forEach(polygon => {
+                if (!polygon || !Array.isArray(polygon.points) || polygon.points.length < 3) {
+                    return;
+                }
+
+                const layerIndex = Number.isFinite(polygon.layerIndex) ? polygon.layerIndex : 0;
+                if (!polygonsByLayer.has(layerIndex)) {
+                    polygonsByLayer.set(layerIndex, []);
+                }
+                polygonsByLayer.get(layerIndex).push(polygon);
+            });
+
+            Array.from(polygonsByLayer.entries())
+                .sort((left, right) => left[0] - right[0])
+                .forEach(([layerIndex, polygons]) => {
+                    const layerCanvas = document.createElement("canvas");
+                    layerCanvas.width = mapWidth;
+                    layerCanvas.height = mapHeight;
+                    const layerCtx = layerCanvas.getContext("2d");
+                    if (!layerCtx) {
+                        return;
+                    }
+
+                    layerCtx.clearRect(0, 0, mapWidth, mapHeight);
+                    polygons.forEach(polygon => {
+                        const color = getLayerColor(polygon.featureType);
+                        drawSmoothPolygon(layerCtx, polygon.points, color, 0.85, "#5a86a1");
+                    });
+
+                    ctx.save();
+                    ctx.globalAlpha = 0.9;
+                    ctx.drawImage(layerCanvas, 0, 0);
+                    ctx.restore();
+
+                    layerCanvases.set(layerIndex, layerCanvas);
+                });
+        }
+
+        /*
         if (renderState && Array.isArray(renderState.activeStrokes)) {
             const activeByLayer = new Map();
             renderState.activeStrokes.forEach(stroke => {
@@ -317,6 +403,99 @@ window.inkAndRealmDemo = {
                 ? renderState.activeStroke.radius
                 : 18;
             drawStroke(renderState.activeStroke.points, radius, "#7fb7d9", 0.6);
+        }
+        */
+
+        if (renderState && Array.isArray(renderState.activePolygons) && renderState.activePolygons.length > 0) {
+            const activeByLayer = new Map();
+            renderState.activePolygons.forEach(polygon => {
+                if (!polygon || !Array.isArray(polygon.points) || polygon.points.length < 2) {
+                    return;
+                }
+
+                const layerIndex = Number.isFinite(polygon.layerIndex) ? polygon.layerIndex : 0;
+                if (!activeByLayer.has(layerIndex)) {
+                    activeByLayer.set(layerIndex, []);
+                }
+                activeByLayer.get(layerIndex).push(polygon);
+            });
+
+            activeByLayer.forEach((polygons, layerIndex) => {
+                const previewCanvas = document.createElement("canvas");
+                previewCanvas.width = mapWidth;
+                previewCanvas.height = mapHeight;
+                const previewCtx = previewCanvas.getContext("2d");
+                if (!previewCtx) {
+                    return;
+                }
+
+                polygons.forEach(polygon => {
+                    if (polygon.points.length < 2) {
+                        return;
+                    }
+
+                    if (polygon.points.length >= 3) {
+                        drawSmoothPolygon(previewCtx, polygon.points, "#7fb7d9", 0.25, "#5a86a1");
+                    }
+
+                    previewCtx.save();
+                    previewCtx.globalAlpha = 0.55;
+                    previewCtx.strokeStyle = "#5a86a1";
+                    previewCtx.lineWidth = 2 / zoom;
+                    previewCtx.setLineDash([6 / zoom, 4 / zoom]);
+                    previewCtx.beginPath();
+                    previewCtx.moveTo(polygon.points[0].x, polygon.points[0].y);
+                    for (let i = 1; i < polygon.points.length; i += 1) {
+                        previewCtx.lineTo(polygon.points[i].x, polygon.points[i].y);
+                    }
+                    previewCtx.stroke();
+                    previewCtx.restore();
+                });
+
+                const existingLayer = layerCanvases.get(layerIndex);
+                if (existingLayer) {
+                    previewCtx.save();
+                    previewCtx.globalCompositeOperation = "destination-out";
+                    previewCtx.drawImage(existingLayer, 0, 0);
+                    previewCtx.restore();
+                }
+
+                ctx.save();
+                ctx.globalAlpha = 0.75;
+                ctx.drawImage(previewCanvas, 0, 0);
+                ctx.restore();
+            });
+        } else if (renderState && renderState.activePolygon && Array.isArray(renderState.activePolygon.points)) {
+            const preview = renderState.activePolygon;
+            if (preview.points.length === 1) {
+                ctx.save();
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = "#5a86a1";
+                ctx.beginPath();
+                ctx.arc(preview.points[0].x, preview.points[0].y, 4 / zoom, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+
+            if (preview.points.length >= 3) {
+                drawSmoothPolygon(ctx, preview.points, "#7fb7d9", 0.25, "#5a86a1");
+            }
+
+            if (preview.points.length >= 2) {
+                ctx.save();
+                ctx.globalAlpha = 0.55;
+                ctx.strokeStyle = "#5a86a1";
+                ctx.lineWidth = 2 / zoom;
+                ctx.setLineDash([6 / zoom, 4 / zoom]);
+                ctx.beginPath();
+                ctx.moveTo(preview.points[0].x, preview.points[0].y);
+                for (let i = 1; i < preview.points.length; i += 1) {
+                    ctx.lineTo(preview.points[i].x, preview.points[i].y);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
         }
 
         if (renderState && Array.isArray(renderState.pointFeatures)) {
