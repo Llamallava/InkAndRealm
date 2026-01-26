@@ -126,6 +126,43 @@ window.inkAndRealmDemo = {
             targetCtx.restore();
         };
 
+        const drawPolygonHandles = (targetCtx, points, selectedIndex = null) => {
+            if (!Array.isArray(points) || points.length === 0) {
+                return;
+            }
+
+            const handleRadius = 5 / zoom;
+            points.forEach((point, index) => {
+                targetCtx.beginPath();
+                targetCtx.fillStyle = index === selectedIndex ? "#f6c343" : "#f7f4ef";
+                targetCtx.strokeStyle = "#2b3a4a";
+                targetCtx.lineWidth = 1 / zoom;
+                targetCtx.arc(point.x, point.y, handleRadius, 0, Math.PI * 2);
+                targetCtx.fill();
+                targetCtx.stroke();
+            });
+        };
+
+        const drawPolygonEdgeHandles = (targetCtx, points, activeEdgeIndex = null) => {
+            if (!Array.isArray(points) || points.length < 2) {
+                return;
+            }
+
+            const handleRadius = 4 / zoom;
+            points.forEach((point, index) => {
+                const next = points[(index + 1) % points.length];
+                const midX = (point.x + next.x) / 2;
+                const midY = (point.y + next.y) / 2;
+                targetCtx.beginPath();
+                targetCtx.fillStyle = index === activeEdgeIndex ? "#ffd28a" : "#d8e4ef";
+                targetCtx.strokeStyle = "#2b3a4a";
+                targetCtx.lineWidth = 1 / zoom;
+                targetCtx.arc(midX, midY, handleRadius, 0, Math.PI * 2);
+                targetCtx.fill();
+                targetCtx.stroke();
+            });
+        };
+
         const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {
             ctx.fillStyle = trunkColor;
             ctx.fillRect(x - 3, y + 6, 6, 10);
@@ -496,6 +533,39 @@ window.inkAndRealmDemo = {
                 ctx.stroke();
                 ctx.restore();
             }
+        }
+
+        if (renderState && renderState.editPolygon && Array.isArray(renderState.editPolygon.points)) {
+            const editPolygon = renderState.editPolygon;
+            const selectedIndex = Number.isFinite(renderState.editPolygonPointIndex)
+                ? renderState.editPolygonPointIndex
+                : null;
+            const activeEdgeIndex = Number.isFinite(renderState.editPolygonEdgeIndex)
+                ? renderState.editPolygonEdgeIndex
+                : null;
+
+            if (editPolygon.points.length >= 3) {
+                drawSmoothPolygon(ctx, editPolygon.points, "#6faed3", 0.18, "#2f5d89");
+            }
+
+            if (editPolygon.points.length >= 2) {
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                ctx.strokeStyle = "#2f5d89";
+                ctx.lineWidth = 2 / zoom;
+                ctx.setLineDash([4 / zoom, 3 / zoom]);
+                ctx.beginPath();
+                ctx.moveTo(editPolygon.points[0].x, editPolygon.points[0].y);
+                for (let i = 1; i < editPolygon.points.length; i += 1) {
+                    ctx.lineTo(editPolygon.points[i].x, editPolygon.points[i].y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            drawPolygonHandles(ctx, editPolygon.points, selectedIndex);
+            drawPolygonEdgeHandles(ctx, editPolygon.points, activeEdgeIndex);
         }
 
         if (renderState && Array.isArray(renderState.pointFeatures)) {

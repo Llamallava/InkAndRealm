@@ -91,6 +91,9 @@ public sealed class MapRenderStateDto
     public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
     public AreaPolygonDto? ActivePolygon { get; set; }
     public List<AreaPolygonDto> ActivePolygons { get; set; } = new();
+    public AreaPolygonDto? EditPolygon { get; set; }
+    public int? EditPolygonPointIndex { get; set; }
+    public int? EditPolygonEdgeIndex { get; set; }
     public MapViewStateDto ViewState { get; set; } = new();
 }
 

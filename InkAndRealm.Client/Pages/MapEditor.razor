@@ -185,6 +185,10 @@
     private readonly List<MapPointDto> _activePolygonPoints = new();
     private readonly List<AreaPolygonDto> _waterPolygons = new();
     private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
+    private AreaPolygonDto? _editingPolygon;
+    private int _editingPointIndex = -1;
+    private int _editingEdgeIndex = -1;
+    private bool _isDraggingEditPoint;
     private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterPolygons.Count;
     [Parameter] public int MapId { get; set; }
     private const float PanDragThreshold = 6f;
@@ -218,7 +222,7 @@
         new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", false),
         new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", true),
         new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", false),
-        new(MapToolType.Edit, "Edit", "Move or update an existing feature.", false),
+        new(MapToolType.Edit, "Edit", "Move or update an existing feature.", true),
         new(MapToolType.Duplicate, "Duplicate", "Clone an existing feature.", false),
         new(MapToolType.Undo, "Undo", "Undo the most recent change.", false)
     };
@@ -288,6 +292,72 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Edit)
+        {
+            if (args.Button != 0)
+            {
+                return;
+            }
+
+            if (!TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                return;
+            }
+
+            var hitRadius = GetEditHitRadius();
+            AreaPolygonDto? polygon = _editingPolygon;
+            if (polygon is not null)
+            {
+                var pointIndex = FindPointIndex(polygon, mapX, mapY, hitRadius);
+                if (pointIndex >= 0)
+                {
+                    _editingPointIndex = pointIndex;
+                    _isDraggingEditPoint = true;
+                    _statusMessage = "Adjusting polygon point...";
+                    return;
+                }
+            }
+
+            if (polygon is null)
+            {
+                polygon = FindPolygonAtPoint(mapX, mapY);
+            }
+
+            if (polygon is not null)
+            {
+                _editingPolygon = polygon;
+
+                var edgeIndex = FindEdgeIndex(polygon, mapX, mapY, hitRadius);
+                if (edgeIndex >= 0)
+                {
+                    var closestPoint = GetClosestPointOnSegment(polygon, edgeIndex, mapX, mapY);
+                    var insertIndex = edgeIndex + 1;
+                    polygon.Points.Insert(insertIndex, closestPoint);
+                    _editingPointIndex = insertIndex;
+                    _editingEdgeIndex = -1;
+                    _isDraggingEditPoint = true;
+                    _statusMessage = "Vertex added. Drag to position.";
+                    await DrawAsync();
+                    return;
+                }
+
+                _editingPointIndex = -1;
+                _editingEdgeIndex = -1;
+                _isDraggingEditPoint = false;
+                _statusMessage = "Polygon selected. Drag a point to edit.";
+                await DrawAsync();
+                return;
+            }
+
+            if (_editingPolygon is not null)
+            {
+                ClearEditSelection();
+                _statusMessage = "Edit selection cleared.";
+                await DrawAsync();
+            }
+            return;
+        }
+
         _statusMessage = $"{ActiveToolDefinition.Label} tool is not available yet.";
     }
 
@@ -313,6 +383,36 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPoint && _editingPolygon is not null && _editingPointIndex >= 0)
+        {
+            if (!TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                return;
+            }
+
+            _editingPolygon.Points[_editingPointIndex] = new MapPointDto { X = mapX, Y = mapY };
+            await DrawAsync();
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && !_isDraggingEditPoint)
+        {
+            var previousEdge = _editingEdgeIndex;
+            if (_editingPolygon is not null && TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                _editingEdgeIndex = FindEdgeIndex(_editingPolygon, mapX, mapY, GetEditHitRadius());
+            }
+            else
+            {
+                _editingEdgeIndex = -1;
+            }
+
+            if (previousEdge != _editingEdgeIndex)
+            {
+                await DrawAsync();
+            }
+        }
+
         return;
     }
 
@@ -332,11 +432,29 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPoint)
+        {
+            _isDraggingEditPoint = false;
+            _statusMessage = "Polygon point updated. Right-click to confirm.";
+            return;
+        }
+
         return;
     }
 
     private async Task HandleContextMenu(MouseEventArgs args)
     {
+        if (_activeTool == MapToolType.Edit)
+        {
+            if (_editingPolygon is not null)
+            {
+                ClearEditSelection();
+                _statusMessage = "Polygon edit confirmed.";
+                await DrawAsync();
+            }
+            return;
+        }
+
         if (_activeTool != MapToolType.Polygon)
         {
             return;
@@ -380,6 +498,18 @@
             _isPanning = false;
             _isPanCandidate = false;
             return;
+        }
+
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPoint)
+        {
+            _isDraggingEditPoint = false;
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && _editingEdgeIndex >= 0)
+        {
+            _editingEdgeIndex = -1;
+            await DrawAsync();
         }
 
         return;
@@ -554,6 +684,7 @@
             _stagedTrees.Clear();
             _stagedHouses.Clear();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
+            ClearEditSelection();
             await DrawAsync();
         }
         else
@@ -634,9 +765,19 @@
     private void SelectTool(MapToolType tool)
     {
         _activeTool = tool;
+        if (tool != MapToolType.Edit && _editingPolygon is not null)
+        {
+            ClearEditSelection();
+            _ = InvokeAsync(DrawAsync);
+        }
         _statusMessage = ActiveToolDefinition.IsImplemented
             ? $"{ActiveToolDefinition.Label} tool selected."
             : $"{ActiveToolDefinition.Label} tool is not available yet.";
+
+        if (tool == MapToolType.Edit)
+        {
+            _statusMessage = "Edit tool selected. Click a polygon to edit; right-click to confirm.";
+        }
     }
 
     private void EnsureAreaLayers()
@@ -773,6 +914,7 @@
         _stagedHouses.Clear();
         _stagedWaterPolygons.Clear();
         _activePolygonPoints.Clear();
+        ClearEditSelection();
         _hasLastPlacement = false;
     }
 
@@ -805,6 +947,151 @@
     private float GetCanvasScaleY()
     {
         return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
+    }
+
+    private void ClearEditSelection()
+    {
+        _editingPolygon = null;
+        _editingPointIndex = -1;
+        _editingEdgeIndex = -1;
+        _isDraggingEditPoint = false;
+    }
+
+    private AreaPolygonDto? FindPolygonAtPoint(float mapX, float mapY)
+    {
+        var candidates = _waterPolygons.Concat(_stagedWaterPolygons).ToList();
+        AreaPolygonDto? selected = null;
+        var selectedLayer = int.MinValue;
+        var selectedOrder = -1;
+
+        for (var i = 0; i < candidates.Count; i += 1)
+        {
+            var polygon = candidates[i];
+            if (polygon.Points.Count < 3)
+            {
+                continue;
+            }
+
+            if (!IsPointInPolygon(mapX, mapY, polygon))
+            {
+                continue;
+            }
+
+            var layerIndex = polygon.LayerIndex;
+            if (layerIndex > selectedLayer || (layerIndex == selectedLayer && i > selectedOrder))
+            {
+                selected = polygon;
+                selectedLayer = layerIndex;
+                selectedOrder = i;
+            }
+        }
+
+        return selected;
+    }
+
+    private int FindPointIndex(AreaPolygonDto polygon, float mapX, float mapY, float threshold)
+    {
+        if (polygon.Points.Count == 0)
+        {
+            return -1;
+        }
+
+        var thresholdSquared = threshold * threshold;
+        var bestIndex = -1;
+        var bestDistance = float.MaxValue;
+
+        for (var i = 0; i < polygon.Points.Count; i += 1)
+        {
+            var point = polygon.Points[i];
+            var dx = point.X - mapX;
+            var dy = point.Y - mapY;
+            var distance = (dx * dx) + (dy * dy);
+            if (distance <= thresholdSquared && distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private int FindEdgeIndex(AreaPolygonDto polygon, float mapX, float mapY, float threshold)
+    {
+        if (polygon.Points.Count < 2)
+        {
+            return -1;
+        }
+
+        var thresholdSquared = threshold * threshold;
+        var bestIndex = -1;
+        var bestDistance = float.MaxValue;
+
+        for (var i = 0; i < polygon.Points.Count; i += 1)
+        {
+            var j = (i + 1) % polygon.Points.Count;
+            var closest = GetClosestPointOnSegment(polygon.Points[i], polygon.Points[j], mapX, mapY);
+            var dx = closest.X - mapX;
+            var dy = closest.Y - mapY;
+            var distance = (dx * dx) + (dy * dy);
+            if (distance <= thresholdSquared && distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static MapPointDto GetClosestPointOnSegment(AreaPolygonDto polygon, int edgeIndex, float mapX, float mapY)
+    {
+        var start = polygon.Points[edgeIndex];
+        var end = polygon.Points[(edgeIndex + 1) % polygon.Points.Count];
+        return GetClosestPointOnSegment(start, end, mapX, mapY);
+    }
+
+    private static MapPointDto GetClosestPointOnSegment(MapPointDto start, MapPointDto end, float mapX, float mapY)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var lengthSquared = (dx * dx) + (dy * dy);
+        if (lengthSquared <= float.Epsilon)
+        {
+            return new MapPointDto { X = start.X, Y = start.Y };
+        }
+
+        var t = ((mapX - start.X) * dx + (mapY - start.Y) * dy) / lengthSquared;
+        t = Math.Clamp(t, 0f, 1f);
+        return new MapPointDto { X = start.X + (t * dx), Y = start.Y + (t * dy) };
+    }
+
+    private float GetEditHitRadius()
+    {
+        var scale = (GetCanvasScaleX() + GetCanvasScaleY()) / 2f;
+        return (10f * scale) / _zoom;
+    }
+
+    private static bool IsPointInPolygon(float x, float y, AreaPolygonDto polygon)
+    {
+        var inside = false;
+        var points = polygon.Points;
+        for (var i = 0; i < points.Count; i += 1)
+        {
+            var j = (i == 0) ? points.Count - 1 : i - 1;
+            var xi = points[i].X;
+            var yi = points[i].Y;
+            var xj = points[j].X;
+            var yj = points[j].Y;
+            var intersect = ((yi > y) != (yj > y))
+                && (x < ((xj - xi) * (y - yi) / (yj - yi + float.Epsilon) + xi));
+            if (intersect)
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
     }
 
     private MapRenderStateDto BuildRenderState()
@@ -879,6 +1166,18 @@
                         .ToList()
                 }
                 : null,
+            EditPolygon = _editingPolygon is null
+                ? null
+                : new AreaPolygonDto
+                {
+                    FeatureType = _editingPolygon.FeatureType,
+                    LayerIndex = _editingPolygon.LayerIndex,
+                    Points = _editingPolygon.Points
+                        .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                        .ToList()
+                },
+            EditPolygonPointIndex = _editingPointIndex >= 0 ? _editingPointIndex : null,
+            EditPolygonEdgeIndex = _editingEdgeIndex >= 0 ? _editingEdgeIndex : null,
             ViewState = new MapViewStateDto
             {
                 ViewX = _viewX,
