@@ -186,15 +186,22 @@
     private readonly List<AreaPolygonDto> _waterPolygons = new();
     private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
     private readonly Dictionary<int, AreaPolygonDto> _editedWaterPolygons = new();
+    private readonly Dictionary<int, TreeFeatureDto> _editedTrees = new();
+    private readonly Dictionary<int, HouseFeatureDto> _editedHouses = new();
     private AreaPolygonDto? _editingPolygon;
     private List<MapPointDto>? _editingOriginalPoints;
     private int _editingPointIndex = -1;
     private int _editingEdgeIndex = -1;
     private bool _isDraggingEditPoint;
+    private EditingPointFeature? _editingPointFeature;
+    private MapPointDto? _editingPointOriginalPosition;
+    private bool _isDraggingEditPointFeature;
     private int PendingCount => _stagedTrees.Count
         + _stagedHouses.Count
         + _stagedWaterPolygons.Count
-        + _editedWaterPolygons.Count;
+        + _editedWaterPolygons.Count
+        + _editedTrees.Count
+        + _editedHouses.Count;
     [Parameter] public int MapId { get; set; }
     private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
@@ -323,6 +330,18 @@
                 }
             }
 
+            var pointFeature = FindPointFeatureAtPoint(mapX, mapY, hitRadius);
+            if (pointFeature is not null)
+            {
+                ClearEditSelection(true);
+                _editingPointFeature = pointFeature;
+                _editingPointOriginalPosition = GetPointFeaturePosition(pointFeature);
+                _isDraggingEditPointFeature = true;
+                _statusMessage = "Moving point feature...";
+                await DrawAsync();
+                return;
+            }
+
             if (polygon is null)
             {
                 polygon = FindPolygonAtPoint(mapX, mapY);
@@ -357,7 +376,7 @@
                 return;
             }
 
-            if (_editingPolygon is not null)
+            if (_editingPolygon is not null || _editingPointFeature is not null)
             {
                 ClearEditSelection(false);
                 _statusMessage = "Edit selection cleared.";
@@ -388,6 +407,18 @@
                 UpdatePan(args);
                 await DrawAsync();
             }
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPointFeature && _editingPointFeature is not null)
+        {
+            if (!TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                return;
+            }
+
+            UpdatePointFeaturePosition(_editingPointFeature, mapX, mapY);
+            await DrawAsync();
             return;
         }
 
@@ -447,6 +478,13 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPointFeature)
+        {
+            _isDraggingEditPointFeature = false;
+            _statusMessage = "Point feature updated. Right-click to confirm.";
+            return;
+        }
+
         return;
     }
 
@@ -459,6 +497,13 @@
                 TrackEditedPolygon(_editingPolygon);
                 ClearEditSelection(true);
                 _statusMessage = "Polygon edit confirmed.";
+                await DrawAsync();
+            }
+            else if (_editingPointFeature is not null)
+            {
+                TrackEditedPointFeature(_editingPointFeature);
+                ClearEditSelection(true);
+                _statusMessage = "Point feature edit confirmed.";
                 await DrawAsync();
             }
             return;
@@ -512,6 +557,12 @@
         if (_activeTool == MapToolType.Edit && _isDraggingEditPoint)
         {
             _isDraggingEditPoint = false;
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPointFeature)
+        {
+            _isDraggingEditPointFeature = false;
             return;
         }
 
@@ -674,6 +725,8 @@
             MapId = MapId,
             AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
             AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
+            UpdatedTrees = _editedTrees.Values.ToList(),
+            UpdatedHouses = _editedHouses.Values.ToList(),
             AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons),
             UpdatedWaterPolygons = _editedWaterPolygons.Values
                 .Select(ClonePolygon)
@@ -693,6 +746,8 @@
                 _waterPolygons.AddRange(map.AreaPolygons);
             }
             _editedWaterPolygons.Clear();
+            _editedTrees.Clear();
+            _editedHouses.Clear();
             LoadAreaLayers(map);
             _stagedTrees.Clear();
             _stagedHouses.Clear();
@@ -754,6 +809,8 @@
             _waterPolygons.AddRange(map.AreaPolygons);
         }
         _editedWaterPolygons.Clear();
+        _editedTrees.Clear();
+        _editedHouses.Clear();
         _hasMap = map?.Id > 0;
         LoadAreaLayers(map);
         ClearStaged();
@@ -779,7 +836,7 @@
     private void SelectTool(MapToolType tool)
     {
         _activeTool = tool;
-        if (tool != MapToolType.Edit && _editingPolygon is not null)
+        if (tool != MapToolType.Edit && (_editingPolygon is not null || _editingPointFeature is not null))
         {
             ClearEditSelection(false);
             _ = InvokeAsync(DrawAsync);
@@ -790,7 +847,7 @@
 
         if (tool == MapToolType.Edit)
         {
-            _statusMessage = "Edit tool selected. Click a polygon to edit; right-click to confirm.";
+            _statusMessage = "Edit tool selected. Click a feature to edit; right-click to confirm.";
         }
     }
 
@@ -928,6 +985,8 @@
         _stagedHouses.Clear();
         _stagedWaterPolygons.Clear();
         _editedWaterPolygons.Clear();
+        _editedTrees.Clear();
+        _editedHouses.Clear();
         _activePolygonPoints.Clear();
         ClearEditSelection(false);
         _hasLastPlacement = false;
@@ -973,11 +1032,19 @@
                 .ToList();
         }
 
+        if (!keepChanges && _editingPointFeature is not null && _editingPointOriginalPosition is not null)
+        {
+            UpdatePointFeaturePosition(_editingPointFeature, _editingPointOriginalPosition.X, _editingPointOriginalPosition.Y);
+        }
+
         _editingPolygon = null;
         _editingOriginalPoints = null;
         _editingPointIndex = -1;
         _editingEdgeIndex = -1;
         _isDraggingEditPoint = false;
+        _editingPointFeature = null;
+        _editingPointOriginalPosition = null;
+        _isDraggingEditPointFeature = false;
     }
 
     private void TrackEditedPolygon(AreaPolygonDto polygon)
@@ -988,6 +1055,30 @@
         }
 
         _editedWaterPolygons[polygon.Id] = ClonePolygon(polygon);
+    }
+
+    private void TrackEditedPointFeature(EditingPointFeature feature)
+    {
+        if (feature.Tree is not null)
+        {
+            if (feature.IsStaged || feature.Tree.Id <= 0)
+            {
+                return;
+            }
+
+            _editedTrees[feature.Tree.Id] = feature.Tree;
+            return;
+        }
+
+        if (feature.House is not null)
+        {
+            if (feature.IsStaged || feature.House.Id <= 0)
+            {
+                return;
+            }
+
+            _editedHouses[feature.House.Id] = feature.House;
+        }
     }
 
     private static AreaPolygonDto ClonePolygon(AreaPolygonDto polygon)
@@ -1039,6 +1130,104 @@
         }
 
         return selected;
+    }
+
+    private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold)
+    {
+        var thresholdSquared = threshold * threshold;
+        EditingPointFeature? best = null;
+        var bestDistance = float.MaxValue;
+
+        void ConsiderTree(TreeFeatureDto tree, bool isStaged)
+        {
+            var dx = tree.X - mapX;
+            var dy = tree.Y - mapY;
+            var distance = (dx * dx) + (dy * dy);
+            if (distance > thresholdSquared || distance >= bestDistance)
+            {
+                return;
+            }
+
+            bestDistance = distance;
+            best = new EditingPointFeature
+            {
+                Tree = tree,
+                House = null,
+                IsStaged = isStaged
+            };
+        }
+
+        void ConsiderHouse(HouseFeatureDto house, bool isStaged)
+        {
+            var dx = house.X - mapX;
+            var dy = house.Y - mapY;
+            var distance = (dx * dx) + (dy * dy);
+            if (distance > thresholdSquared || distance >= bestDistance)
+            {
+                return;
+            }
+
+            bestDistance = distance;
+            best = new EditingPointFeature
+            {
+                Tree = null,
+                House = house,
+                IsStaged = isStaged
+            };
+        }
+
+        foreach (var tree in _trees)
+        {
+            ConsiderTree(tree, false);
+        }
+
+        foreach (var tree in _stagedTrees)
+        {
+            ConsiderTree(tree, true);
+        }
+
+        foreach (var house in _houses)
+        {
+            ConsiderHouse(house, false);
+        }
+
+        foreach (var house in _stagedHouses)
+        {
+            ConsiderHouse(house, true);
+        }
+
+        return best;
+    }
+
+    private static MapPointDto? GetPointFeaturePosition(EditingPointFeature feature)
+    {
+        if (feature.Tree is not null)
+        {
+            return new MapPointDto { X = feature.Tree.X, Y = feature.Tree.Y };
+        }
+
+        if (feature.House is not null)
+        {
+            return new MapPointDto { X = feature.House.X, Y = feature.House.Y };
+        }
+
+        return null;
+    }
+
+    private static void UpdatePointFeaturePosition(EditingPointFeature feature, float mapX, float mapY)
+    {
+        if (feature.Tree is not null)
+        {
+            feature.Tree.X = mapX;
+            feature.Tree.Y = mapY;
+            return;
+        }
+
+        if (feature.House is not null)
+        {
+            feature.House.X = mapX;
+            feature.House.Y = mapY;
+        }
     }
 
     private int FindPointIndex(AreaPolygonDto polygon, float mapX, float mapY, float threshold)
@@ -1228,6 +1417,27 @@
                         .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                         .ToList()
                 },
+            EditPointFeature = _editingPointFeature is null
+                ? null
+                : _editingPointFeature.Tree is not null
+                    ? new MapPointFeatureDto
+                    {
+                        FeatureType = "Tree",
+                        X = _editingPointFeature.Tree.X,
+                        Y = _editingPointFeature.Tree.Y,
+                        StyleKey = _editingPointFeature.Tree.TreeType,
+                        IsStaged = _editingPointFeature.IsStaged
+                    }
+                    : _editingPointFeature.House is not null
+                        ? new MapPointFeatureDto
+                        {
+                            FeatureType = "House",
+                            X = _editingPointFeature.House.X,
+                            Y = _editingPointFeature.House.Y,
+                            StyleKey = _editingPointFeature.House.HouseType,
+                            IsStaged = _editingPointFeature.IsStaged
+                        }
+                        : null,
             EditPolygonPointIndex = _editingPointIndex >= 0 ? _editingPointIndex : null,
             EditPolygonEdgeIndex = _editingEdgeIndex >= 0 ? _editingEdgeIndex : null,
             ViewState = new MapViewStateDto
@@ -1257,6 +1467,13 @@
         Edit,
         Duplicate,
         Undo
+    }
+
+    private sealed class EditingPointFeature
+    {
+        public TreeFeatureDto? Tree { get; init; }
+        public HouseFeatureDto? House { get; init; }
+        public bool IsStaged { get; init; }
     }
 
     private sealed record ToolDefinition(MapToolType Tool, string Label, string Description, bool IsImplemented);

@@ -167,6 +167,66 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.UpdatedTrees is not null && request.UpdatedTrees.Count > 0)
+        {
+            foreach (var tree in request.UpdatedTrees)
+            {
+                if (tree is null || tree.Id <= 0)
+                {
+                    continue;
+                }
+
+                var feature = map.Features
+                    .OfType<TreeFeatureEntity>()
+                    .FirstOrDefault(existing => existing.Id == tree.Id);
+                if (feature is null)
+                {
+                    continue;
+                }
+
+                feature.TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak;
+                feature.Points.Clear();
+                feature.Points.Add(new FeaturePointEntity
+                {
+                    X = tree.X,
+                    Y = tree.Y,
+                    SortOrder = 0
+                });
+
+                hasChanges = true;
+            }
+        }
+
+        if (request.UpdatedHouses is not null && request.UpdatedHouses.Count > 0)
+        {
+            foreach (var house in request.UpdatedHouses)
+            {
+                if (house is null || house.Id <= 0)
+                {
+                    continue;
+                }
+
+                var feature = map.Features
+                    .OfType<HouseFeatureEntity>()
+                    .FirstOrDefault(existing => existing.Id == house.Id);
+                if (feature is null)
+                {
+                    continue;
+                }
+
+                feature.HouseType = Enum.TryParse<HouseType>(house.HouseType, out var houseType) ? houseType : HouseType.Cottage;
+                feature.Points.Clear();
+                feature.Points.Add(new FeaturePointEntity
+                {
+                    X = house.X,
+                    Y = house.Y,
+                    SortOrder = 0
+                });
+
+                hasChanges = true;
+            }
+        }
+
         if (request.UpdatedWaterPolygons is not null && request.UpdatedWaterPolygons.Count > 0)
         {
             foreach (var polygon in request.UpdatedWaterPolygons)

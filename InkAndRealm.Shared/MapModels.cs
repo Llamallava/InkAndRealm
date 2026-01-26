@@ -55,6 +55,8 @@ public sealed class MapEditsRequest
     public int MapId { get; set; }
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
+    public List<TreeFeatureDto> UpdatedTrees { get; set; } = new();
+    public List<HouseFeatureDto> UpdatedHouses { get; set; } = new();
     public List<AreaPolygonDto> AddedWaterPolygons { get; set; } = new();
     public List<AreaPolygonDto> UpdatedWaterPolygons { get; set; } = new();
 }
@@ -95,6 +97,7 @@ public sealed class MapRenderStateDto
     public AreaPolygonDto? ActivePolygon { get; set; }
     public List<AreaPolygonDto> ActivePolygons { get; set; } = new();
     public AreaPolygonDto? EditPolygon { get; set; }
+    public MapPointFeatureDto? EditPointFeature { get; set; }
     public int? EditPolygonPointIndex { get; set; }
     public int? EditPolygonEdgeIndex { get; set; }
     public MapViewStateDto ViewState { get; set; } = new();

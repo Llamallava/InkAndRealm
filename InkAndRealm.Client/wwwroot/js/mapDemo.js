@@ -163,6 +163,23 @@ window.inkAndRealmDemo = {
             });
         };
 
+        const drawPointEditHandle = (targetCtx, feature) => {
+            if (!feature || !Number.isFinite(feature.x) || !Number.isFinite(feature.y)) {
+                return;
+            }
+
+            const handleRadius = 10 / zoom;
+            targetCtx.save();
+            targetCtx.fillStyle = "rgba(111, 174, 211, 0.2)";
+            targetCtx.strokeStyle = "#2f5d89";
+            targetCtx.lineWidth = 2 / zoom;
+            targetCtx.beginPath();
+            targetCtx.arc(feature.x, feature.y, handleRadius, 0, Math.PI * 2);
+            targetCtx.fill();
+            targetCtx.stroke();
+            targetCtx.restore();
+        };
+
         const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {
             ctx.fillStyle = trunkColor;
             ctx.fillRect(x - 3, y + 6, 6, 10);
@@ -579,6 +596,10 @@ window.inkAndRealmDemo = {
                     renderer(feature);
                 }
             });
+        }
+
+        if (renderState && renderState.editPointFeature) {
+            drawPointEditHandle(ctx, renderState.editPointFeature);
         }
 
     },
