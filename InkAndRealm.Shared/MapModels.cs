@@ -100,7 +100,16 @@ public sealed class MapRenderStateDto
     public MapPointFeatureDto? EditPointFeature { get; set; }
     public int? EditPolygonPointIndex { get; set; }
     public int? EditPolygonEdgeIndex { get; set; }
+    public BrushPreviewDto? BrushPreview { get; set; }
     public MapViewStateDto ViewState { get; set; } = new();
+}
+
+public sealed class BrushPreviewDto
+{
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Radius { get; set; }
+    public bool IsActive { get; set; }
 }
 
 public sealed class MapPointFeatureDto

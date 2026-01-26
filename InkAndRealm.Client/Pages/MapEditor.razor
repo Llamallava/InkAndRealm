@@ -91,6 +91,23 @@
                                 }
                             </div>
                         </div>
+                        <div class="map-editor-tool-section">
+                            <div class="small text-muted">Brush Size</div>
+                            <input class="form-range"
+                                   type="range"
+                                   min="1"
+                                   max="10"
+                                   step="1"
+                                   disabled="@(_activeTool != MapToolType.Brush)"
+                                   @bind="_brushSize" />
+                            <div class="small text-muted">
+                                Size @_brushSize/10
+                                @if (_activeTool != MapToolType.Brush)
+                                {
+                                    <span> (select Brush to adjust)</span>
+                                }
+                            </div>
+                        </div>
                         <div class="map-editor-tool-summary">
                             <div class="small text-muted">Active Tool</div>
                             <div class="fw-semibold">@ActiveToolDefinition.Label</div>
@@ -202,8 +219,15 @@
     private float _brushLastY;
     private int _brushStrokeCount;
     private int _brushTightness = 6;
+    private int _brushSize = 5;
+    private float _brushCursorX;
+    private float _brushCursorY;
+    private bool _hasBrushCursor;
     private const float BrushMinSpacing = 16f;
     private const float BrushMaxSpacing = 90f;
+    private const float BrushMinRadius = 2f;
+    private const float BrushMaxRadius = 24f;
+    private const int BrushMaxPointsPerStamp = 220;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
     private readonly List<MapPointDto> _activePolygonPoints = new();
@@ -265,7 +289,7 @@
     private ToolDefinition ActiveToolDefinition => ToolDefinitions.First(tool => tool.Tool == _activeTool);
     private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
         ? _activeTool == MapToolType.Brush
-            ? $"{ActiveToolDefinition.Description} (tightness {_brushTightness}/10)."
+            ? $"{ActiveToolDefinition.Description} (tightness {_brushTightness}/10, size {_brushSize}/10)."
             : ActiveToolDefinition.Description
         : $"{ActiveToolDefinition.Description} (coming soon).";
     private string ActiveAreaLayerLabel => _activeAreaLayer is null ? "None" : GetLayerLabel(_activeAreaLayer);
@@ -495,6 +519,23 @@
             }
         }
 
+        if (_activeTool == MapToolType.Brush && !_isBrushing)
+        {
+            var wasVisible = _hasBrushCursor;
+            var previousX = _brushCursorX;
+            var previousY = _brushCursorY;
+            _hasBrushCursor = TryGetMapPoint(args, out _brushCursorX, out _brushCursorY);
+
+            var moved = _hasBrushCursor
+                && (MathF.Abs(previousX - _brushCursorX) > 0.5f || MathF.Abs(previousY - _brushCursorY) > 0.5f);
+
+            if (wasVisible != _hasBrushCursor || moved)
+            {
+                await DrawAsync();
+            }
+            return;
+        }
+
         return;
     }
 
@@ -524,6 +565,7 @@
         if (_activeTool == MapToolType.Brush && _isBrushing)
         {
             _isBrushing = false;
+            _hasBrushCursor = false;
             _statusMessage = _brushStrokeCount == 0
                 ? "Brush stroke canceled."
                 : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
@@ -609,9 +651,17 @@
         if (_activeTool == MapToolType.Brush && _isBrushing)
         {
             _isBrushing = false;
+            _hasBrushCursor = false;
             _statusMessage = _brushStrokeCount == 0
                 ? "Brush stroke canceled."
                 : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
+            return;
+        }
+
+        if (_activeTool == MapToolType.Brush && _hasBrushCursor)
+        {
+            _hasBrushCursor = false;
+            await DrawAsync();
             return;
         }
 
@@ -886,6 +936,10 @@
             _isBrushing = false;
             _brushStrokeCount = 0;
         }
+        if (_activeTool != MapToolType.Brush)
+        {
+            _hasBrushCursor = false;
+        }
         if (tool != MapToolType.Edit && (_editingPolygon is not null || _editingPointFeature is not null))
         {
             ClearEditSelection(false);
@@ -1042,6 +1096,7 @@
         _hasLastPlacement = false;
         _isBrushing = false;
         _brushStrokeCount = 0;
+        _hasBrushCursor = false;
     }
 
     private async Task UpdateCanvasClientSizeAsync()
@@ -1371,6 +1426,19 @@
         return BrushMaxSpacing - ((BrushMaxSpacing - BrushMinSpacing) * normalized);
     }
 
+    private float GetBrushRadius()
+    {
+        var normalized = (_brushSize - 1f) / 9f;
+        return BrushMinRadius + ((BrushMaxRadius - BrushMinRadius) * normalized);
+    }
+
+    private float GetBrushStampSpacing()
+    {
+        var radius = GetBrushRadius();
+        var spacing = GetBrushSpacing();
+        return MathF.Max(spacing, radius * 0.55f);
+    }
+
     private void PlacePointFeature(float mapX, float mapY)
     {
         _lastX = mapX;
@@ -1398,6 +1466,68 @@
         }
     }
 
+    private int PlaceBrushStamp(float centerX, float centerY)
+    {
+        var radius = GetBrushRadius();
+        var spacing = GetBrushSpacing();
+        if (radius <= 0.1f || spacing <= 0.1f)
+        {
+            PlacePointFeature(centerX, centerY);
+            return 1;
+        }
+
+        if (radius < spacing * 0.75f)
+        {
+            PlacePointFeature(centerX, centerY);
+            return 1;
+        }
+
+        var radiusSquared = radius * radius;
+        var jitter = spacing * 0.35f;
+        var placed = 0;
+        var centerPlaced = false;
+
+        for (var y = -radius; y <= radius; y += spacing)
+        {
+            for (var x = -radius; x <= radius; x += spacing)
+            {
+                if ((x * x) + (y * y) > radiusSquared)
+                {
+                    continue;
+                }
+
+                var jx = (float)((Random.Shared.NextDouble() * 2 - 1) * jitter);
+                var jy = (float)((Random.Shared.NextDouble() * 2 - 1) * jitter);
+                var offsetX = x + jx;
+                var offsetY = y + jy;
+                if (!centerPlaced && (offsetX * offsetX) + (offsetY * offsetY) <= (spacing * spacing * 0.25f))
+                {
+                    offsetX = 0f;
+                    offsetY = 0f;
+                    centerPlaced = true;
+                }
+
+                var mapX = Math.Clamp(centerX + offsetX, 0f, MapWidth);
+                var mapY = Math.Clamp(centerY + offsetY, 0f, MapHeight);
+                PlacePointFeature(mapX, mapY);
+                placed += 1;
+
+                if (placed >= BrushMaxPointsPerStamp)
+                {
+                    return placed;
+                }
+            }
+        }
+
+        if (!centerPlaced)
+        {
+            PlacePointFeature(centerX, centerY);
+            placed += 1;
+        }
+
+        return placed;
+    }
+
     private async Task StartBrushAsync(MouseEventArgs args)
     {
         if (!TryGetMapPoint(args, out var mapX, out var mapY))
@@ -1406,11 +1536,13 @@
         }
 
         _isBrushing = true;
+        _hasBrushCursor = true;
+        _brushCursorX = mapX;
+        _brushCursorY = mapY;
         _brushLastX = mapX;
         _brushLastY = mapY;
         _brushStrokeCount = 0;
-        PlacePointFeature(mapX, mapY);
-        _brushStrokeCount += 1;
+        _brushStrokeCount += PlaceBrushStamp(mapX, mapY);
         _statusMessage = "Brushing features...";
         await DrawAsync();
     }
@@ -1422,12 +1554,16 @@
             return;
         }
 
-        var spacing = GetBrushSpacing();
+        _hasBrushCursor = true;
+        _brushCursorX = mapX;
+        _brushCursorY = mapY;
+        var spacing = GetBrushStampSpacing();
         var dx = mapX - _brushLastX;
         var dy = mapY - _brushLastY;
         var distance = MathF.Sqrt((dx * dx) + (dy * dy));
         if (distance < spacing)
         {
+            await DrawAsync();
             return;
         }
 
@@ -1439,8 +1575,7 @@
         {
             _brushLastX += stepX;
             _brushLastY += stepY;
-            PlacePointFeature(_brushLastX, _brushLastY);
-            _brushStrokeCount += 1;
+            _brushStrokeCount += PlaceBrushStamp(_brushLastX, _brushLastY);
         }
 
         await DrawAsync();
@@ -1573,6 +1708,15 @@
                         : null,
             EditPolygonPointIndex = _editingPointIndex >= 0 ? _editingPointIndex : null,
             EditPolygonEdgeIndex = _editingEdgeIndex >= 0 ? _editingEdgeIndex : null,
+            BrushPreview = _activeTool == MapToolType.Brush && _hasBrushCursor
+                ? new BrushPreviewDto
+                {
+                    X = _brushCursorX,
+                    Y = _brushCursorY,
+                    Radius = GetBrushRadius(),
+                    IsActive = _isBrushing
+                }
+                : null,
             ViewState = new MapViewStateDto
             {
                 ViewX = _viewX,

@@ -180,6 +180,29 @@ window.inkAndRealmDemo = {
             targetCtx.restore();
         };
 
+        const drawBrushCursor = (targetCtx, brushPreview) => {
+            if (!brushPreview || !Number.isFinite(brushPreview.x) || !Number.isFinite(brushPreview.y)) {
+                return;
+            }
+
+            const radius = Number.isFinite(brushPreview.radius) ? brushPreview.radius : 0;
+            if (radius <= 0) {
+                return;
+            }
+
+            targetCtx.save();
+            targetCtx.globalAlpha = brushPreview.isActive ? 0.35 : 0.25;
+            targetCtx.fillStyle = "rgba(111, 174, 211, 0.2)";
+            targetCtx.strokeStyle = "#2f5d89";
+            targetCtx.lineWidth = 2 / zoom;
+            targetCtx.setLineDash([5 / zoom, 4 / zoom]);
+            targetCtx.beginPath();
+            targetCtx.arc(brushPreview.x, brushPreview.y, radius, 0, Math.PI * 2);
+            targetCtx.fill();
+            targetCtx.stroke();
+            targetCtx.restore();
+        };
+
         const drawTree = (x, y, canopyColor, trunkColor, outlineColor) => {
             ctx.fillStyle = trunkColor;
             ctx.fillRect(x - 3, y + 6, 6, 10);
@@ -600,6 +623,10 @@ window.inkAndRealmDemo = {
 
         if (renderState && renderState.editPointFeature) {
             drawPointEditHandle(ctx, renderState.editPointFeature);
+        }
+
+        if (renderState && renderState.brushPreview) {
+            drawBrushCursor(ctx, renderState.brushPreview);
         }
 
     },
