@@ -74,6 +74,23 @@
                                 }
                             </select>
                         </div>
+                        <div class="map-editor-tool-section">
+                            <div class="small text-muted">Brush Tightness</div>
+                            <input class="form-range"
+                                   type="range"
+                                   min="1"
+                                   max="10"
+                                   step="1"
+                                   disabled="@(_activeTool != MapToolType.Brush)"
+                                   @bind="_brushTightness" />
+                            <div class="small text-muted">
+                                Density @_brushTightness/10
+                                @if (_activeTool != MapToolType.Brush)
+                                {
+                                    <span> (select Brush to adjust)</span>
+                                }
+                            </div>
+                        </div>
                         <div class="map-editor-tool-summary">
                             <div class="small text-muted">Active Tool</div>
                             <div class="fw-semibold">@ActiveToolDefinition.Label</div>
@@ -180,6 +197,13 @@
         { PlacementType.House, "Cottage" }
     };
     private MapToolType _activeTool = MapToolType.Point;
+    private bool _isBrushing;
+    private float _brushLastX;
+    private float _brushLastY;
+    private int _brushStrokeCount;
+    private int _brushTightness = 6;
+    private const float BrushMinSpacing = 16f;
+    private const float BrushMaxSpacing = 90f;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
     private readonly List<MapPointDto> _activePolygonPoints = new();
@@ -231,7 +255,7 @@
     {
         new(MapToolType.Pointer, "Pointer", "Pan the map without placing items.", true),
         new(MapToolType.Point, "Point", "Place one feature per click.", true),
-        new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", false),
+        new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", true),
         new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", true),
         new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", false),
         new(MapToolType.Edit, "Edit", "Move or update an existing feature.", true),
@@ -240,7 +264,9 @@
     };
     private ToolDefinition ActiveToolDefinition => ToolDefinitions.First(tool => tool.Tool == _activeTool);
     private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
-        ? ActiveToolDefinition.Description
+        ? _activeTool == MapToolType.Brush
+            ? $"{ActiveToolDefinition.Description} (tightness {_brushTightness}/10)."
+            : ActiveToolDefinition.Description
         : $"{ActiveToolDefinition.Description} (coming soon).";
     private string ActiveAreaLayerLabel => _activeAreaLayer is null ? "None" : GetLayerLabel(_activeAreaLayer);
     private FeatureStyleDefinition ActiveStyleDefinition
@@ -284,6 +310,17 @@
         if (_activeTool == MapToolType.Point)
         {
             BeginPanCandidate(args);
+            return;
+        }
+
+        if (_activeTool == MapToolType.Brush)
+        {
+            if (args.Button != 0)
+            {
+                return;
+            }
+
+            await StartBrushAsync(args);
             return;
         }
 
@@ -410,6 +447,12 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Brush && _isBrushing)
+        {
+            await ContinueBrushAsync(args);
+            return;
+        }
+
         if (_activeTool == MapToolType.Edit && _isDraggingEditPointFeature && _editingPointFeature is not null)
         {
             if (!TryGetMapPoint(args, out var mapX, out var mapY))
@@ -475,6 +518,15 @@
         {
             _isDraggingEditPoint = false;
             _statusMessage = "Polygon point updated. Right-click to confirm.";
+            return;
+        }
+
+        if (_activeTool == MapToolType.Brush && _isBrushing)
+        {
+            _isBrushing = false;
+            _statusMessage = _brushStrokeCount == 0
+                ? "Brush stroke canceled."
+                : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
             return;
         }
 
@@ -551,6 +603,15 @@
         {
             _isPanning = false;
             _isPanCandidate = false;
+            return;
+        }
+
+        if (_activeTool == MapToolType.Brush && _isBrushing)
+        {
+            _isBrushing = false;
+            _statusMessage = _brushStrokeCount == 0
+                ? "Brush stroke canceled."
+                : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
             return;
         }
 
@@ -666,29 +727,13 @@
             return;
         }
 
-        _lastX = mapX;
-        _lastY = mapY;
-        _hasLastPlacement = true;
-
-        var selectedStyle = GetStyleForPlacement(_placementType);
+        PlacePointFeature(mapX, mapY);
         if (_placementType == PlacementType.House)
         {
-            _stagedHouses.Add(new HouseFeatureDto
-            {
-                X = _lastX,
-                Y = _lastY,
-                HouseType = selectedStyle
-            });
             _statusMessage = $"Placed house at {_lastX:0}, {_lastY:0} (unsaved).";
         }
         else
         {
-            _stagedTrees.Add(new TreeFeatureDto
-            {
-                X = _lastX,
-                Y = _lastY,
-                TreeType = selectedStyle
-            });
             _statusMessage = $"Placed tree at {_lastX:0}, {_lastY:0} (unsaved).";
         }
 
@@ -836,6 +881,11 @@
     private void SelectTool(MapToolType tool)
     {
         _activeTool = tool;
+        if (_isBrushing)
+        {
+            _isBrushing = false;
+            _brushStrokeCount = 0;
+        }
         if (tool != MapToolType.Edit && (_editingPolygon is not null || _editingPointFeature is not null))
         {
             ClearEditSelection(false);
@@ -990,6 +1040,8 @@
         _activePolygonPoints.Clear();
         ClearEditSelection(false);
         _hasLastPlacement = false;
+        _isBrushing = false;
+        _brushStrokeCount = 0;
     }
 
     private async Task UpdateCanvasClientSizeAsync()
@@ -1311,6 +1363,87 @@
     {
         var scale = (GetCanvasScaleX() + GetCanvasScaleY()) / 2f;
         return (10f * scale) / _zoom;
+    }
+
+    private float GetBrushSpacing()
+    {
+        var normalized = (_brushTightness - 1f) / 9f;
+        return BrushMaxSpacing - ((BrushMaxSpacing - BrushMinSpacing) * normalized);
+    }
+
+    private void PlacePointFeature(float mapX, float mapY)
+    {
+        _lastX = mapX;
+        _lastY = mapY;
+        _hasLastPlacement = true;
+
+        var selectedStyle = GetStyleForPlacement(_placementType);
+        if (_placementType == PlacementType.House)
+        {
+            _stagedHouses.Add(new HouseFeatureDto
+            {
+                X = mapX,
+                Y = mapY,
+                HouseType = selectedStyle
+            });
+        }
+        else
+        {
+            _stagedTrees.Add(new TreeFeatureDto
+            {
+                X = mapX,
+                Y = mapY,
+                TreeType = selectedStyle
+            });
+        }
+    }
+
+    private async Task StartBrushAsync(MouseEventArgs args)
+    {
+        if (!TryGetMapPoint(args, out var mapX, out var mapY))
+        {
+            return;
+        }
+
+        _isBrushing = true;
+        _brushLastX = mapX;
+        _brushLastY = mapY;
+        _brushStrokeCount = 0;
+        PlacePointFeature(mapX, mapY);
+        _brushStrokeCount += 1;
+        _statusMessage = "Brushing features...";
+        await DrawAsync();
+    }
+
+    private async Task ContinueBrushAsync(MouseEventArgs args)
+    {
+        if (!TryGetMapPoint(args, out var mapX, out var mapY))
+        {
+            return;
+        }
+
+        var spacing = GetBrushSpacing();
+        var dx = mapX - _brushLastX;
+        var dy = mapY - _brushLastY;
+        var distance = MathF.Sqrt((dx * dx) + (dy * dy));
+        if (distance < spacing)
+        {
+            return;
+        }
+
+        var steps = Math.Max(1, (int)MathF.Floor(distance / spacing));
+        var stepX = (dx / distance) * spacing;
+        var stepY = (dy / distance) * spacing;
+
+        for (var i = 0; i < steps; i += 1)
+        {
+            _brushLastX += stepX;
+            _brushLastY += stepY;
+            PlacePointFeature(_brushLastX, _brushLastY);
+            _brushStrokeCount += 1;
+        }
+
+        await DrawAsync();
     }
 
     private static bool IsPointInPolygon(float x, float y, AreaPolygonDto polygon)

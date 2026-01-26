@@ -166,6 +166,9 @@ code {
     box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
     max-width: 200px;
     pointer-events: auto;
+    max-height: calc(100% - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .map-editor-tool-section {
