@@ -14,7 +14,12 @@
     <h1 class="mb-3">Ink & Realm</h1>
     <p class="text-muted">Create a new map or pick one of your existing maps.</p>
 
-    <div class="d-flex gap-2 mb-3">
+    <div class="d-flex gap-2 mb-3 align-items-center">
+        <input class="form-control"
+               style="max-width: 320px;"
+               placeholder="Map name (optional)"
+               disabled="@(!IsLoggedIn || _isCreating)"
+               @bind="_newMapName" />
         <button class="btn btn-primary"
                 disabled="@(!IsLoggedIn || _isCreating)"
                 @onclick="CreateMapAsync">
@@ -62,6 +67,7 @@
     private bool _isCreating;
     private bool _isLoading;
     private string _statusMessage = string.Empty;
+    private string _newMapName = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private List<MapSummaryDto> _maps = new();
 
@@ -85,7 +91,8 @@
         var response = await Http.PostAsJsonAsync("api/demo-map/new", new CreateMapRequest
         {
             UserId = UserState.CurrentUser?.UserId,
-            SessionToken = UserState.CurrentUser?.SessionToken
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            Name = string.IsNullOrWhiteSpace(_newMapName) ? null : _newMapName.Trim()
         });
 
         if (response.IsSuccessStatusCode)
@@ -93,6 +100,7 @@
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
             if (map is not null)
             {
+                _newMapName = string.Empty;
                 Navigation.NavigateTo($"/map-demo/{map.Id}");
                 return;
             }

@@ -75,6 +75,11 @@ public sealed class DemoMapController : ControllerBase
     [HttpPost("new")]
     public async Task<ActionResult<MapDto>> CreateMap([FromBody] CreateMapRequest request)
     {
+        if (request is null)
+        {
+            return BadRequest("Map request is required.");
+        }
+
         if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
         {
             return Unauthorized("Log in to create a new map.");
@@ -86,9 +91,13 @@ public sealed class DemoMapController : ControllerBase
             return Unauthorized("Invalid user.");
         }
 
+        var mapName = string.IsNullOrWhiteSpace(request.Name)
+            ? DefaultMapName
+            : request.Name.Trim();
+
         var map = new MapEntity
         {
-            Name = DefaultMapName,
+            Name = mapName,
             UserId = user.Id
         };
 

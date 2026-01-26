@@ -63,6 +63,7 @@ public sealed class CreateMapRequest
 {
     public int? UserId { get; set; }
     public string? SessionToken { get; set; }
+    public string? Name { get; set; }
 }
 
 public sealed class AreaLayerDto
