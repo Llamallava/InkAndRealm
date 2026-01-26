@@ -1005,6 +1005,7 @@
 
     private AreaPolygonDto? FindPolygonAtPoint(float mapX, float mapY)
     {
+        var activeLayerIndex = _activeAreaLayer?.LayerIndex;
         var candidates = _waterPolygons.Concat(_stagedWaterPolygons).ToList();
         AreaPolygonDto? selected = null;
         var selectedLayer = int.MinValue;
@@ -1014,6 +1015,11 @@
         {
             var polygon = candidates[i];
             if (polygon.Points.Count < 3)
+            {
+                continue;
+            }
+
+            if (activeLayerIndex is not null && polygon.LayerIndex != activeLayerIndex.Value)
             {
                 continue;
             }
