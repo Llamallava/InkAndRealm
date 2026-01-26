@@ -182,21 +182,11 @@
     private MapToolType _activeTool = MapToolType.Point;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
-    private readonly List<AreaStrokeDto> _activeStrokes = new();
-    private AreaStrokeDto? _currentStroke;
-    private bool _isDrawing;
     private readonly List<MapPointDto> _activePolygonPoints = new();
-    private MapPointDto? _lastBrushInputPoint;
-    private readonly HashSet<int> _activeStrokeCells = new();
-    private readonly Dictionary<int, bool[]> _layerMasks = new();
-    private readonly List<AreaStrokeDto> _stagedWaterStrokes = new();
+    private readonly List<AreaPolygonDto> _waterPolygons = new();
     private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
-    private const float AreaMaskCellSize = 0.5f;
-    private readonly int _maskWidth = (int)Math.Ceiling(MapWidth / AreaMaskCellSize);
-    private readonly int _maskHeight = (int)Math.Ceiling(MapHeight / AreaMaskCellSize);
-    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterStrokes.Count + _stagedWaterPolygons.Count;
+    private int PendingCount => _stagedTrees.Count + _stagedHouses.Count + _stagedWaterPolygons.Count;
     [Parameter] public int MapId { get; set; }
-    private const float BrushRadius = 18f;
     private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
     {
@@ -225,7 +215,7 @@
     {
         new(MapToolType.Pointer, "Pointer", "Pan the map without placing items.", true),
         new(MapToolType.Point, "Point", "Place one feature per click.", true),
-        new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", true),
+        new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", false),
         new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", true),
         new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", false),
         new(MapToolType.Edit, "Edit", "Move or update an existing feature.", false),
@@ -249,7 +239,6 @@
     {
         UserState.Changed += OnUserChanged;
         EnsureAreaLayers();
-        RebuildLayerMasks();
         await LoadMapAsync();
     }
 
@@ -279,16 +268,6 @@
         if (_activeTool == MapToolType.Point)
         {
             BeginPanCandidate(args);
-            return;
-        }
-
-        if (_activeTool == MapToolType.Brush)
-        {
-            if (TryGetMapPoint(args, out var mapX, out var mapY))
-            {
-                StartBrushStroke(mapX, mapY);
-                await DrawAsync();
-            }
             return;
         }
 
@@ -334,18 +313,7 @@
             return;
         }
 
-        if (!_isDrawing || _activeTool != MapToolType.Brush)
-        {
-            return;
-        }
-
-        if (!TryGetMapPoint(args, out var mapX, out var mapY))
-        {
-            return;
-        }
-
-        AddBrushPoint(mapX, mapY);
-        await DrawAsync();
+        return;
     }
 
     private async Task HandlePointerUp(MouseEventArgs args)
@@ -364,13 +332,7 @@
             return;
         }
 
-        if (!_isDrawing || _activeTool != MapToolType.Brush)
-        {
-            return;
-        }
-
-        CommitBrushStroke();
-        await DrawAsync();
+        return;
     }
 
     private async Task HandleContextMenu(MouseEventArgs args)
@@ -420,13 +382,7 @@
             return;
         }
 
-        if (!_isDrawing || _activeTool != MapToolType.Brush)
-        {
-            return;
-        }
-
-        CommitBrushStroke();
-        await DrawAsync();
+        return;
     }
 
     private async Task HandleWheel(WheelEventArgs args)
@@ -579,7 +535,7 @@
             MapId = MapId,
             AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
             AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
-            AddedWaterStrokes = new List<AreaStrokeDto>(_stagedWaterStrokes)
+            AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons)
         };
 
         var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
@@ -589,10 +545,14 @@
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
             _trees = map?.Trees ?? new List<TreeFeatureDto>();
             _houses = map?.Houses ?? new List<HouseFeatureDto>();
+            _waterPolygons.Clear();
+            if (map?.AreaPolygons is not null && map.AreaPolygons.Count > 0)
+            {
+                _waterPolygons.AddRange(map.AreaPolygons);
+            }
             LoadAreaLayers(map);
             _stagedTrees.Clear();
             _stagedHouses.Clear();
-            _stagedWaterStrokes.Clear();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             await DrawAsync();
         }
@@ -619,6 +579,7 @@
         {
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
+            _waterPolygons.Clear();
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
@@ -631,6 +592,7 @@
         {
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
+            _waterPolygons.Clear();
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
@@ -642,6 +604,11 @@
         var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
+        _waterPolygons.Clear();
+        if (map?.AreaPolygons is not null && map.AreaPolygons.Count > 0)
+        {
+            _waterPolygons.AddRange(map.AreaPolygons);
+        }
         _hasMap = map?.Id > 0;
         LoadAreaLayers(map);
         ClearStaged();
@@ -712,7 +679,6 @@
             _activeAreaLayer = null;
         }
         EnsureAreaLayers();
-        RebuildLayerMasks();
     }
 
     private void ResetAreaLayers()
@@ -720,7 +686,6 @@
         _areaLayers.Clear();
         _activeAreaLayer = null;
         EnsureAreaLayers();
-        RebuildLayerMasks();
     }
 
     private void NormalizeAreaLayers()
@@ -749,7 +714,6 @@
         _areaLayers.Add(layer);
         NormalizeAreaLayers();
         _activeAreaLayer = layer;
-        GetLayerMask(layer);
         _statusMessage = $"{GetLayerLabel(layer)} created.";
     }
 
@@ -770,70 +734,6 @@
         return $"Layer {index + 1}";
     }
 
-    private void StartBrushStroke(float mapX, float mapY)
-    {
-        EnsureAreaLayers();
-        _isDrawing = true;
-        _activeStrokes.Clear();
-        _currentStroke = null;
-        _activeStrokeCells.Clear();
-        _lastBrushInputPoint = new MapPointDto { X = mapX, Y = mapY };
-        TryAddBrushSegment(mapX, mapY, mapX, mapY);
-        _statusMessage = $"Painting {_activeAreaLayer?.FeatureType ?? "area"}...";
-    }
-
-    private void AddBrushPoint(float x, float y)
-    {
-        if (_activeAreaLayer is null)
-        {
-            return;
-        }
-
-        if (_lastBrushInputPoint is null)
-        {
-            _lastBrushInputPoint = new MapPointDto { X = x, Y = y };
-            TryAddBrushSegment(x, y, x, y);
-            return;
-        }
-
-        TryAddBrushSegment(_lastBrushInputPoint.X, _lastBrushInputPoint.Y, x, y);
-        _lastBrushInputPoint.X = x;
-        _lastBrushInputPoint.Y = y;
-    }
-
-    private void CommitBrushStroke()
-    {
-        if (_activeAreaLayer is null)
-        {
-            _currentStroke = null;
-            _isDrawing = false;
-            return;
-        }
-
-        var committed = 0;
-        foreach (var stroke in _activeStrokes)
-        {
-            if (stroke.Points.Count == 0)
-            {
-                continue;
-            }
-
-            _activeAreaLayer.Strokes.Add(stroke);
-            _stagedWaterStrokes.Add(stroke);
-            StampStrokeToMask(stroke, GetLayerMask(_activeAreaLayer));
-            committed += 1;
-        }
-
-        _statusMessage = committed > 0
-            ? $"Painted {_activeAreaLayer.FeatureType} layer."
-            : $"Nothing new to add on {GetLayerLabel(_activeAreaLayer)}.";
-
-        _activeStrokes.Clear();
-        _currentStroke = null;
-        _lastBrushInputPoint = null;
-        _activeStrokeCells.Clear();
-        _isDrawing = false;
-    }
 
     private string GetMapUrl()
     {
@@ -871,7 +771,6 @@
     {
         _stagedTrees.Clear();
         _stagedHouses.Clear();
-        _stagedWaterStrokes.Clear();
         _stagedWaterPolygons.Clear();
         _activePolygonPoints.Clear();
         _hasLastPlacement = false;
@@ -906,181 +805,6 @@
     private float GetCanvasScaleY()
     {
         return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
-    }
-
-    private void TryAddBrushSegment(float startX, float startY, float endX, float endY)
-    {
-        if (_activeAreaLayer is null)
-        {
-            return;
-        }
-
-        var radius = BrushRadius;
-        var layerMask = GetLayerMask(_activeAreaLayer);
-        if (!HasNewCoverageSegment(startX, startY, endX, endY, radius, layerMask))
-        {
-            _currentStroke = null;
-            return;
-        }
-
-        if (_currentStroke is null)
-        {
-            _currentStroke = new AreaStrokeDto
-            {
-                Tool = "Brush",
-                Radius = BrushRadius,
-                LayerIndex = _activeAreaLayer.LayerIndex
-            };
-            _activeStrokes.Add(_currentStroke);
-        }
-
-        var shouldAddPoint = true;
-        if (_currentStroke.Points.Count > 0)
-        {
-            var last = _currentStroke.Points[^1];
-            var deltaX = endX - last.X;
-            var deltaY = endY - last.Y;
-            var minDistance = BrushRadius * 0.5f;
-            shouldAddPoint = (deltaX * deltaX) + (deltaY * deltaY) >= (minDistance * minDistance);
-        }
-
-        if (_currentStroke.Points.Count == 0)
-        {
-            _currentStroke.Points.Add(new MapPointDto { X = startX, Y = startY });
-        }
-
-        if (shouldAddPoint)
-        {
-            _currentStroke.Points.Add(new MapPointDto { X = endX, Y = endY });
-        }
-
-        MarkCoverageSegment(startX, startY, endX, endY, radius, layerMask);
-    }
-
-    private bool HasNewCoverageSegment(float startX, float startY, float endX, float endY, float radius, bool[] layerMask)
-    {
-        foreach (var index in GetMaskCellsForSegment(startX, startY, endX, endY, radius))
-        {
-            if (!layerMask[index] && !_activeStrokeCells.Contains(index))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private void MarkCoverageSegment(float startX, float startY, float endX, float endY, float radius, bool[] layerMask)
-    {
-        foreach (var index in GetMaskCellsForSegment(startX, startY, endX, endY, radius))
-        {
-            if (layerMask[index])
-            {
-                continue;
-            }
-
-            _activeStrokeCells.Add(index);
-        }
-    }
-
-    private IEnumerable<int> GetMaskCellsForSegment(float startX, float startY, float endX, float endY, float radius)
-    {
-        var expandedRadius = radius + (AreaMaskCellSize * 0.5f);
-        var minX = Math.Clamp((int)MathF.Floor((MathF.Min(startX, endX) - expandedRadius) / AreaMaskCellSize), 0, _maskWidth - 1);
-        var maxX = Math.Clamp((int)MathF.Floor((MathF.Max(startX, endX) + expandedRadius) / AreaMaskCellSize), 0, _maskWidth - 1);
-        var minY = Math.Clamp((int)MathF.Floor((MathF.Min(startY, endY) - expandedRadius) / AreaMaskCellSize), 0, _maskHeight - 1);
-        var maxY = Math.Clamp((int)MathF.Floor((MathF.Max(startY, endY) + expandedRadius) / AreaMaskCellSize), 0, _maskHeight - 1);
-        var radiusSquared = expandedRadius * expandedRadius;
-
-        for (var gridY = minY; gridY <= maxY; gridY += 1)
-        {
-            var centerY = (gridY + 0.5f) * AreaMaskCellSize;
-            for (var gridX = minX; gridX <= maxX; gridX += 1)
-            {
-                var centerX = (gridX + 0.5f) * AreaMaskCellSize;
-                var distanceSquared = DistanceSquaredToSegment(centerX, centerY, startX, startY, endX, endY);
-                if (distanceSquared <= radiusSquared)
-                {
-                    yield return (gridY * _maskWidth) + gridX;
-                }
-            }
-        }
-    }
-
-    private void RebuildLayerMasks()
-    {
-        _layerMasks.Clear();
-        foreach (var layer in _areaLayers)
-        {
-            var mask = GetLayerMask(layer);
-            foreach (var stroke in layer.Strokes)
-            {
-                StampStrokeToMask(stroke, mask);
-            }
-        }
-    }
-
-    private bool[] GetLayerMask(AreaLayerDto layer)
-    {
-        if (!_layerMasks.TryGetValue(layer.LayerIndex, out var mask))
-        {
-            mask = new bool[_maskWidth * _maskHeight];
-            _layerMasks[layer.LayerIndex] = mask;
-        }
-
-        return mask;
-    }
-
-    private void StampStrokeToMask(AreaStrokeDto stroke, bool[] mask)
-    {
-        if (stroke.Points.Count == 0)
-        {
-            return;
-        }
-
-        var radius = stroke.Radius > 0 ? stroke.Radius : BrushRadius;
-        for (var i = 0; i < stroke.Points.Count; i += 1)
-        {
-            var point = stroke.Points[i];
-            if (i == 0)
-            {
-                StampSegmentToMask(point.X, point.Y, point.X, point.Y, radius, mask);
-                continue;
-            }
-
-            var prev = stroke.Points[i - 1];
-            StampSegmentToMask(prev.X, prev.Y, point.X, point.Y, radius, mask);
-        }
-    }
-
-    private void StampSegmentToMask(float startX, float startY, float endX, float endY, float radius, bool[] mask)
-    {
-        foreach (var index in GetMaskCellsForSegment(startX, startY, endX, endY, radius))
-        {
-            mask[index] = true;
-        }
-    }
-
-    private static float DistanceSquaredToSegment(float px, float py, float ax, float ay, float bx, float by)
-    {
-        var abx = bx - ax;
-        var aby = by - ay;
-        var apx = px - ax;
-        var apy = py - ay;
-        var abLenSquared = (abx * abx) + (aby * aby);
-
-        if (abLenSquared <= 0.0001f)
-        {
-            return (apx * apx) + (apy * apy);
-        }
-
-        var t = ((apx * abx) + (apy * aby)) / abLenSquared;
-        t = Math.Clamp(t, 0f, 1f);
-        var closestX = ax + (abx * t);
-        var closestY = ay + (aby * t);
-        var dx = px - closestX;
-        var dy = py - closestY;
-        return (dx * dx) + (dy * dy);
     }
 
     private MapRenderStateDto BuildRenderState()
@@ -1141,11 +865,10 @@
             AreaLayers = _areaLayers
                 .OrderBy(layer => layer.LayerIndex)
                 .ToList(),
-            AreaPolygons = _stagedWaterPolygons
+            AreaPolygons = _waterPolygons
+                .Concat(_stagedWaterPolygons)
                 .OrderBy(polygon => polygon.LayerIndex)
                 .ToList(),
-            ActiveStroke = null,
-            ActiveStrokes = new List<AreaStrokeDto>(_activeStrokes),
             ActivePolygon = _activePolygonPoints.Count >= 1
                 ? new AreaPolygonDto
                 {

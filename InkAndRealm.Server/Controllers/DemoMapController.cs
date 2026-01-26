@@ -11,7 +11,6 @@ namespace InkAndRealm.Server.Controllers;
 public sealed class DemoMapController : ControllerBase
 {
     private const string DefaultMapName = "Untitled Map";
-    private const float DefaultBrushRadius = 18f;
     private readonly DemoMapContext _context;
 
     public DemoMapController(DemoMapContext context)
@@ -149,11 +148,11 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
-        if (request.AddedWaterStrokes is not null && request.AddedWaterStrokes.Count > 0)
+        if (request.AddedWaterPolygons is not null && request.AddedWaterPolygons.Count > 0)
         {
-            foreach (var stroke in request.AddedWaterStrokes)
+            foreach (var polygon in request.AddedWaterPolygons)
             {
-                map.Features.Add(CreateWaterFeature(stroke));
+                map.Features.Add(CreateWaterFeature(polygon));
             }
 
             hasChanges = true;
@@ -271,19 +270,19 @@ public sealed class DemoMapController : ControllerBase
         };
     }
 
-    private static WaterFeatureEntity CreateWaterFeature(AreaStrokeDto stroke)
+    private static WaterFeatureEntity CreateWaterFeature(AreaPolygonDto polygon)
     {
         var feature = new WaterFeatureEntity
         {
             WaterType = WaterType.Lake,
-            ZIndex = stroke?.LayerIndex ?? 0
+            ZIndex = polygon?.LayerIndex ?? 0
         };
 
-        if (stroke?.Points is not null)
+        if (polygon?.Points is not null)
         {
-            for (var i = 0; i < stroke.Points.Count; i += 1)
+            for (var i = 0; i < polygon.Points.Count; i += 1)
             {
-                var point = stroke.Points[i];
+                var point = polygon.Points[i];
                 feature.Points.Add(new FeaturePointEntity
                 {
                     X = point.X,
@@ -298,12 +297,11 @@ public sealed class DemoMapController : ControllerBase
 
     private static MapDto ToDto(MapEntity map)
     {
-        var waterStrokes = map.Features
+        var waterPolygons = map.Features
             .OfType<WaterFeatureEntity>()
-            .Select(feature => new AreaStrokeDto
+            .Select(feature => new AreaPolygonDto
             {
-                Tool = "Brush",
-                Radius = DefaultBrushRadius,
+                FeatureType = "Water",
                 LayerIndex = feature.ZIndex,
                 Points = feature.Points
                     .OrderBy(point => point.SortOrder)
@@ -316,15 +314,14 @@ public sealed class DemoMapController : ControllerBase
             })
             .ToList();
 
-        var waterLayers = waterStrokes
-            .GroupBy(stroke => stroke.LayerIndex)
+        var waterLayers = waterPolygons
+            .GroupBy(polygon => polygon.LayerIndex)
             .OrderBy(group => group.Key)
             .Select(group => new AreaLayerDto
             {
                 LayerKey = $"water-{group.Key}",
                 LayerIndex = group.Key,
-                FeatureType = "Water",
-                Strokes = group.ToList()
+                FeatureType = "Water"
             })
             .ToList();
 
@@ -360,7 +357,8 @@ public sealed class DemoMapController : ControllerBase
                     };
                 })
                 .ToList(),
-            AreaLayers = waterLayers
+            AreaLayers = waterLayers,
+            AreaPolygons = waterPolygons
         };
     }
 

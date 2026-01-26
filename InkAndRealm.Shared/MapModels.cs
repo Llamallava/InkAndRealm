@@ -7,6 +7,7 @@ public sealed class MapDto
     public List<TreeFeatureDto> Trees { get; set; } = new();
     public List<HouseFeatureDto> Houses { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
+    public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
 }
 
 public sealed class MapSummaryDto
@@ -54,7 +55,7 @@ public sealed class MapEditsRequest
     public int MapId { get; set; }
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
-    public List<AreaStrokeDto> AddedWaterStrokes { get; set; } = new();
+    public List<AreaPolygonDto> AddedWaterPolygons { get; set; } = new();
 }
 
 public sealed class CreateMapRequest
@@ -68,15 +69,6 @@ public sealed class AreaLayerDto
     public string LayerKey { get; set; } = string.Empty;
     public int LayerIndex { get; set; }
     public string FeatureType { get; set; } = string.Empty;
-    public List<AreaStrokeDto> Strokes { get; set; } = new();
-}
-
-public sealed class AreaStrokeDto
-{
-    public string Tool { get; set; } = "Brush";
-    public float Radius { get; set; }
-    public int LayerIndex { get; set; }
-    public List<MapPointDto> Points { get; set; } = new();
 }
 
 public sealed class AreaPolygonDto
@@ -97,8 +89,6 @@ public sealed class MapRenderStateDto
     public List<MapPointFeatureDto> PointFeatures { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
-    public AreaStrokeDto? ActiveStroke { get; set; }
-    public List<AreaStrokeDto> ActiveStrokes { get; set; } = new();
     public AreaPolygonDto? ActivePolygon { get; set; }
     public List<AreaPolygonDto> ActivePolygons { get; set; } = new();
     public MapViewStateDto ViewState { get; set; } = new();
