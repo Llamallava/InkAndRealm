@@ -180,6 +180,30 @@ code {
     text-align: left;
 }
 
+.map-layer-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.map-layer-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.map-layer-delete:hover {
+    opacity: 1;
+    color: #b42318;
+    background: rgba(180, 35, 24, 0.12);
+}
+
 .map-editor-tool-summary {
     display: grid;
     gap: 0.25rem;

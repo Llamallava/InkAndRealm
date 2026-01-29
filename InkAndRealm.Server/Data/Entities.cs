@@ -34,6 +34,17 @@ public sealed class MapEntity
     public float Width { get; set; }
     public float Height { get; set; }
     public List<FeatureEntity> Features { get; set; } = new();
+    public List<MapLayerEntity> Layers { get; set; } = new();
+}
+
+public sealed class MapLayerEntity
+{
+    public int Id { get; set; }
+    public int MapId { get; set; }
+    public MapEntity? Map { get; set; }
+    public string LayerKey { get; set; } = string.Empty;
+    public int LayerIndex { get; set; }
+    public string FeatureType { get; set; } = string.Empty;
 }
 
 public abstract class FeatureEntity

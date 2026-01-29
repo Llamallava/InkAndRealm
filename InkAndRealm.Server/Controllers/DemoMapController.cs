@@ -62,6 +62,7 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
+            .Include(m => m.Layers)
             .FirstOrDefaultAsync(m => m.Id == mapId && m.UserId == user.Id);
 
         if (map is null)
@@ -129,6 +130,7 @@ public sealed class DemoMapController : ControllerBase
         var map = await _context.Maps
             .Include(m => m.Features)
             .ThenInclude(feature => feature.Points)
+            .Include(m => m.Layers)
             .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
 
         if (map is null)
@@ -137,6 +139,28 @@ public sealed class DemoMapController : ControllerBase
         }
 
         var hasChanges = false;
+        if (request.AreaLayers is not null)
+        {
+            var normalizedLayers = request.AreaLayers
+                .Where(layer => layer is not null)
+                .OrderBy(layer => layer.LayerIndex)
+                .GroupBy(layer => layer.LayerIndex)
+                .Select(group => group.First())
+                .ToList();
+
+            map.Layers.Clear();
+            foreach (var layer in normalizedLayers)
+            {
+                map.Layers.Add(new MapLayerEntity
+                {
+                    LayerKey = layer.LayerKey ?? string.Empty,
+                    LayerIndex = layer.LayerIndex,
+                    FeatureType = layer.FeatureType ?? string.Empty
+                });
+            }
+
+            hasChanges = true;
+        }
         if (request.AddedTrees is not null && request.AddedTrees.Count > 0)
         {
             foreach (var tree in request.AddedTrees)
@@ -165,6 +189,26 @@ public sealed class DemoMapController : ControllerBase
             }
 
             hasChanges = true;
+        }
+
+        if (request.DeletedWaterPolygonIds is not null && request.DeletedWaterPolygonIds.Count > 0)
+        {
+            var deletedSet = request.DeletedWaterPolygonIds
+                .Where(id => id > 0)
+                .ToHashSet();
+            if (deletedSet.Count > 0)
+            {
+                var featuresToRemove = map.Features
+                    .OfType<WaterFeatureEntity>()
+                    .Where(feature => deletedSet.Contains(feature.Id))
+                    .ToList();
+                foreach (var feature in featuresToRemove)
+                {
+                    map.Features.Remove(feature);
+                }
+
+                hasChanges = hasChanges || featuresToRemove.Count > 0;
+            }
         }
 
         if (request.UpdatedTrees is not null && request.UpdatedTrees.Count > 0)
@@ -432,6 +476,18 @@ public sealed class DemoMapController : ControllerBase
             })
             .ToList();
 
+        var persistedLayers = map.Layers is null || map.Layers.Count == 0
+            ? waterLayers
+            : map.Layers
+                .OrderBy(layer => layer.LayerIndex)
+                .Select(layer => new AreaLayerDto
+                {
+                    LayerKey = layer.LayerKey,
+                    LayerIndex = layer.LayerIndex,
+                    FeatureType = layer.FeatureType
+                })
+                .ToList();
+
         return new MapDto
         {
             Id = map.Id,
@@ -464,7 +520,7 @@ public sealed class DemoMapController : ControllerBase
                     };
                 })
                 .ToList(),
-            AreaLayers = waterLayers,
+            AreaLayers = persistedLayers,
             AreaPolygons = waterPolygons
         };
     }

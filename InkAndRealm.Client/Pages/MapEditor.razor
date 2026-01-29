@@ -145,9 +145,17 @@
                     @for (var i = 0; i < _areaLayers.Count; i += 1)
                     {
                         var layer = _areaLayers[i];
-                        <button class="btn btn-sm @(_activeAreaLayer == layer ? "btn-primary" : "btn-outline-primary")"
+                        <button class="btn btn-sm map-layer-button @(_activeAreaLayer == layer ? "btn-primary" : "btn-outline-primary")"
                                 @onclick="() => SelectAreaLayer(layer)">
-                            @GetLayerLabel(layer, i)
+                            <span>@GetLayerLabel(layer, i)</span>
+                            <span class="map-layer-delete"
+                                  role="button"
+                                  title="Delete layer"
+                                  aria-label="Delete layer"
+                                  @onclick="() => PromptDeleteLayerAsync(layer)"
+                                  @onclick:stopPropagation="true">
+                                &#128465;
+                            </span>
                         </button>
                     }
                 </div>
@@ -234,6 +242,7 @@
     private readonly List<AreaPolygonDto> _waterPolygons = new();
     private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
     private readonly Dictionary<int, AreaPolygonDto> _editedWaterPolygons = new();
+    private readonly HashSet<int> _deletedWaterPolygonIds = new();
     private readonly Dictionary<int, TreeFeatureDto> _editedTrees = new();
     private readonly Dictionary<int, HouseFeatureDto> _editedHouses = new();
     private AreaPolygonDto? _editingPolygon;
@@ -248,6 +257,7 @@
         + _stagedHouses.Count
         + _stagedWaterPolygons.Count
         + _editedWaterPolygons.Count
+        + _deletedWaterPolygonIds.Count
         + _editedTrees.Count
         + _editedHouses.Count;
     [Parameter] public int MapId { get; set; }
@@ -818,11 +828,21 @@
             UserId = UserState.CurrentUser?.UserId,
             SessionToken = UserState.CurrentUser?.SessionToken,
             MapId = MapId,
+            AreaLayers = _areaLayers
+                .OrderBy(layer => layer.LayerIndex)
+                .Select(layer => new AreaLayerDto
+                {
+                    LayerKey = layer.LayerKey,
+                    LayerIndex = layer.LayerIndex,
+                    FeatureType = layer.FeatureType
+                })
+                .ToList(),
             AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
             AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
             UpdatedTrees = _editedTrees.Values.ToList(),
             UpdatedHouses = _editedHouses.Values.ToList(),
             AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons),
+            DeletedWaterPolygonIds = _deletedWaterPolygonIds.ToList(),
             UpdatedWaterPolygons = _editedWaterPolygons.Values
                 .Select(ClonePolygon)
                 .ToList()
@@ -841,6 +861,7 @@
                 _waterPolygons.AddRange(map.AreaPolygons);
             }
             _editedWaterPolygons.Clear();
+            _deletedWaterPolygonIds.Clear();
             _editedTrees.Clear();
             _editedHouses.Clear();
             LoadAreaLayers(map);
@@ -1039,6 +1060,64 @@
         _statusMessage = $"{GetLayerLabel(layer)} selected.";
     }
 
+    private async Task PromptDeleteLayerAsync(AreaLayerDto layer)
+    {
+        var label = GetLayerLabel(layer);
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete {label}? Deleting the layer removes everything on that layer. Continue?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        DeleteAreaLayer(layer);
+        _statusMessage = $"{label} deleted.";
+        await DrawAsync();
+    }
+
+    private void DeleteAreaLayer(AreaLayerDto layer)
+    {
+        var layerIndex = layer.LayerIndex;
+        if (_activeAreaLayer?.LayerIndex == layerIndex)
+        {
+            _activePolygonPoints.Clear();
+        }
+
+        if (_editingPolygon is not null && _editingPolygon.LayerIndex == layerIndex)
+        {
+            ClearEditSelection(true);
+        }
+
+        _stagedWaterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
+
+        foreach (var polygonId in _editedWaterPolygons
+                     .Where(entry => entry.Value.LayerIndex == layerIndex)
+                     .Select(entry => entry.Key)
+                     .ToList())
+        {
+            _editedWaterPolygons.Remove(polygonId);
+        }
+
+        foreach (var polygonId in _waterPolygons
+                     .Where(polygon => polygon.LayerIndex == layerIndex && polygon.Id > 0)
+                     .Select(polygon => polygon.Id))
+        {
+            _deletedWaterPolygonIds.Add(polygonId);
+        }
+
+        _waterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
+        _areaLayers.RemoveAll(existing => existing.LayerIndex == layerIndex);
+
+        if (_activeAreaLayer == layer)
+        {
+            _activeAreaLayer = null;
+        }
+
+        NormalizeAreaLayers();
+        EnsureAreaLayers();
+    }
+
     private int GetNextLayerIndex()
     {
         return _areaLayers.Count == 0 ? 0 : _areaLayers.Max(layer => layer.LayerIndex) + 1;
@@ -1089,6 +1168,7 @@
         _stagedHouses.Clear();
         _stagedWaterPolygons.Clear();
         _editedWaterPolygons.Clear();
+        _deletedWaterPolygonIds.Clear();
         _editedTrees.Clear();
         _editedHouses.Clear();
         _activePolygonPoints.Clear();

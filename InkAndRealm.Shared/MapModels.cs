@@ -53,11 +53,13 @@ public sealed class MapEditsRequest
     public int? UserId { get; set; }
     public string? SessionToken { get; set; }
     public int MapId { get; set; }
+    public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
     public List<TreeFeatureDto> UpdatedTrees { get; set; } = new();
     public List<HouseFeatureDto> UpdatedHouses { get; set; } = new();
     public List<AreaPolygonDto> AddedWaterPolygons { get; set; } = new();
+    public List<int> DeletedWaterPolygonIds { get; set; } = new();
     public List<AreaPolygonDto> UpdatedWaterPolygons { get; set; } = new();
 }
 
