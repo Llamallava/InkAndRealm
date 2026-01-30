@@ -1,14 +1,21 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @using InkAndRealm.Client.State
 @inject UserState UserState
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
 
-    <main>
+<div class="page">
+    <main @onclick="CloseLoginPanel">
         <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <div class="top-row-actions">
+                <button class="btn btn-outline-primary btn-sm" @onclick="ToggleLoginPanel" @onclick:stopPropagation>
+                    @(UserState.CurrentUser is null ? "Account" : UserState.CurrentUser.Username)
+                </button>
+                @if (isLoginPanelOpen)
+                {
+                    <div class="login-panel" @onclick:stopPropagation>
+                        <AccountPanel Compact="true" OnCompleted="CloseLoginPanelAsync" />
+                    </div>
+                }
+            </div>
         </div>
 
         <article class="content px-4">
@@ -18,8 +25,26 @@
 </div>
 
 @code {
+    private bool isLoginPanelOpen;
+
     protected override async Task OnInitializedAsync()
     {
         await UserState.InitializeAsync();
+    }
+
+    private void ToggleLoginPanel()
+    {
+        isLoginPanelOpen = !isLoginPanelOpen;
+    }
+
+    private void CloseLoginPanel()
+    {
+        isLoginPanelOpen = false;
+    }
+
+    private Task CloseLoginPanelAsync()
+    {
+        isLoginPanelOpen = false;
+        return Task.CompletedTask;
     }
 }

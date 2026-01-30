@@ -1,0 +1,124 @@
+@using InkAndRealm.Shared
+@using InkAndRealm.Client.State
+@inject HttpClient Http
+@inject UserState UserState
+
+<div class="@PanelClass">
+    @if (UserState.CurrentUser is not null)
+    {
+        <div class="account-panel-status">
+            Signed in as <strong>@UserState.CurrentUser.Username</strong>
+        </div>
+    }
+
+    @if (showRegister)
+    {
+        <h2 class="account-panel-title">Create account</h2>
+        <EditForm Model="registerRequest" OnSubmit="RegisterAsync">
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <InputText class="form-control" @bind-Value="registerRequest.Username" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText class="form-control" type="password" @bind-Value="registerRequest.Password" />
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Create new</button>
+        </EditForm>
+        <button class="btn btn-link account-panel-switch" type="button" @onclick="ShowLogin">Back to login</button>
+        @if (!string.IsNullOrWhiteSpace(registerMessage))
+        {
+            <p class="mt-2 account-panel-message">@registerMessage</p>
+        }
+    }
+    else
+    {
+        <h2 class="account-panel-title">Log in</h2>
+        <EditForm Model="loginRequest" OnSubmit="LoginAsync">
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <InputText class="form-control" @bind-Value="loginRequest.Username" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText class="form-control" type="password" @bind-Value="loginRequest.Password" />
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Log in</button>
+        </EditForm>
+        <button class="btn btn-link account-panel-switch" type="button" @onclick="ShowRegister">Create new</button>
+        @if (!string.IsNullOrWhiteSpace(loginMessage))
+        {
+            <p class="mt-2 account-panel-message">@loginMessage</p>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public bool Compact { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnCompleted { get; set; }
+
+    private readonly RegisterRequest registerRequest = new();
+    private readonly LoginRequest loginRequest = new();
+    private string? registerMessage;
+    private string? loginMessage;
+    private bool showRegister;
+
+    private string PanelClass => Compact
+        ? "account-panel account-panel-compact"
+        : "account-panel account-panel-page";
+
+    private void ShowRegister()
+    {
+        showRegister = true;
+        registerMessage = null;
+        loginMessage = null;
+    }
+
+    private void ShowLogin()
+    {
+        showRegister = false;
+        registerMessage = null;
+        loginMessage = null;
+    }
+
+    private async Task RegisterAsync()
+    {
+        registerMessage = null;
+        loginMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/auth/register", registerRequest);
+        if (response.IsSuccessStatusCode)
+        {
+            var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            await UserState.SetUserAsync(user);
+            registerMessage = user is null ? "Registration succeeded." : $"Registered as {user.Username}.";
+            registerRequest.Password = string.Empty;
+            await OnCompleted.InvokeAsync();
+            return;
+        }
+
+        registerMessage = await response.Content.ReadAsStringAsync();
+    }
+
+    private async Task LoginAsync()
+    {
+        registerMessage = null;
+        loginMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/auth/login", loginRequest);
+        if (response.IsSuccessStatusCode)
+        {
+            var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            await UserState.SetUserAsync(user);
+            loginMessage = user is null ? "Login succeeded." : $"Logged in as {user.Username}.";
+            loginRequest.Password = string.Empty;
+            await OnCompleted.InvokeAsync();
+            return;
+        }
+
+        loginMessage = await response.Content.ReadAsStringAsync();
+    }
+}

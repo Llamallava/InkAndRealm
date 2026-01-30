@@ -1,0 +1,32 @@
+.account-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.account-panel-compact {
+    font-size: 0.95rem;
+}
+
+.account-panel-page {
+    max-width: 520px;
+}
+
+.account-panel-title {
+    font-size: 1.1rem;
+    margin: 0 0 0.25rem 0;
+}
+
+.account-panel-status {
+    font-size: 0.9rem;
+    color: #3f3f3f;
+}
+
+.account-panel-switch {
+    padding-left: 0;
+    text-align: left;
+}
+
+.account-panel-message {
+    color: #444444;
+}
