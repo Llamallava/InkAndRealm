@@ -181,6 +181,46 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.DeletedTreeIds is not null && request.DeletedTreeIds.Count > 0)
+        {
+            var deletedSet = request.DeletedTreeIds
+                .Where(id => id > 0)
+                .ToHashSet();
+            if (deletedSet.Count > 0)
+            {
+                var featuresToRemove = map.Features
+                    .OfType<TreeFeatureEntity>()
+                    .Where(feature => deletedSet.Contains(feature.Id))
+                    .ToList();
+                foreach (var feature in featuresToRemove)
+                {
+                    map.Features.Remove(feature);
+                }
+
+                hasChanges = hasChanges || featuresToRemove.Count > 0;
+            }
+        }
+
+        if (request.DeletedHouseIds is not null && request.DeletedHouseIds.Count > 0)
+        {
+            var deletedSet = request.DeletedHouseIds
+                .Where(id => id > 0)
+                .ToHashSet();
+            if (deletedSet.Count > 0)
+            {
+                var featuresToRemove = map.Features
+                    .OfType<HouseFeatureEntity>()
+                    .Where(feature => deletedSet.Contains(feature.Id))
+                    .ToList();
+                foreach (var feature in featuresToRemove)
+                {
+                    map.Features.Remove(feature);
+                }
+
+                hasChanges = hasChanges || featuresToRemove.Count > 0;
+            }
+        }
+
         if (request.AddedWaterPolygons is not null && request.AddedWaterPolygons.Count > 0)
         {
             foreach (var polygon in request.AddedWaterPolygons)

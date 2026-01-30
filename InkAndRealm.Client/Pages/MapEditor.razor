@@ -90,6 +90,21 @@
                         }
                     </div>
                 </div>
+                @if (_activeTool == MapToolType.Eraser)
+                {
+                    <div class="map-editor-topbar-block">
+                        <div class="small text-muted">Eraser Target</div>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Eraser target selection">
+                            @foreach (var target in EraserTargetDefinitions)
+                            {
+                                <button class="btn @(_eraserTarget == target.Target ? "btn-primary" : "btn-outline-primary")"
+                                        @onclick="() => SelectEraserTarget(target.Target)">
+                                    @target.Label
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
                 <div class="map-editor-topbar-block">
                     <div class="small text-muted">@ActiveStyleDefinition.MenuLabel</div>
                     <select class="form-select form-select-sm" @bind="SelectedPlacementStyle">
@@ -233,6 +248,8 @@
     private readonly HashSet<int> _deletedWaterPolygonIds = new();
     private readonly Dictionary<int, TreeFeatureDto> _editedTrees = new();
     private readonly Dictionary<int, HouseFeatureDto> _editedHouses = new();
+    private readonly HashSet<int> _deletedTreeIds = new();
+    private readonly HashSet<int> _deletedHouseIds = new();
     private AreaPolygonDto? _editingPolygon;
     private List<MapPointDto>? _editingOriginalPoints;
     private int _editingPointIndex = -1;
@@ -241,13 +258,16 @@
     private EditingPointFeature? _editingPointFeature;
     private MapPointDto? _editingPointOriginalPosition;
     private bool _isDraggingEditPointFeature;
+    private EraserTarget _eraserTarget = EraserTarget.All;
     private int PendingCount => _stagedTrees.Count
         + _stagedHouses.Count
         + _stagedWaterPolygons.Count
         + _editedWaterPolygons.Count
         + _deletedWaterPolygonIds.Count
         + _editedTrees.Count
-        + _editedHouses.Count;
+        + _editedHouses.Count
+        + _deletedTreeIds.Count
+        + _deletedHouseIds.Count;
     [Parameter] public int MapId { get; set; }
     private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
@@ -273,6 +293,13 @@
         new(PlacementType.House, "House"),
         new(PlacementType.Water, "Water")
     };
+    private static readonly IReadOnlyList<EraserTargetDefinition> EraserTargetDefinitions = new List<EraserTargetDefinition>
+    {
+        new(EraserTarget.All, "All"),
+        new(EraserTarget.Tree, "Trees"),
+        new(EraserTarget.House, "Houses"),
+        new(EraserTarget.Water, "Water")
+    };
     private static readonly IReadOnlyList<FeatureStyleDefinition> FeatureStyleDefinitions = new List<FeatureStyleDefinition>
     {
         new(PlacementType.Tree, "Tree Style", TreeStyles),
@@ -285,7 +312,7 @@
         new(MapToolType.Point, "Point", "Place one feature per click.", true),
         new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", true),
         new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", true),
-        new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", false),
+        new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", true),
         new(MapToolType.Edit, "Edit", "Move or update an existing feature.", true),
         new(MapToolType.Duplicate, "Duplicate", "Clone an existing feature.", false),
         new(MapToolType.Undo, "Undo", "Undo the most recent change.", false)
@@ -375,6 +402,17 @@
                 _statusMessage = $"Polygon point added ({_activePolygonPoints.Count}).";
                 await DrawAsync();
             }
+            return;
+        }
+
+        if (_activeTool == MapToolType.Eraser)
+        {
+            if (args.Button != 0)
+            {
+                return;
+            }
+
+            await HandleEraserAsync(args);
             return;
         }
 
@@ -826,6 +864,68 @@
         await DrawAsync();
     }
 
+    private async Task HandleEraserAsync(MouseEventArgs args)
+    {
+        if (!TryGetMapPoint(args, out var mapX, out var mapY))
+        {
+            return;
+        }
+
+        var erased = false;
+        string? status = null;
+
+        if (_eraserTarget == EraserTarget.Tree || _eraserTarget == EraserTarget.House)
+        {
+            erased = TryErasePointFeatureAtPoint(mapX, mapY, _eraserTarget, out status);
+            if (!erased)
+            {
+                status = $"Nothing to erase for {GetEraserTargetLabel(_eraserTarget)}.";
+            }
+        }
+        else if (_eraserTarget == EraserTarget.Water)
+        {
+            EnsureAreaLayers();
+            if (_activeAreaLayer is null)
+            {
+                _statusMessage = "Select a layer before erasing.";
+                return;
+            }
+
+            erased = TryErasePolygonAtPoint(mapX, mapY);
+            status = erased
+                ? $"Polygon erased from {GetLayerLabel(_activeAreaLayer)} (unsaved)."
+                : $"Nothing to erase on {GetLayerLabel(_activeAreaLayer)}.";
+        }
+        else
+        {
+            erased = TryErasePointFeatureAtPoint(mapX, mapY, EraserTarget.All, out status);
+            if (!erased)
+            {
+                EnsureAreaLayers();
+                if (_activeAreaLayer is null)
+                {
+                    _statusMessage = "Select a layer before erasing.";
+                    return;
+                }
+
+                erased = TryErasePolygonAtPoint(mapX, mapY);
+                status = erased
+                    ? $"Polygon erased from {GetLayerLabel(_activeAreaLayer)} (unsaved)."
+                    : $"Nothing to erase on {GetLayerLabel(_activeAreaLayer)}.";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            _statusMessage = status;
+        }
+
+        if (erased)
+        {
+            await DrawAsync();
+        }
+    }
+
     private async Task SaveEditsAsync()
     {
         if (PendingCount == 0)
@@ -867,6 +967,8 @@
             AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
             UpdatedTrees = _editedTrees.Values.ToList(),
             UpdatedHouses = _editedHouses.Values.ToList(),
+            DeletedTreeIds = _deletedTreeIds.ToList(),
+            DeletedHouseIds = _deletedHouseIds.ToList(),
             AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons),
             DeletedWaterPolygonIds = _deletedWaterPolygonIds.ToList(),
             UpdatedWaterPolygons = _editedWaterPolygons.Values
@@ -890,6 +992,8 @@
             _deletedWaterPolygonIds.Clear();
             _editedTrees.Clear();
             _editedHouses.Clear();
+            _deletedTreeIds.Clear();
+            _deletedHouseIds.Clear();
             LoadAreaLayers(map);
             _stagedTrees.Clear();
             _stagedHouses.Clear();
@@ -1012,6 +1116,12 @@
         {
             _statusMessage = "Edit tool selected. Click a feature to edit; right-click to confirm.";
         }
+    }
+
+    private void SelectEraserTarget(EraserTarget target)
+    {
+        _eraserTarget = target;
+        _statusMessage = $"Eraser set to {GetEraserTargetLabel(target)}.";
     }
 
     private void EnsureAreaLayers()
@@ -1167,6 +1277,11 @@
         return $"Layer {index + 1}";
     }
 
+    private string GetEraserTargetLabel(EraserTarget target)
+    {
+        return EraserTargetDefinitions.First(definition => definition.Target == target).Label;
+    }
+
 
     private string GetMapUrl()
     {
@@ -1209,6 +1324,8 @@
         _deletedWaterPolygonIds.Clear();
         _editedTrees.Clear();
         _editedHouses.Clear();
+        _deletedTreeIds.Clear();
+        _deletedHouseIds.Clear();
         _activePolygonPoints.Clear();
         ClearEditSelection(false);
         _hasLastPlacement = false;
@@ -1362,11 +1479,107 @@
         return selected;
     }
 
+    private bool TryErasePolygonAtPoint(float mapX, float mapY)
+    {
+        var polygon = FindPolygonAtPoint(mapX, mapY);
+        if (polygon is null)
+        {
+            return false;
+        }
+
+        if (_editingPolygon == polygon)
+        {
+            ClearEditSelection(true);
+        }
+
+        if (polygon.Id > 0)
+        {
+            _deletedWaterPolygonIds.Add(polygon.Id);
+            _editedWaterPolygons.Remove(polygon.Id);
+        }
+
+        _waterPolygons.Remove(polygon);
+        _stagedWaterPolygons.Remove(polygon);
+
+        return true;
+    }
+
+    private bool TryErasePointFeatureAtPoint(float mapX, float mapY, EraserTarget target, out string? status)
+    {
+        status = null;
+        var feature = FindPointFeatureAtPoint(mapX, mapY, GetEditHitRadius(), target);
+        if (feature is null)
+        {
+            return false;
+        }
+
+        if (_editingPointFeature is not null
+            && ((_editingPointFeature.Tree is not null && _editingPointFeature.Tree == feature.Tree)
+                || (_editingPointFeature.House is not null && _editingPointFeature.House == feature.House)))
+        {
+            ClearEditSelection(true);
+        }
+
+        if (feature.Tree is not null)
+        {
+            if (feature.IsStaged)
+            {
+                _stagedTrees.Remove(feature.Tree);
+            }
+            else
+            {
+                if (feature.Tree.Id > 0)
+                {
+                    _deletedTreeIds.Add(feature.Tree.Id);
+                }
+                _editedTrees.Remove(feature.Tree.Id);
+                _trees.Remove(feature.Tree);
+            }
+
+            status = "Tree erased (unsaved).";
+            return true;
+        }
+
+        if (feature.House is not null)
+        {
+            if (feature.IsStaged)
+            {
+                _stagedHouses.Remove(feature.House);
+            }
+            else
+            {
+                if (feature.House.Id > 0)
+                {
+                    _deletedHouseIds.Add(feature.House.Id);
+                }
+                _editedHouses.Remove(feature.House.Id);
+                _houses.Remove(feature.House);
+            }
+
+            status = "House erased (unsaved).";
+            return true;
+        }
+
+        return false;
+    }
+
     private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold)
     {
+        return FindPointFeatureAtPoint(mapX, mapY, threshold, EraserTarget.All);
+    }
+
+    private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold, EraserTarget target)
+    {
+        if (target == EraserTarget.Water)
+        {
+            return null;
+        }
+
         var thresholdSquared = threshold * threshold;
         EditingPointFeature? best = null;
         var bestDistance = float.MaxValue;
+        var considerTrees = target == EraserTarget.All || target == EraserTarget.Tree;
+        var considerHouses = target == EraserTarget.All || target == EraserTarget.House;
 
         void ConsiderTree(TreeFeatureDto tree, bool isStaged)
         {
@@ -1406,24 +1619,30 @@
             };
         }
 
-        foreach (var tree in _trees)
+        if (considerTrees)
         {
-            ConsiderTree(tree, false);
+            foreach (var tree in _trees)
+            {
+                ConsiderTree(tree, false);
+            }
+
+            foreach (var tree in _stagedTrees)
+            {
+                ConsiderTree(tree, true);
+            }
         }
 
-        foreach (var tree in _stagedTrees)
+        if (considerHouses)
         {
-            ConsiderTree(tree, true);
-        }
+            foreach (var house in _houses)
+            {
+                ConsiderHouse(house, false);
+            }
 
-        foreach (var house in _houses)
-        {
-            ConsiderHouse(house, false);
-        }
-
-        foreach (var house in _stagedHouses)
-        {
-            ConsiderHouse(house, true);
+            foreach (var house in _stagedHouses)
+            {
+                ConsiderHouse(house, true);
+            }
         }
 
         return best;
@@ -1939,6 +2158,14 @@
         Water
     }
 
+    private enum EraserTarget
+    {
+        All,
+        Tree,
+        House,
+        Water
+    }
+
     private enum MapToolType
     {
         Pointer,
@@ -1960,6 +2187,7 @@
 
     private sealed record ToolDefinition(MapToolType Tool, string Label, string Description, bool IsImplemented);
     private sealed record PlacementDefinition(PlacementType PlacementType, string Label);
+    private sealed record EraserTargetDefinition(EraserTarget Target, string Label);
     private sealed record FeatureStyleDefinition(PlacementType PlacementType, string MenuLabel, IReadOnlyList<string> Styles);
     private sealed record CanvasClientSize(float Width, float Height);
 }
