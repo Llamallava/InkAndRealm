@@ -23,6 +23,7 @@ public sealed class TreeFeatureDto
     public float Y { get; set; }
     public string TreeType { get; set; } = "Oak";
     public int LayerIndex { get; set; }
+    public float Size { get; set; } = 1f;
 }
 
 public sealed class HouseFeatureDto
@@ -32,6 +33,7 @@ public sealed class HouseFeatureDto
     public float Y { get; set; }
     public string HouseType { get; set; } = "Cottage";
     public int LayerIndex { get; set; }
+    public float Size { get; set; } = 1f;
 }
 
 public sealed class AddTreeRequest
@@ -125,6 +127,7 @@ public sealed class MapPointFeatureDto
     public float Y { get; set; }
     public string StyleKey { get; set; } = string.Empty;
     public bool IsStaged { get; set; }
+    public float Size { get; set; } = 1f;
 }
 
 public sealed class MapViewStateDto

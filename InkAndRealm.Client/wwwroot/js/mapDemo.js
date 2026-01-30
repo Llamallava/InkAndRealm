@@ -1,5 +1,7 @@
 const treeImage = new Image();
 let treeImageReady = false;
+const buildingImage = new Image();
+let buildingImageReady = false;
 
 treeImage.onload = () => {
     treeImageReady = true;
@@ -11,6 +13,16 @@ treeImage.onerror = () => {
 
 treeImage.src = "/assets/Summer%20Set/tree_1.png";
 
+buildingImage.onload = () => {
+    buildingImageReady = true;
+};
+
+buildingImage.onerror = () => {
+    buildingImageReady = false;
+};
+
+buildingImage.src = "/assets/Summer%20Set/building_2.png";
+
 window.inkAndRealmDemo = {
     drawMap: (canvasId, renderState) => {
         const canvas = document.getElementById(canvasId);
@@ -20,6 +32,10 @@ window.inkAndRealmDemo = {
 
         const ctx = canvas.getContext("2d");
         const getNumber = (value, fallback) => (Number.isFinite(value) ? value : fallback);
+        const getFeatureScale = (feature) => {
+            const raw = feature && Number.isFinite(feature.size) ? feature.size : 1;
+            return raw > 0 ? raw : 1;
+        };
         const viewState = renderState && renderState.viewState ? renderState.viewState : null;
         const zoom = viewState ? Math.max(0.25, Math.min(getNumber(viewState.zoom, 1), 4)) : 1;
         const viewX = viewState ? getNumber(viewState.viewX, 0) : 0;
@@ -309,6 +325,25 @@ window.inkAndRealmDemo = {
         };
 
         const drawHouse = (x, y, baseColor, roofColor, outlineColor) => {
+            if (buildingImageReady) {
+                const targetHeight = 96;
+                const scale = targetHeight / buildingImage.naturalHeight;
+                const targetWidth = buildingImage.naturalWidth * scale;
+
+                ctx.save();
+                ctx.globalAlpha = 1;
+                ctx.imageSmoothingEnabled = true;
+                ctx.drawImage(
+                    buildingImage,
+                    x - targetWidth * 0.5,
+                    y - targetHeight,
+                    targetWidth,
+                    targetHeight
+                );
+                ctx.restore();
+                return;
+            }
+
             ctx.fillStyle = baseColor;
             ctx.fillRect(x - 10, y - 2, 20, 14);
 
@@ -326,29 +361,51 @@ window.inkAndRealmDemo = {
             }
         };
 
+        const drawWithScale = (feature, draw) => {
+            const scale = getFeatureScale(feature);
+            if (scale === 1) {
+                draw(feature.x, feature.y);
+                return;
+            }
+
+            ctx.save();
+            ctx.translate(feature.x, feature.y);
+            ctx.scale(scale, scale);
+            draw(0, 0);
+            ctx.restore();
+        };
+
+        const drawTreeAt = (x, y, styleKey, isStaged) => {
+            const palette = getTreePalette(styleKey, isStaged);
+            if (drawTilesetTree(x, y, isStaged)) {
+                return;
+            }
+
+            if (styleKey === "Palm") {
+                drawPalm(x, y, palette.canopy, palette.trunk, palette.outline);
+            } else {
+                drawTree(x, y, palette.canopy, palette.trunk, palette.outline);
+            }
+        };
+
+        const drawHouseAt = (x, y, isStaged) => {
+            drawHouse(
+                x,
+                y,
+                isStaged ? "#e3c9a8" : "#d7b894",
+                isStaged ? "#9a6a42" : "#7f5a3b",
+                isStaged ? "#6a4a2d" : null
+            );
+        };
+
         const pointRenderers = {
             Tree: (feature) => {
                 const isStaged = !!feature.isStaged;
-                const palette = getTreePalette(feature.styleKey, isStaged);
-                if (drawTilesetTree(feature.x, feature.y, isStaged)) {
-                    return;
-                }
-
-                if (feature.styleKey === "Palm") {
-                    drawPalm(feature.x, feature.y, palette.canopy, palette.trunk, palette.outline);
-                } else {
-                    drawTree(feature.x, feature.y, palette.canopy, palette.trunk, palette.outline);
-                }
+                drawWithScale(feature, (x, y) => drawTreeAt(x, y, feature.styleKey, isStaged));
             },
             House: (feature) => {
                 const isStaged = !!feature.isStaged;
-                drawHouse(
-                    feature.x,
-                    feature.y,
-                    isStaged ? "#e3c9a8" : "#d7b894",
-                    isStaged ? "#9a6a42" : "#7f5a3b",
-                    isStaged ? "#6a4a2d" : null
-                );
+                drawWithScale(feature, (x, y) => drawHouseAt(x, y, isStaged));
             }
         };
 

@@ -270,6 +270,7 @@ public sealed class DemoMapController : ControllerBase
 
                 feature.TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak;
                 feature.ZIndex = tree.LayerIndex;
+                feature.Size = NormalizePointSize(tree.Size);
                 feature.Points.Clear();
                 feature.Points.Add(new FeaturePointEntity
                 {
@@ -301,6 +302,7 @@ public sealed class DemoMapController : ControllerBase
 
                 feature.HouseType = Enum.TryParse<HouseType>(house.HouseType, out var houseType) ? houseType : HouseType.Cottage;
                 feature.ZIndex = house.LayerIndex;
+                feature.Size = NormalizePointSize(house.Size);
                 feature.Points.Clear();
                 feature.Points.Add(new FeaturePointEntity
                 {
@@ -434,6 +436,7 @@ public sealed class DemoMapController : ControllerBase
         {
             TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak,
             ZIndex = tree.LayerIndex,
+            Size = NormalizePointSize(tree.Size),
             Points =
             {
                 new FeaturePointEntity
@@ -452,6 +455,7 @@ public sealed class DemoMapController : ControllerBase
         {
             HouseType = Enum.TryParse<HouseType>(house.HouseType, out var houseType) ? houseType : HouseType.Cottage,
             ZIndex = house.LayerIndex,
+            Size = NormalizePointSize(house.Size),
             Points =
             {
                 new FeaturePointEntity
@@ -547,7 +551,8 @@ public sealed class DemoMapController : ControllerBase
                         X = point?.X ?? 0f,
                         Y = point?.Y ?? 0f,
                         TreeType = tree.TreeType.ToString(),
-                        LayerIndex = tree.ZIndex
+                        LayerIndex = tree.ZIndex,
+                        Size = NormalizePointSize(tree.Size)
                     };
                 })
                 .ToList(),
@@ -562,13 +567,24 @@ public sealed class DemoMapController : ControllerBase
                         X = point?.X ?? 0f,
                         Y = point?.Y ?? 0f,
                         HouseType = house.HouseType.ToString(),
-                        LayerIndex = house.ZIndex
+                        LayerIndex = house.ZIndex,
+                        Size = NormalizePointSize(house.Size)
                     };
                 })
                 .ToList(),
             AreaLayers = persistedLayers,
             AreaPolygons = waterPolygons
         };
+    }
+
+    private static float NormalizePointSize(float size)
+    {
+        if (!float.IsFinite(size) || size <= 0f)
+        {
+            return 1f;
+        }
+
+        return size;
     }
 
     private async Task<UserEntity?> ResolveUserAsync(string? sessionToken, int? userId)

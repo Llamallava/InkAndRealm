@@ -114,6 +114,19 @@
                         }
                     </select>
                 </div>
+                @if (ShowPointSize)
+                {
+                    <div class="map-editor-topbar-block">
+                        <div class="small text-muted">Point Size (@($"{SelectedPointSize:0.0}x"))</div>
+                        <input class="form-range"
+                               type="range"
+                               min="@PointSizeMin"
+                               max="@PointSizeMax"
+                               step="@PointSizeStep"
+                               @bind="SelectedPointSize"
+                               @bind:event="oninput" />
+                    </div>
+                }
                 <div class="map-editor-topbar-block">
                     <div class="small text-muted">Brush Tightness</div>
                     <input class="form-range"
@@ -240,6 +253,9 @@
     private const float BrushMinRadius = 2f;
     private const float BrushMaxRadius = 24f;
     private const int BrushMaxPointsPerStamp = 220;
+    private const float PointSizeMin = 0.1f;
+    private const float PointSizeMax = 5f;
+    private const float PointSizeStep = 0.1f;
     private const float EraseMinSpacing = 8f;
     private const float PolygonMinSpacing = 18f;
     private const float PolygonMaxSpacing = 120f;
@@ -311,6 +327,11 @@
         new(PlacementType.House, "House Style", HouseStyles),
         new(PlacementType.Water, "Water Type", WaterStyles)
     };
+    private readonly Dictionary<PlacementType, float> _pointSizeByPlacement = new()
+    {
+        { PlacementType.Tree, 1f },
+        { PlacementType.House, 1f }
+    };
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
     {
         new(MapToolType.Pointer, "Pointer", "Pan the map without placing items.", true),
@@ -334,10 +355,16 @@
     private FeatureStyleDefinition ActiveStyleDefinition
         => FeatureStyleDefinitions.First(definition => definition.PlacementType == _placementType);
     private bool ShowPolygonDensity => _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType);
+    private bool ShowPointSize => IsPointPlacement(_placementType);
     private string SelectedPlacementStyle
     {
         get => GetStyleForPlacement(_placementType);
         set => _selectedStyleByPlacement[_placementType] = value;
+    }
+    private float SelectedPointSize
+    {
+        get => GetPointSizeForPlacement(_placementType);
+        set => SetPointSizeForPlacement(_placementType, value);
     }
 
     protected override async Task OnInitializedAsync()
@@ -1387,9 +1414,36 @@
             : string.Empty;
     }
 
+    private float GetPointSizeForPlacement(PlacementType placementType)
+    {
+        if (!IsPointPlacement(placementType))
+        {
+            return 1f;
+        }
+
+        return _pointSizeByPlacement.TryGetValue(placementType, out var size)
+            ? size
+            : 1f;
+    }
+
+    private void SetPointSizeForPlacement(PlacementType placementType, float value)
+    {
+        if (!IsPointPlacement(placementType))
+        {
+            return;
+        }
+
+        _pointSizeByPlacement[placementType] = NormalizePointSize(value);
+    }
+
     private static bool IsPointPlacement(PlacementType placementType)
     {
         return placementType == PlacementType.Tree || placementType == PlacementType.House;
+    }
+
+    private static float NormalizePointSize(float size)
+    {
+        return float.IsFinite(size) && size > 0f ? size : 1f;
     }
 
     private float GetCanvasScaleX()
@@ -1908,6 +1962,7 @@
         _hasLastPlacement = true;
 
         var selectedStyle = GetStyleForPlacement(_placementType);
+        var selectedSize = GetPointSizeForPlacement(_placementType);
         if (_placementType == PlacementType.House)
         {
             _stagedHouses.Add(new HouseFeatureDto
@@ -1915,7 +1970,8 @@
                 X = mapX,
                 Y = mapY,
                 HouseType = selectedStyle,
-                LayerIndex = layerIndex
+                LayerIndex = layerIndex,
+                Size = selectedSize
             });
         }
         else
@@ -1925,7 +1981,8 @@
                 X = mapX,
                 Y = mapY,
                 TreeType = selectedStyle,
-                LayerIndex = layerIndex
+                LayerIndex = layerIndex,
+                Size = selectedSize
             });
         }
     }
@@ -2147,7 +2204,8 @@
                 X = tree.X,
                 Y = tree.Y,
                 StyleKey = tree.TreeType,
-                IsStaged = false
+                IsStaged = false,
+                Size = NormalizePointSize(tree.Size)
             });
         }
 
@@ -2159,7 +2217,8 @@
                 X = house.X,
                 Y = house.Y,
                 StyleKey = house.HouseType,
-                IsStaged = false
+                IsStaged = false,
+                Size = NormalizePointSize(house.Size)
             });
         }
 
@@ -2171,7 +2230,8 @@
                 X = tree.X,
                 Y = tree.Y,
                 StyleKey = tree.TreeType,
-                IsStaged = true
+                IsStaged = true,
+                Size = NormalizePointSize(tree.Size)
             });
         }
 
@@ -2183,7 +2243,8 @@
                 X = house.X,
                 Y = house.Y,
                 StyleKey = house.HouseType,
-                IsStaged = true
+                IsStaged = true,
+                Size = NormalizePointSize(house.Size)
             });
         }
 
@@ -2228,7 +2289,8 @@
                         X = _editingPointFeature.Tree.X,
                         Y = _editingPointFeature.Tree.Y,
                         StyleKey = _editingPointFeature.Tree.TreeType,
-                        IsStaged = _editingPointFeature.IsStaged
+                        IsStaged = _editingPointFeature.IsStaged,
+                        Size = NormalizePointSize(_editingPointFeature.Tree.Size)
                     }
                     : _editingPointFeature.House is not null
                         ? new MapPointFeatureDto
@@ -2237,7 +2299,8 @@
                             X = _editingPointFeature.House.X,
                             Y = _editingPointFeature.House.Y,
                             StyleKey = _editingPointFeature.House.HouseType,
-                            IsStaged = _editingPointFeature.IsStaged
+                            IsStaged = _editingPointFeature.IsStaged,
+                            Size = NormalizePointSize(_editingPointFeature.House.Size)
                         }
                         : null,
             EditPolygonPointIndex = _editingPointIndex >= 0 ? _editingPointIndex : null,

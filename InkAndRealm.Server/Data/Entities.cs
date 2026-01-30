@@ -74,11 +74,13 @@ public sealed class TitleFeatureEntity : FeatureEntity
 public sealed class TreeFeatureEntity : PointFeatureEntity
 {
     public TreeType TreeType { get; set; }
+    public float Size { get; set; } = 1f;
 }
 
 public sealed class HouseFeatureEntity : PointFeatureEntity
 {
     public HouseType HouseType { get; set; }
+    public float Size { get; set; } = 1f;
 }
 
 public sealed class LandFeatureEntity : AreaFeatureEntity
