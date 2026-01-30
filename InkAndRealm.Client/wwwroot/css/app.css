@@ -191,6 +191,43 @@ code {
     align-items: center;
 }
 
+.map-editor-bottombar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    background: #ffffff;
+    border-radius: 0.75rem;
+    border: 1px solid #d9dee5;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+}
+
+.map-editor-bottombar-block {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.map-editor-icon-group {
+    gap: 0.5rem;
+}
+
+.map-editor-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    padding: 0.3rem;
+}
+
+.map-editor-icon-button img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+
 .map-editor-canvas-card {
     background: #ffffff;
     border-radius: 0.75rem;

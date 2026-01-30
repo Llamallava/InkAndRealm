@@ -78,18 +78,6 @@
 
         <section class="map-editor-main">
             <div class="map-editor-topbar">
-                <div class="map-editor-topbar-block">
-                    <div class="small text-muted">Placement</div>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Feature placement selection">
-                        @foreach (var placement in PlacementDefinitions)
-                        {
-                            <button class="btn @(_placementType == placement.PlacementType ? "btn-primary" : "btn-outline-primary")"
-                                    @onclick="() => SelectPlacement(placement.PlacementType)">
-                                @placement.Label
-                            </button>
-                        }
-                    </div>
-                </div>
                 @if (_activeTool == MapToolType.Eraser)
                 {
                     <div class="map-editor-topbar-block">
@@ -187,6 +175,22 @@
                             @onwheel="HandleWheel"
                             @onwheel:preventDefault="true">
                     </canvas>
+                </div>
+            </div>
+
+            <div class="map-editor-bottombar">
+                <div class="map-editor-bottombar-block">
+                    <div class="small text-muted">Map Items</div>
+                    <div class="btn-group map-editor-icon-group" role="group" aria-label="Map item selection">
+                        @foreach (var placement in PlacementDefinitions)
+                        {
+                            <button class="btn map-editor-icon-button @(_placementType == placement.PlacementType ? "btn-primary" : "btn-outline-primary")"
+                                    aria-label="@placement.Label"
+                                    @onclick="() => SelectPlacement(placement.PlacementType)">
+                                <img src="@placement.ImageUrl" alt="" />
+                            </button>
+                        }
+                    </div>
                 </div>
             </div>
         </section>
@@ -310,9 +314,9 @@
     };
     private static readonly IReadOnlyList<PlacementDefinition> PlacementDefinitions = new List<PlacementDefinition>
     {
-        new(PlacementType.Tree, "Tree"),
-        new(PlacementType.House, "House"),
-        new(PlacementType.Water, "Water")
+        new(PlacementType.Tree, "Tree", "/assets/Summer%20Set/tree_1.png"),
+        new(PlacementType.House, "House", "/assets/Summer%20Set/building_2.png"),
+        new(PlacementType.Water, "Water", "/assets/Summer%20Set/river.png")
     };
     private static readonly IReadOnlyList<EraserTargetDefinition> EraserTargetDefinitions = new List<EraserTargetDefinition>
     {
@@ -2360,7 +2364,7 @@
     }
 
     private sealed record ToolDefinition(MapToolType Tool, string Label, string Description, bool IsImplemented);
-    private sealed record PlacementDefinition(PlacementType PlacementType, string Label);
+    private sealed record PlacementDefinition(PlacementType PlacementType, string Label, string ImageUrl);
     private sealed record EraserTargetDefinition(EraserTarget Target, string Label);
     private sealed record FeatureStyleDefinition(PlacementType PlacementType, string MenuLabel, IReadOnlyList<string> Styles);
     private sealed record CanvasClientSize(float Width, float Height);
