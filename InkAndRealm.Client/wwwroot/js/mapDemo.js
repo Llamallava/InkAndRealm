@@ -558,7 +558,6 @@ window.inkAndRealmDemo = {
                 ctx.arc(preview.points[0].x, preview.points[0].y, 4 / zoom, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
-                return;
             }
 
             if (preview.points.length >= 3) {
