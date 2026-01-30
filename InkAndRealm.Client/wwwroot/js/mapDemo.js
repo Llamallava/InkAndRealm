@@ -1,3 +1,16 @@
+const treeImage = new Image();
+let treeImageReady = false;
+
+treeImage.onload = () => {
+    treeImageReady = true;
+};
+
+treeImage.onerror = () => {
+    treeImageReady = false;
+};
+
+treeImage.src = "/assets/Summer%20Set/tree_1.png";
+
 window.inkAndRealmDemo = {
     drawMap: (canvasId, renderState) => {
         const canvas = document.getElementById(canvasId);
@@ -251,6 +264,30 @@ window.inkAndRealmDemo = {
             }
         };
 
+        const drawTilesetTree = (x, y, isStaged) => {
+            if (!treeImageReady) {
+                return false;
+            }
+
+            const targetHeight = 48;
+            const scale = targetHeight / treeImage.naturalHeight;
+            const targetWidth = treeImage.naturalWidth * scale;
+
+            ctx.save();
+            ctx.globalAlpha = isStaged ? 0.75 : 1;
+            ctx.imageSmoothingEnabled = true;
+            ctx.drawImage(
+                treeImage,
+                x - targetWidth * 0.5,
+                y - targetHeight,
+                targetWidth,
+                targetHeight
+            );
+            ctx.restore();
+
+            return true;
+        };
+
         const treeStylePalette = {
             Oak: { canopy: "#4a8f5a", trunk: "#5c4b32", outline: null },
             Pine: { canopy: "#3b7a4a", trunk: "#4c3c2a", outline: null },
@@ -293,6 +330,10 @@ window.inkAndRealmDemo = {
             Tree: (feature) => {
                 const isStaged = !!feature.isStaged;
                 const palette = getTreePalette(feature.styleKey, isStaged);
+                if (drawTilesetTree(feature.x, feature.y, isStaged)) {
+                    return;
+                }
+
                 if (feature.styleKey === "Palm") {
                     drawPalm(feature.x, feature.y, palette.canopy, palette.trunk, palette.outline);
                 } else {
