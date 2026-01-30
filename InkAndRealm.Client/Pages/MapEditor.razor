@@ -108,6 +108,21 @@
                                 }
                             </div>
                         </div>
+                        @if (ShowPolygonDensity)
+                        {
+                            <div class="map-editor-tool-section">
+                                <div class="small text-muted">Polygon Density</div>
+                                <input class="form-range"
+                                       type="range"
+                                       min="1"
+                                       max="10"
+                                       step="1"
+                                       @bind="_polygonDensity" />
+                                <div class="small text-muted">
+                                    Density @_polygonDensity/10
+                                </div>
+                            </div>
+                        }
                         <div class="map-editor-tool-summary">
                             <div class="small text-muted">Active Tool</div>
                             <div class="fw-semibold">@ActiveToolDefinition.Label</div>
@@ -219,7 +234,8 @@
     private readonly Dictionary<PlacementType, string> _selectedStyleByPlacement = new()
     {
         { PlacementType.Tree, "Oak" },
-        { PlacementType.House, "Cottage" }
+        { PlacementType.House, "Cottage" },
+        { PlacementType.Water, "Water" }
     };
     private MapToolType _activeTool = MapToolType.Point;
     private bool _isBrushing;
@@ -228,6 +244,7 @@
     private int _brushStrokeCount;
     private int _brushTightness = 6;
     private int _brushSize = 5;
+    private int _polygonDensity = 6;
     private float _brushCursorX;
     private float _brushCursorY;
     private bool _hasBrushCursor;
@@ -236,6 +253,9 @@
     private const float BrushMinRadius = 2f;
     private const float BrushMaxRadius = 24f;
     private const int BrushMaxPointsPerStamp = 220;
+    private const float PolygonMinSpacing = 18f;
+    private const float PolygonMaxSpacing = 120f;
+    private const int PolygonMaxPoints = 1600;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
     private readonly List<MapPointDto> _activePolygonPoints = new();
@@ -275,15 +295,21 @@
         "Cabin",
         "Manor"
     };
+    private static readonly IReadOnlyList<string> WaterStyles = new List<string>
+    {
+        "Water"
+    };
     private static readonly IReadOnlyList<PlacementDefinition> PlacementDefinitions = new List<PlacementDefinition>
     {
         new(PlacementType.Tree, "Tree"),
-        new(PlacementType.House, "House")
+        new(PlacementType.House, "House"),
+        new(PlacementType.Water, "Water")
     };
     private static readonly IReadOnlyList<FeatureStyleDefinition> FeatureStyleDefinitions = new List<FeatureStyleDefinition>
     {
         new(PlacementType.Tree, "Tree Style", TreeStyles),
-        new(PlacementType.House, "House Style", HouseStyles)
+        new(PlacementType.House, "House Style", HouseStyles),
+        new(PlacementType.Water, "Water Type", WaterStyles)
     };
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
     {
@@ -300,11 +326,14 @@
     private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
         ? _activeTool == MapToolType.Brush
             ? $"{ActiveToolDefinition.Description} (tightness {_brushTightness}/10, size {_brushSize}/10)."
+            : _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType)
+                ? $"{ActiveToolDefinition.Description} (density {_polygonDensity}/10)."
             : ActiveToolDefinition.Description
         : $"{ActiveToolDefinition.Description} (coming soon).";
     private string ActiveAreaLayerLabel => _activeAreaLayer is null ? "None" : GetLayerLabel(_activeAreaLayer);
     private FeatureStyleDefinition ActiveStyleDefinition
         => FeatureStyleDefinitions.First(definition => definition.PlacementType == _placementType);
+    private bool ShowPolygonDensity => _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType);
     private string SelectedPlacementStyle
     {
         get => GetStyleForPlacement(_placementType);
@@ -351,6 +380,12 @@
         {
             if (args.Button != 0)
             {
+                return;
+            }
+
+            if (_placementType == PlacementType.Water)
+            {
+                _statusMessage = "Water can only be placed with the Polygon tool.";
                 return;
             }
 
@@ -410,6 +445,11 @@
                 _isDraggingEditPointFeature = true;
                 _statusMessage = "Moving point feature...";
                 await DrawAsync();
+                return;
+            }
+
+            if (IsPointPlacement(_placementType))
+            {
                 return;
             }
 
@@ -626,26 +666,38 @@
             return;
         }
 
-        EnsureAreaLayers();
-        var layer = _activeAreaLayer;
-        if (layer is null)
+        if (IsPointPlacement(_placementType))
         {
-            _statusMessage = "Select a layer before placing polygons.";
-            return;
+            var placedCount = PlacePolygonPointFeatures(_activePolygonPoints);
+            _activePolygonPoints.Clear();
+            var label = _placementType == PlacementType.House ? "house" : "tree";
+            _statusMessage = placedCount == 0
+                ? "Polygon placed with no points (adjust density)."
+                : $"Polygon filled with {placedCount} {label} item{(placedCount == 1 ? string.Empty : "s")} (unsaved).";
         }
-
-        var polygon = new AreaPolygonDto
+        else
         {
-            FeatureType = layer.FeatureType,
-            LayerIndex = layer.LayerIndex,
-            Points = _activePolygonPoints
-                .Select(point => new MapPointDto { X = point.X, Y = point.Y })
-                .ToList()
-        };
+            EnsureAreaLayers();
+            var layer = _activeAreaLayer;
+            if (layer is null)
+            {
+                _statusMessage = "Select a layer before placing polygons.";
+                return;
+            }
 
-        _stagedWaterPolygons.Add(polygon);
-        _activePolygonPoints.Clear();
-        _statusMessage = $"Polygon placed on {GetLayerLabel(layer)} (unsaved).";
+            var polygon = new AreaPolygonDto
+            {
+                FeatureType = layer.FeatureType,
+                LayerIndex = layer.LayerIndex,
+                Points = _activePolygonPoints
+                    .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                    .ToList()
+            };
+
+            _stagedWaterPolygons.Add(polygon);
+            _activePolygonPoints.Clear();
+            _statusMessage = $"Polygon placed on {GetLayerLabel(layer)} (unsaved).";
+        }
         await DrawAsync();
     }
 
@@ -782,6 +834,12 @@
 
     private async Task HandlePointToolAsync(MouseEventArgs args)
     {
+        if (_placementType == PlacementType.Water)
+        {
+            _statusMessage = "Water can only be placed with the Polygon tool.";
+            return;
+        }
+
         if (!TryGetMapPoint(args, out var mapX, out var mapY))
         {
             return;
@@ -946,6 +1004,18 @@
     private Task SelectPlacement(PlacementType placementType)
     {
         _placementType = placementType;
+        if (IsPointPlacement(placementType))
+        {
+            if (_editingPolygon is not null)
+            {
+                _editingPolygon = null;
+                _editingOriginalPoints = null;
+                _editingPointIndex = -1;
+                _editingEdgeIndex = -1;
+                _isDraggingEditPoint = false;
+                _ = InvokeAsync(DrawAsync);
+            }
+        }
         return Task.CompletedTask;
     }
 
@@ -1198,6 +1268,11 @@
         return _selectedStyleByPlacement.TryGetValue(placementType, out var style)
             ? style
             : string.Empty;
+    }
+
+    private static bool IsPointPlacement(PlacementType placementType)
+    {
+        return placementType == PlacementType.Tree || placementType == PlacementType.House;
     }
 
     private float GetCanvasScaleX()
@@ -1519,8 +1594,19 @@
         return MathF.Max(spacing, radius * 0.55f);
     }
 
+    private float GetPolygonSpacing()
+    {
+        var normalized = (_polygonDensity - 1f) / 9f;
+        return PolygonMaxSpacing - ((PolygonMaxSpacing - PolygonMinSpacing) * normalized);
+    }
+
     private void PlacePointFeature(float mapX, float mapY)
     {
+        if (!IsPointPlacement(_placementType))
+        {
+            return;
+        }
+
         _lastX = mapX;
         _lastY = mapY;
         _hasLastPlacement = true;
@@ -1544,6 +1630,74 @@
                 TreeType = selectedStyle
             });
         }
+    }
+
+    private int PlacePolygonPointFeatures(IReadOnlyList<MapPointDto> points)
+    {
+        if (points is null || points.Count < 3)
+        {
+            return 0;
+        }
+
+        var minX = points.Min(point => point.X);
+        var maxX = points.Max(point => point.X);
+        var minY = points.Min(point => point.Y);
+        var maxY = points.Max(point => point.Y);
+        if (maxX <= minX || maxY <= minY)
+        {
+            return 0;
+        }
+
+        var spacing = GetPolygonSpacing();
+        if (spacing <= 0.5f)
+        {
+            spacing = 0.5f;
+        }
+
+        var polygon = new AreaPolygonDto
+        {
+            Points = points.Select(point => new MapPointDto { X = point.X, Y = point.Y }).ToList()
+        };
+
+        var jitter = spacing * 0.35f;
+        var placed = 0;
+
+        if ((maxX - minX) < spacing && (maxY - minY) < spacing)
+        {
+            var centerX = (minX + maxX) / 2f;
+            var centerY = (minY + maxY) / 2f;
+            if (IsPointInPolygon(centerX, centerY, polygon))
+            {
+                PlacePointFeature(centerX, centerY);
+                return 1;
+            }
+        }
+
+        for (var y = minY; y <= maxY; y += spacing)
+        {
+            for (var x = minX; x <= maxX; x += spacing)
+            {
+                var candidateX = x + (float)((Random.Shared.NextDouble() * 2 - 1) * jitter);
+                var candidateY = y + (float)((Random.Shared.NextDouble() * 2 - 1) * jitter);
+                candidateX = Math.Clamp(candidateX, minX, maxX);
+                candidateY = Math.Clamp(candidateY, minY, maxY);
+
+                if (!IsPointInPolygon(candidateX, candidateY, polygon))
+                {
+                    continue;
+                }
+
+                PlacePointFeature(candidateX, candidateY);
+                placed += 1;
+
+                if (placed >= PolygonMaxPoints)
+                {
+                    return placed;
+                }
+            }
+        }
+
+        return placed;
     }
 
     private int PlaceBrushStamp(float centerX, float centerY)
@@ -1748,7 +1902,9 @@
             ActivePolygon = _activePolygonPoints.Count >= 1
                 ? new AreaPolygonDto
                 {
-                    FeatureType = _activeAreaLayer?.FeatureType ?? "Water",
+                    FeatureType = IsPointPlacement(_placementType)
+                        ? _placementType.ToString()
+                        : _activeAreaLayer?.FeatureType ?? "Water",
                     LayerIndex = _activeAreaLayer?.LayerIndex ?? 0,
                     Points = _activePolygonPoints
                         .Select(point => new MapPointDto { X = point.X, Y = point.Y })
@@ -1811,7 +1967,8 @@
     private enum PlacementType
     {
         Tree,
-        House
+        House,
+        Water
     }
 
     private enum MapToolType

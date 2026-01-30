@@ -47,6 +47,10 @@ window.inkAndRealmDemo = {
             switch (featureType) {
                 case "Water":
                     return "#7fb7d9";
+                case "Tree":
+                    return "#9bc97c";
+                case "House":
+                    return "#d6c2a4";
                 case "Land":
                     return "#9bc97c";
                 default:
@@ -512,7 +516,9 @@ window.inkAndRealmDemo = {
                     }
 
                     if (polygon.points.length >= 3) {
-                        drawSmoothPolygon(previewCtx, polygon.points, "#7fb7d9", 0.25, "#5a86a1");
+                        if (polygon.featureType === "Water") {
+                            drawSmoothPolygon(previewCtx, polygon.points, "#7fb7d9", 0.25, "#5a86a1");
+                        }
                     }
 
                     previewCtx.save();
@@ -556,7 +562,9 @@ window.inkAndRealmDemo = {
             }
 
             if (preview.points.length >= 3) {
-                drawSmoothPolygon(ctx, preview.points, "#7fb7d9", 0.25, "#5a86a1");
+                if (preview.featureType === "Water") {
+                    drawSmoothPolygon(ctx, preview.points, "#7fb7d9", 0.25, "#5a86a1");
+                }
             }
 
             if (preview.points.length >= 2) {
