@@ -222,6 +222,7 @@
     };
     private MapToolType _activeTool = MapToolType.Point;
     private bool _isBrushing;
+    private bool _isErasing;
     private float _brushLastX;
     private float _brushLastY;
     private int _brushStrokeCount;
@@ -231,11 +232,15 @@
     private float _brushCursorX;
     private float _brushCursorY;
     private bool _hasBrushCursor;
+    private float _eraseLastX;
+    private float _eraseLastY;
+    private int _eraseCount;
     private const float BrushMinSpacing = 16f;
     private const float BrushMaxSpacing = 90f;
     private const float BrushMinRadius = 2f;
     private const float BrushMaxRadius = 24f;
     private const int BrushMaxPointsPerStamp = 220;
+    private const float EraseMinSpacing = 8f;
     private const float PolygonMinSpacing = 18f;
     private const float PolygonMaxSpacing = 120f;
     private const int PolygonMaxPoints = 1600;
@@ -412,7 +417,7 @@
                 return;
             }
 
-            await HandleEraserAsync(args);
+            await StartEraserAsync(args);
             return;
         }
 
@@ -533,6 +538,12 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Eraser && _isErasing)
+        {
+            await ContinueEraserAsync(args);
+            return;
+        }
+
         if (_activeTool == MapToolType.Edit && _isDraggingEditPointFeature && _editingPointFeature is not null)
         {
             if (!TryGetMapPoint(args, out var mapX, out var mapY))
@@ -625,6 +636,12 @@
             _statusMessage = _brushStrokeCount == 0
                 ? "Brush stroke canceled."
                 : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
+            return;
+        }
+
+        if (_activeTool == MapToolType.Eraser && _isErasing)
+        {
+            StopEraser();
             return;
         }
 
@@ -723,6 +740,12 @@
             _statusMessage = _brushStrokeCount == 0
                 ? "Brush stroke canceled."
                 : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
+            return;
+        }
+
+        if (_activeTool == MapToolType.Eraser && _isErasing)
+        {
+            StopEraser();
             return;
         }
 
@@ -864,66 +887,68 @@
         await DrawAsync();
     }
 
-    private async Task HandleEraserAsync(MouseEventArgs args)
+    private async Task StartEraserAsync(MouseEventArgs args)
     {
         if (!TryGetMapPoint(args, out var mapX, out var mapY))
         {
             return;
         }
 
-        var erased = false;
+        _isErasing = true;
+        _eraseCount = 0;
+        _eraseLastX = mapX;
+        _eraseLastY = mapY;
+
         string? status = null;
+        var erased = TryEraseAtPoint(mapX, mapY, out status, showEmptyStatus: true);
 
-        if (_eraserTarget == EraserTarget.Tree || _eraserTarget == EraserTarget.House)
-        {
-            erased = TryErasePointFeatureAtPoint(mapX, mapY, _eraserTarget, out status);
-            if (!erased)
-            {
-                status = $"Nothing to erase for {GetEraserTargetLabel(_eraserTarget)}.";
-            }
-        }
-        else if (_eraserTarget == EraserTarget.Water)
-        {
-            EnsureAreaLayers();
-            if (_activeAreaLayer is null)
-            {
-                _statusMessage = "Select a layer before erasing.";
-                return;
-            }
+        _statusMessage = erased
+            ? "Erasing..."
+            : status ?? "Nothing to erase.";
 
-            erased = TryErasePolygonAtPoint(mapX, mapY);
-            status = erased
-                ? $"Polygon erased from {GetLayerLabel(_activeAreaLayer)} (unsaved)."
-                : $"Nothing to erase on {GetLayerLabel(_activeAreaLayer)}.";
-        }
-        else
+        if (!erased && status == "Select a layer before erasing.")
         {
-            erased = TryErasePointFeatureAtPoint(mapX, mapY, EraserTarget.All, out status);
-            if (!erased)
-            {
-                EnsureAreaLayers();
-                if (_activeAreaLayer is null)
-                {
-                    _statusMessage = "Select a layer before erasing.";
-                    return;
-                }
-
-                erased = TryErasePolygonAtPoint(mapX, mapY);
-                status = erased
-                    ? $"Polygon erased from {GetLayerLabel(_activeAreaLayer)} (unsaved)."
-                    : $"Nothing to erase on {GetLayerLabel(_activeAreaLayer)}.";
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(status))
-        {
-            _statusMessage = status;
+            _isErasing = false;
         }
 
         if (erased)
         {
+            _eraseCount += 1;
             await DrawAsync();
         }
+    }
+
+    private async Task ContinueEraserAsync(MouseEventArgs args)
+    {
+        if (!TryGetMapPoint(args, out var mapX, out var mapY))
+        {
+            return;
+        }
+
+        var dx = mapX - _eraseLastX;
+        var dy = mapY - _eraseLastY;
+        var distance = MathF.Sqrt((dx * dx) + (dy * dy));
+        if (distance < EraseMinSpacing)
+        {
+            return;
+        }
+
+        _eraseLastX = mapX;
+        _eraseLastY = mapY;
+
+        if (TryEraseAtPoint(mapX, mapY, out _, showEmptyStatus: false))
+        {
+            _eraseCount += 1;
+            await DrawAsync();
+        }
+    }
+
+    private void StopEraser()
+    {
+        _isErasing = false;
+        _statusMessage = _eraseCount == 0
+            ? "Nothing erased."
+            : $"Erased {_eraseCount} item{(_eraseCount == 1 ? string.Empty : "s")}.";
     }
 
     private async Task SaveEditsAsync()
@@ -1098,6 +1123,11 @@
         {
             _isBrushing = false;
             _brushStrokeCount = 0;
+        }
+        if (_isErasing)
+        {
+            _isErasing = false;
+            _eraseCount = 0;
         }
         if (_activeTool != MapToolType.Brush)
         {
@@ -1331,6 +1361,8 @@
         _hasLastPlacement = false;
         _isBrushing = false;
         _brushStrokeCount = 0;
+        _isErasing = false;
+        _eraseCount = 0;
         _hasBrushCursor = false;
     }
 
@@ -1507,7 +1539,8 @@
     private bool TryErasePointFeatureAtPoint(float mapX, float mapY, EraserTarget target, out string? status)
     {
         status = null;
-        var feature = FindPointFeatureAtPoint(mapX, mapY, GetEditHitRadius(), target);
+        EnsureAreaLayers();
+        var feature = FindPointFeatureAtPoint(mapX, mapY, GetEditHitRadius(), target, true);
         if (feature is null)
         {
             return false;
@@ -1563,12 +1596,75 @@
         return false;
     }
 
-    private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold)
+    private bool TryEraseAtPoint(float mapX, float mapY, out string? status, bool showEmptyStatus)
     {
-        return FindPointFeatureAtPoint(mapX, mapY, threshold, EraserTarget.All);
+        status = null;
+        var erased = false;
+
+        if (_eraserTarget == EraserTarget.Tree || _eraserTarget == EraserTarget.House)
+        {
+            erased = TryErasePointFeatureAtPoint(mapX, mapY, _eraserTarget, out status);
+            if (!erased && showEmptyStatus)
+            {
+                status = $"Nothing to erase for {GetEraserTargetLabel(_eraserTarget)}.";
+            }
+
+            return erased;
+        }
+
+        if (_eraserTarget == EraserTarget.Water)
+        {
+            EnsureAreaLayers();
+            if (_activeAreaLayer is null)
+            {
+                status = "Select a layer before erasing.";
+                return false;
+            }
+
+            erased = TryErasePolygonAtPoint(mapX, mapY);
+            if (showEmptyStatus)
+            {
+                status = erased
+                    ? $"Polygon erased from {GetLayerLabel(_activeAreaLayer)} (unsaved)."
+                    : $"Nothing to erase on {GetLayerLabel(_activeAreaLayer)}.";
+            }
+
+            return erased;
+        }
+
+        erased = TryErasePointFeatureAtPoint(mapX, mapY, EraserTarget.All, out status);
+        if (!erased)
+        {
+            EnsureAreaLayers();
+            if (_activeAreaLayer is null)
+            {
+                status = "Select a layer before erasing.";
+                return false;
+            }
+
+            erased = TryErasePolygonAtPoint(mapX, mapY);
+            if (showEmptyStatus)
+            {
+                status = erased
+                    ? $"Polygon erased from {GetLayerLabel(_activeAreaLayer)} (unsaved)."
+                    : $"Nothing to erase on {GetLayerLabel(_activeAreaLayer)}.";
+            }
+        }
+
+        return erased;
     }
 
-    private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold, EraserTarget target)
+    private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold)
+    {
+        return FindPointFeatureAtPoint(mapX, mapY, threshold, EraserTarget.All, false);
+    }
+
+    private EditingPointFeature? FindPointFeatureAtPoint(
+        float mapX,
+        float mapY,
+        float threshold,
+        EraserTarget target,
+        bool restrictToActiveLayer)
     {
         if (target == EraserTarget.Water)
         {
@@ -1580,9 +1676,15 @@
         var bestDistance = float.MaxValue;
         var considerTrees = target == EraserTarget.All || target == EraserTarget.Tree;
         var considerHouses = target == EraserTarget.All || target == EraserTarget.House;
+        var activeLayerIndex = restrictToActiveLayer ? _activeAreaLayer?.LayerIndex : null;
 
         void ConsiderTree(TreeFeatureDto tree, bool isStaged)
         {
+            if (activeLayerIndex is not null && tree.LayerIndex != activeLayerIndex.Value)
+            {
+                return;
+            }
+
             var dx = tree.X - mapX;
             var dy = tree.Y - mapY;
             var distance = (dx * dx) + (dy * dy);
@@ -1602,6 +1704,11 @@
 
         void ConsiderHouse(HouseFeatureDto house, bool isStaged)
         {
+            if (activeLayerIndex is not null && house.LayerIndex != activeLayerIndex.Value)
+            {
+                return;
+            }
+
             var dx = house.X - mapX;
             var dy = house.Y - mapY;
             var distance = (dx * dx) + (dy * dy);
@@ -1794,6 +1901,8 @@
             return;
         }
 
+        EnsureAreaLayers();
+        var layerIndex = _activeAreaLayer?.LayerIndex ?? 0;
         _lastX = mapX;
         _lastY = mapY;
         _hasLastPlacement = true;
@@ -1805,7 +1914,8 @@
             {
                 X = mapX,
                 Y = mapY,
-                HouseType = selectedStyle
+                HouseType = selectedStyle,
+                LayerIndex = layerIndex
             });
         }
         else
@@ -1814,7 +1924,8 @@
             {
                 X = mapX,
                 Y = mapY,
-                TreeType = selectedStyle
+                TreeType = selectedStyle,
+                LayerIndex = layerIndex
             });
         }
     }

@@ -22,6 +22,7 @@ public sealed class TreeFeatureDto
     public float X { get; set; }
     public float Y { get; set; }
     public string TreeType { get; set; } = "Oak";
+    public int LayerIndex { get; set; }
 }
 
 public sealed class HouseFeatureDto
@@ -30,6 +31,7 @@ public sealed class HouseFeatureDto
     public float X { get; set; }
     public float Y { get; set; }
     public string HouseType { get; set; } = "Cottage";
+    public int LayerIndex { get; set; }
 }
 
 public sealed class AddTreeRequest

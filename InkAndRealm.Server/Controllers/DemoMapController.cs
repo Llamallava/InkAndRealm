@@ -269,6 +269,7 @@ public sealed class DemoMapController : ControllerBase
                 }
 
                 feature.TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak;
+                feature.ZIndex = tree.LayerIndex;
                 feature.Points.Clear();
                 feature.Points.Add(new FeaturePointEntity
                 {
@@ -299,6 +300,7 @@ public sealed class DemoMapController : ControllerBase
                 }
 
                 feature.HouseType = Enum.TryParse<HouseType>(house.HouseType, out var houseType) ? houseType : HouseType.Cottage;
+                feature.ZIndex = house.LayerIndex;
                 feature.Points.Clear();
                 feature.Points.Add(new FeaturePointEntity
                 {
@@ -431,6 +433,7 @@ public sealed class DemoMapController : ControllerBase
         return new TreeFeatureEntity
         {
             TreeType = Enum.TryParse<TreeType>(tree.TreeType, out var treeType) ? treeType : TreeType.Oak,
+            ZIndex = tree.LayerIndex,
             Points =
             {
                 new FeaturePointEntity
@@ -448,6 +451,7 @@ public sealed class DemoMapController : ControllerBase
         return new HouseFeatureEntity
         {
             HouseType = Enum.TryParse<HouseType>(house.HouseType, out var houseType) ? houseType : HouseType.Cottage,
+            ZIndex = house.LayerIndex,
             Points =
             {
                 new FeaturePointEntity
@@ -542,7 +546,8 @@ public sealed class DemoMapController : ControllerBase
                         Id = tree.Id,
                         X = point?.X ?? 0f,
                         Y = point?.Y ?? 0f,
-                        TreeType = tree.TreeType.ToString()
+                        TreeType = tree.TreeType.ToString(),
+                        LayerIndex = tree.ZIndex
                     };
                 })
                 .ToList(),
@@ -556,7 +561,8 @@ public sealed class DemoMapController : ControllerBase
                         Id = house.Id,
                         X = point?.X ?? 0f,
                         Y = point?.Y ?? 0f,
-                        HouseType = house.HouseType.ToString()
+                        HouseType = house.HouseType.ToString(),
+                        LayerIndex = house.ZIndex
                     };
                 })
                 .ToList(),
