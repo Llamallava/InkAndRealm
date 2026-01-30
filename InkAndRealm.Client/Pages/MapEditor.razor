@@ -13,147 +13,34 @@
 
 <PageTitle>Ink & Realm Map Editor</PageTitle>
 
-<div class="container-fluid map-editor-page py-4 px-4">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h1 class="mb-0">Map Editor</h1>
-        <button class="btn btn-outline-secondary" @onclick="GoHome">
-            Back to Start
-        </button>
-    </div>
-
-    <p class="text-muted map-editor-instructions">
-        Click on the canvas to place the selected feature. Changes stay local until you save all.
-    </p>
-
+<div class="container-fluid map-editor-page">
     <div class="map-editor-layout">
-        <section class="map-editor-canvas-zone">
-            <div class="map-editor-canvas-card">
-                <div class="map-editor-canvas-shell">
-                    <canvas id="@CanvasId"
-                            width="1000"
-                            height="600"
-                            class="map-editor-canvas"
-                            style="touch-action:none;"
-                            @onmousedown="HandlePointerDown"
-                            @onmousemove="HandlePointerMove"
-                            @onmouseup="HandlePointerUp"
-                            @onmouseleave="HandlePointerLeave"
-                            @oncontextmenu="HandleContextMenu"
-                            @oncontextmenu:preventDefault="true"
-                            @onwheel="HandleWheel"
-                            @onwheel:preventDefault="true">
-                    </canvas>
-                    <div class="map-editor-toolbox">
-                        <div class="btn-group-vertical" role="group" aria-label="Tool selection">
-                            @foreach (var tool in ToolDefinitions)
-                            {
-                                <button class="btn btn-sm @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
-                                        @onclick="() => SelectTool(tool.Tool)">
-                                    @tool.Label
-                                </button>
-                            }
-                        </div>
-                        <div class="map-editor-tool-section">
-                            <div class="small text-muted">Placement</div>
-                            <div class="btn-group-vertical" role="group" aria-label="Feature placement selection">
-                                @foreach (var placement in PlacementDefinitions)
-                                {
-                                    <button class="btn btn-sm @(_placementType == placement.PlacementType ? "btn-primary" : "btn-outline-primary")"
-                                            @onclick="() => SelectPlacement(placement.PlacementType)">
-                                        @placement.Label
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                        <div class="map-editor-tool-section">
-                            <div class="small text-muted">@ActiveStyleDefinition.MenuLabel</div>
-                            <select class="form-select form-select-sm" @bind="SelectedPlacementStyle">
-                                @foreach (var style in ActiveStyleDefinition.Styles)
-                                {
-                                    <option value="@style">@style</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="map-editor-tool-section">
-                            <div class="small text-muted">Brush Tightness</div>
-                            <input class="form-range"
-                                   type="range"
-                                   min="1"
-                                   max="10"
-                                   step="1"
-                                   disabled="@(_activeTool != MapToolType.Brush)"
-                                   @bind="_brushTightness" />
-                            <div class="small text-muted">
-                                Density @_brushTightness/10
-                                @if (_activeTool != MapToolType.Brush)
-                                {
-                                    <span> (select Brush to adjust)</span>
-                                }
-                            </div>
-                        </div>
-                        <div class="map-editor-tool-section">
-                            <div class="small text-muted">Brush Size</div>
-                            <input class="form-range"
-                                   type="range"
-                                   min="1"
-                                   max="10"
-                                   step="1"
-                                   disabled="@(_activeTool != MapToolType.Brush)"
-                                   @bind="_brushSize" />
-                            <div class="small text-muted">
-                                Size @_brushSize/10
-                                @if (_activeTool != MapToolType.Brush)
-                                {
-                                    <span> (select Brush to adjust)</span>
-                                }
-                            </div>
-                        </div>
-                        @if (ShowPolygonDensity)
-                        {
-                            <div class="map-editor-tool-section">
-                                <div class="small text-muted">Polygon Density</div>
-                                <input class="form-range"
-                                       type="range"
-                                       min="1"
-                                       max="10"
-                                       step="1"
-                                       @bind="_polygonDensity" />
-                                <div class="small text-muted">
-                                    Density @_polygonDensity/10
-                                </div>
-                            </div>
-                        }
-                        <div class="map-editor-tool-summary">
-                            <div class="small text-muted">Active Tool</div>
-                            <div class="fw-semibold">@ActiveToolDefinition.Label</div>
-                            <div class="small text-muted">@ActiveToolSummary</div>
-                        </div>
-                    </div>
-                </div>
+        <aside class="map-editor-sidebar">
+            <div class="map-editor-sidebar-header">
+                <div class="fw-semibold">Tools</div>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="GoHome">
+                    Back
+                </button>
             </div>
-        </section>
-
-        <aside class="map-editor-panel">
-            <div class="mb-3">
-                <div><strong>Last Placement:</strong></div>
-                <div>@(_hasLastPlacement ? $"{_lastX:0}, {_lastY:0}" : "Click the canvas to place a feature.")</div>
+            <div class="btn-group-vertical w-100" role="group" aria-label="Tool selection">
+                @foreach (var tool in ToolDefinitions)
+                {
+                    <button class="btn btn-sm @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => SelectTool(tool.Tool)">
+                        @tool.Label
+                    </button>
+                }
             </div>
-
-            <div class="mb-3">
-                <div><strong>View:</strong></div>
-                <div>@($"Zoom {_zoom * 100:0}% | Origin {_viewX:0}, {_viewY:0}")</div>
+            <div class="map-editor-sidebar-section">
+                <div class="small text-muted">Active Tool</div>
+                <div class="fw-semibold">@ActiveToolDefinition.Label</div>
+                <div class="small text-muted">@ActiveToolSummary</div>
             </div>
-
-            <div class="mb-3">
-                <div><strong>Unsaved Items:</strong></div>
-                <div>@PendingCount</div>
-            </div>
-
-            <div class="mb-3">
+            <div class="map-editor-sidebar-section">
                 <div class="d-flex align-items-center justify-content-between">
-                    <div><strong>Layers:</strong></div>
+                    <div class="fw-semibold">Layers</div>
                     <button class="btn btn-sm btn-outline-secondary" @onclick="AddAreaLayer">
-                        Add Layer
+                        Add
                     </button>
                 </div>
                 <div class="btn-group-vertical w-100 mt-2" role="group" aria-label="Area layers">
@@ -175,25 +62,106 @@
                     }
                 </div>
             </div>
-
-            <div class="d-flex gap-2">
-                <button class="btn btn-primary"
-                        disabled="@(PendingCount == 0 || _isSaving || !IsLoggedIn || !_hasMap)"
-                        @onclick="SaveEditsAsync">
-                    Save All
-                </button>
-                <button class="btn btn-outline-secondary"
-                        disabled="@(_isLoading)"
-                        @onclick="ReloadAsync">
-                    Reload Map
-                </button>
+            <div class="map-editor-sidebar-section map-editor-sidebar-metrics">
+                <div class="small text-muted">Last Placement</div>
+                <div>@(_hasLastPlacement ? $"{_lastX:0}, {_lastY:0}" : "No placements yet.")</div>
+                <div class="small text-muted mt-2">View</div>
+                <div>@($"Zoom {_zoom * 100:0}% | Origin {_viewX:0}, {_viewY:0}")</div>
+                <div class="small text-muted mt-2">Unsaved Items</div>
+                <div>@PendingCount</div>
             </div>
-
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="alert alert-info mt-3">@_statusMessage</div>
+                <div class="alert alert-info mt-3 mb-0">@_statusMessage</div>
             }
         </aside>
+
+        <section class="map-editor-main">
+            <div class="map-editor-topbar">
+                <div class="map-editor-topbar-block">
+                    <div class="small text-muted">Placement</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Feature placement selection">
+                        @foreach (var placement in PlacementDefinitions)
+                        {
+                            <button class="btn @(_placementType == placement.PlacementType ? "btn-primary" : "btn-outline-primary")"
+                                    @onclick="() => SelectPlacement(placement.PlacementType)">
+                                @placement.Label
+                            </button>
+                        }
+                    </div>
+                </div>
+                <div class="map-editor-topbar-block">
+                    <div class="small text-muted">@ActiveStyleDefinition.MenuLabel</div>
+                    <select class="form-select form-select-sm" @bind="SelectedPlacementStyle">
+                        @foreach (var style in ActiveStyleDefinition.Styles)
+                        {
+                            <option value="@style">@style</option>
+                        }
+                    </select>
+                </div>
+                <div class="map-editor-topbar-block">
+                    <div class="small text-muted">Brush Tightness</div>
+                    <input class="form-range"
+                           type="range"
+                           min="1"
+                           max="10"
+                           step="1"
+                           disabled="@(_activeTool != MapToolType.Brush)"
+                           @bind="_brushTightness" />
+                </div>
+                <div class="map-editor-topbar-block">
+                    <div class="small text-muted">Brush Size</div>
+                    <input class="form-range"
+                           type="range"
+                           min="1"
+                           max="10"
+                           step="1"
+                           disabled="@(_activeTool != MapToolType.Brush)"
+                           @bind="_brushSize" />
+                </div>
+                <div class="map-editor-topbar-block">
+                    <div class="small text-muted">Polygon Density</div>
+                    <input class="form-range"
+                           type="range"
+                           min="1"
+                           max="10"
+                           step="1"
+                           disabled="@(!ShowPolygonDensity)"
+                           @bind="_polygonDensity" />
+                </div>
+                <div class="map-editor-topbar-actions">
+                    <button class="btn btn-primary btn-sm"
+                            disabled="@(PendingCount == 0 || _isSaving || !IsLoggedIn || !_hasMap)"
+                            @onclick="SaveEditsAsync">
+                        Save All
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm"
+                            disabled="@(_isLoading)"
+                            @onclick="ReloadAsync">
+                        Reload
+                    </button>
+                </div>
+            </div>
+
+            <div class="map-editor-canvas-card">
+                <div class="map-editor-canvas-shell">
+                    <canvas id="@CanvasId"
+                            width="1000"
+                            height="600"
+                            class="map-editor-canvas"
+                            style="touch-action:none;"
+                            @onmousedown="HandlePointerDown"
+                            @onmousemove="HandlePointerMove"
+                            @onmouseup="HandlePointerUp"
+                            @onmouseleave="HandlePointerLeave"
+                            @oncontextmenu="HandleContextMenu"
+                            @oncontextmenu:preventDefault="true"
+                            @onwheel="HandleWheel"
+                            @onwheel:preventDefault="true">
+                    </canvas>
+                </div>
+            </div>
+        </section>
     </div>
 </div>
 

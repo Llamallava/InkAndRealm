@@ -115,27 +115,90 @@ code {
 }
 
 .map-editor-page {
-    max-width: 1600px;
-    margin: 0 auto;
+    height: calc(100vh - 3.5rem);
+    padding: 0.75rem;
+    margin: -1.1rem -1.5rem 0 -1.5rem;
 }
 
 .map-editor-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-    gap: 1.5rem;
-    align-items: start;
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
 }
 
-.map-editor-canvas-zone {
+.map-editor-sidebar {
+    background: #ffffff;
+    border-radius: 0.75rem;
+    border: 1px solid #d9dee5;
+    padding: 0.75rem;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.map-editor-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.map-editor-sidebar-section {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.map-editor-sidebar-metrics {
+    font-size: 0.9rem;
+}
+
+.map-editor-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
     min-width: 0;
+    min-height: 0;
+}
+
+.map-editor-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    background: #ffffff;
+    border-radius: 0.75rem;
+    border: 1px solid #d9dee5;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+}
+
+.map-editor-topbar-block {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 140px;
+}
+
+.map-editor-topbar-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+    align-items: center;
 }
 
 .map-editor-canvas-card {
     background: #ffffff;
     border-radius: 0.75rem;
     border: 1px solid #d9dee5;
-    padding: 1rem;
+    padding: 0.5rem;
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    flex: 1;
+    min-height: 0;
 }
 
 .map-editor-canvas-shell {
@@ -144,40 +207,13 @@ code {
     border-radius: 0.5rem;
     border: 1px solid #dfe4ea;
     background: #f5f1e8;
+    height: 100%;
 }
 
 .map-editor-canvas {
     display: block;
     width: 100%;
-    height: auto;
-}
-
-.map-editor-toolbox {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.92);
-    border-radius: 0.75rem;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
-    max-width: 200px;
-    pointer-events: auto;
-    max-height: calc(100% - 2rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-}
-
-.map-editor-tool-section {
-    display: grid;
-    gap: 0.4rem;
-}
-
-.map-editor-toolbox .btn {
-    text-align: left;
+    height: 100%;
 }
 
 .map-layer-button {
@@ -204,29 +240,21 @@ code {
     background: rgba(180, 35, 24, 0.12);
 }
 
-.map-editor-tool-summary {
-    display: grid;
-    gap: 0.25rem;
-}
-
-.map-editor-panel {
-    background: #ffffff;
-    border-radius: 0.75rem;
-    border: 1px solid #d9dee5;
-    padding: 1.25rem;
-    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
-}
-
-.map-editor-instructions {
-    max-width: 720px;
-}
-
 @media (max-width: 1200px) {
     .map-editor-layout {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto 1fr;
     }
 
-    .map-editor-panel {
+    .map-editor-sidebar {
         order: 2;
+        max-height: 35vh;
+    }
+}
+
+@media (min-width: 641px) {
+    .map-editor-page {
+        margin-left: -2rem;
+        margin-right: -1.5rem;
     }
 }
