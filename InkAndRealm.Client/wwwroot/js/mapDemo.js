@@ -81,7 +81,7 @@ window.inkAndRealmDemo = {
                 case "House":
                     return "#d6c2a4";
                 case "Land":
-                    return "#9bc97c";
+                    return "#d9c5a1";
                 default:
                     return "#c9d8b6";
             }
@@ -157,6 +157,93 @@ window.inkAndRealmDemo = {
                 targetCtx.stroke();
             }
             targetCtx.restore();
+        };
+
+        const drawPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null) => {
+            if (!Array.isArray(points) || points.length < 3) {
+                return;
+            }
+
+            targetCtx.save();
+            targetCtx.globalAlpha = alpha;
+            targetCtx.fillStyle = color;
+            if (strokeColor) {
+                targetCtx.strokeStyle = strokeColor;
+                targetCtx.lineWidth = 1 / zoom;
+            }
+
+            targetCtx.beginPath();
+            targetCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i += 1) {
+                targetCtx.lineTo(points[i].x, points[i].y);
+            }
+            targetCtx.closePath();
+            targetCtx.fill();
+            if (strokeColor) {
+                targetCtx.stroke();
+            }
+            targetCtx.restore();
+        };
+
+        const hashValue = (value) => {
+            const raw = Math.sin(value) * 10000;
+            return raw - Math.floor(raw);
+        };
+
+        const buildChaoticPoints = (points, segmentLength, amplitude, seed) => {
+            if (!Array.isArray(points) || points.length < 2) {
+                return points || [];
+            }
+
+            const jittered = [];
+            for (let i = 0; i < points.length; i += 1) {
+                const current = points[i];
+                const next = points[(i + 1) % points.length];
+                const dx = next.x - current.x;
+                const dy = next.y - current.y;
+                const length = Math.hypot(dx, dy);
+                if (!Number.isFinite(length) || length <= 0.001) {
+                    jittered.push({ x: current.x, y: current.y });
+                    continue;
+                }
+
+                const steps = Math.max(1, Math.floor(length / segmentLength));
+                const nx = -dy / length;
+                const ny = dx / length;
+                jittered.push({ x: current.x, y: current.y });
+
+                for (let step = 1; step < steps; step += 1) {
+                    const t = step / steps;
+                    const baseX = current.x + dx * t;
+                    const baseY = current.y + dy * t;
+                    const rand = hashValue(seed + (i * 127.1) + (step * 311.7));
+                    const offset = (rand * 2 - 1) * amplitude;
+                    jittered.push({
+                        x: baseX + (nx * offset),
+                        y: baseY + (ny * offset)
+                    });
+                }
+            }
+
+            return jittered;
+        };
+
+        const drawChaoticPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null) => {
+            if (!Array.isArray(points) || points.length < 3) {
+                return;
+            }
+
+            const seed = points.reduce((total, point) => total + (point.x * 0.13) + (point.y * 0.71), 0);
+            const chaoticPoints = buildChaoticPoints(points, 28, 7, seed);
+            drawPolygon(targetCtx, chaoticPoints, color, alpha, strokeColor);
+        };
+
+        const drawLandPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null) => {
+            if (chaoticLandEdges) {
+                drawChaoticPolygon(targetCtx, points, color, alpha, strokeColor);
+            } else {
+                drawPolygon(targetCtx, points, color, alpha, strokeColor);
+            }
         };
 
         const drawPolygonHandles = (targetCtx, points, selectedIndex = null) => {
@@ -470,6 +557,7 @@ window.inkAndRealmDemo = {
         }
         */
 
+        const chaoticLandEdges = !!(renderState && renderState.useChaoticLandEdges);
         const layerCanvases = new Map();
         if (renderState && Array.isArray(renderState.areaPolygons)) {
             const polygonsByLayer = new Map();
@@ -499,7 +587,13 @@ window.inkAndRealmDemo = {
                     layerCtx.clearRect(0, 0, mapWidth, mapHeight);
                     polygons.forEach(polygon => {
                         const color = getLayerColor(polygon.featureType);
-                        drawSmoothPolygon(layerCtx, polygon.points, color, 0.85, "#5a86a1");
+                        if (polygon.featureType === "Water") {
+                            drawSmoothPolygon(layerCtx, polygon.points, color, 0.85, "#5a86a1");
+                        } else if (polygon.featureType === "Land") {
+                            drawLandPolygon(layerCtx, polygon.points, color, 0.85, "#8a6a4d");
+                        } else {
+                            drawPolygon(layerCtx, polygon.points, color, 0.85, "#7b6b4a");
+                        }
                     });
 
                     ctx.save();
@@ -616,12 +710,14 @@ window.inkAndRealmDemo = {
                     if (polygon.points.length >= 3) {
                         if (polygon.featureType === "Water") {
                             drawSmoothPolygon(previewCtx, polygon.points, "#7fb7d9", 0.25, "#5a86a1");
+                        } else if (polygon.featureType === "Land") {
+                            drawLandPolygon(previewCtx, polygon.points, "#d9c5a1", 0.2, "#8a6a4d");
                         }
                     }
 
                     previewCtx.save();
                     previewCtx.globalAlpha = 0.55;
-                    previewCtx.strokeStyle = "#5a86a1";
+                    previewCtx.strokeStyle = polygon.featureType === "Land" ? "#8a6a4d" : "#5a86a1";
                     previewCtx.lineWidth = 2 / zoom;
                     previewCtx.setLineDash([6 / zoom, 4 / zoom]);
                     previewCtx.beginPath();
@@ -661,13 +757,15 @@ window.inkAndRealmDemo = {
             if (preview.points.length >= 3) {
                 if (preview.featureType === "Water") {
                     drawSmoothPolygon(ctx, preview.points, "#7fb7d9", 0.25, "#5a86a1");
+                } else if (preview.featureType === "Land") {
+                    drawLandPolygon(ctx, preview.points, "#d9c5a1", 0.2, "#8a6a4d");
                 }
             }
 
             if (preview.points.length >= 2) {
                 ctx.save();
                 ctx.globalAlpha = 0.55;
-                ctx.strokeStyle = "#5a86a1";
+                ctx.strokeStyle = preview.featureType === "Land" ? "#8a6a4d" : "#5a86a1";
                 ctx.lineWidth = 2 / zoom;
                 ctx.setLineDash([6 / zoom, 4 / zoom]);
                 ctx.beginPath();
@@ -690,13 +788,19 @@ window.inkAndRealmDemo = {
                 : null;
 
             if (editPolygon.points.length >= 3) {
-                drawSmoothPolygon(ctx, editPolygon.points, "#6faed3", 0.18, "#2f5d89");
+                if (editPolygon.featureType === "Water") {
+                    drawSmoothPolygon(ctx, editPolygon.points, "#6faed3", 0.18, "#2f5d89");
+                } else if (editPolygon.featureType === "Land") {
+                    drawLandPolygon(ctx, editPolygon.points, "#d9c5a1", 0.16, "#8a6a4d");
+                } else {
+                    drawPolygon(ctx, editPolygon.points, "#d9c5a1", 0.16, "#7b6b4a");
+                }
             }
 
             if (editPolygon.points.length >= 2) {
                 ctx.save();
                 ctx.globalAlpha = 0.7;
-                ctx.strokeStyle = "#2f5d89";
+                ctx.strokeStyle = editPolygon.featureType === "Land" ? "#8a6a4d" : "#2f5d89";
                 ctx.lineWidth = 2 / zoom;
                 ctx.setLineDash([4 / zoom, 3 / zoom]);
                 ctx.beginPath();

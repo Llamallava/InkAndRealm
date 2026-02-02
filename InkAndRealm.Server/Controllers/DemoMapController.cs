@@ -231,6 +231,16 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.AddedLandPolygons is not null && request.AddedLandPolygons.Count > 0)
+        {
+            foreach (var polygon in request.AddedLandPolygons)
+            {
+                map.Features.Add(CreateLandFeature(polygon));
+            }
+
+            hasChanges = true;
+        }
+
         if (request.DeletedWaterPolygonIds is not null && request.DeletedWaterPolygonIds.Count > 0)
         {
             var deletedSet = request.DeletedWaterPolygonIds
@@ -240,6 +250,26 @@ public sealed class DemoMapController : ControllerBase
             {
                 var featuresToRemove = map.Features
                     .OfType<WaterFeatureEntity>()
+                    .Where(feature => deletedSet.Contains(feature.Id))
+                    .ToList();
+                foreach (var feature in featuresToRemove)
+                {
+                    map.Features.Remove(feature);
+                }
+
+                hasChanges = hasChanges || featuresToRemove.Count > 0;
+            }
+        }
+
+        if (request.DeletedLandPolygonIds is not null && request.DeletedLandPolygonIds.Count > 0)
+        {
+            var deletedSet = request.DeletedLandPolygonIds
+                .Where(id => id > 0)
+                .ToHashSet();
+            if (deletedSet.Count > 0)
+            {
+                var featuresToRemove = map.Features
+                    .OfType<LandFeatureEntity>()
                     .Where(feature => deletedSet.Contains(feature.Id))
                     .ToList();
                 foreach (var feature in featuresToRemove)
@@ -326,6 +356,43 @@ public sealed class DemoMapController : ControllerBase
 
                 var feature = map.Features
                     .OfType<WaterFeatureEntity>()
+                    .FirstOrDefault(existing => existing.Id == polygon.Id);
+                if (feature is null)
+                {
+                    continue;
+                }
+
+                feature.ZIndex = polygon.LayerIndex;
+                feature.Points.Clear();
+                if (polygon.Points is not null)
+                {
+                    for (var i = 0; i < polygon.Points.Count; i += 1)
+                    {
+                        var point = polygon.Points[i];
+                        feature.Points.Add(new FeaturePointEntity
+                        {
+                            X = point.X,
+                            Y = point.Y,
+                            SortOrder = i
+                        });
+                    }
+                }
+
+                hasChanges = true;
+            }
+        }
+
+        if (request.UpdatedLandPolygons is not null && request.UpdatedLandPolygons.Count > 0)
+        {
+            foreach (var polygon in request.UpdatedLandPolygons)
+            {
+                if (polygon is null || polygon.Id <= 0)
+                {
+                    continue;
+                }
+
+                var feature = map.Features
+                    .OfType<LandFeatureEntity>()
                     .FirstOrDefault(existing => existing.Id == polygon.Id);
                 if (feature is null)
                 {
@@ -493,6 +560,32 @@ public sealed class DemoMapController : ControllerBase
         return feature;
     }
 
+    private static LandFeatureEntity CreateLandFeature(AreaPolygonDto polygon)
+    {
+        var feature = new LandFeatureEntity
+        {
+            LandType = LandType.Plains,
+            ElevationType = ElevationType.Low,
+            ZIndex = polygon?.LayerIndex ?? 0
+        };
+
+        if (polygon?.Points is not null)
+        {
+            for (var i = 0; i < polygon.Points.Count; i += 1)
+            {
+                var point = polygon.Points[i];
+                feature.Points.Add(new FeaturePointEntity
+                {
+                    X = point.X,
+                    Y = point.Y,
+                    SortOrder = i
+                });
+            }
+        }
+
+        return feature;
+    }
+
     private static MapDto ToDto(MapEntity map)
     {
         var waterPolygons = map.Features
@@ -513,19 +606,39 @@ public sealed class DemoMapController : ControllerBase
             })
             .ToList();
 
-        var waterLayers = waterPolygons
-            .GroupBy(polygon => polygon.LayerIndex)
-            .OrderBy(group => group.Key)
+        var landPolygons = map.Features
+            .OfType<LandFeatureEntity>()
+            .Select(feature => new AreaPolygonDto
+            {
+                Id = feature.Id,
+                FeatureType = "Land",
+                LayerIndex = feature.ZIndex,
+                Points = feature.Points
+                    .OrderBy(point => point.SortOrder)
+                    .Select(point => new MapPointDto
+                    {
+                        X = point.X,
+                        Y = point.Y
+                    })
+                    .ToList()
+            })
+            .ToList();
+
+        var areaPolygons = waterPolygons.Concat(landPolygons).ToList();
+
+        var areaLayers = areaPolygons
+            .GroupBy(polygon => new { polygon.FeatureType, polygon.LayerIndex })
+            .OrderBy(group => group.Key.LayerIndex)
             .Select(group => new AreaLayerDto
             {
-                LayerKey = $"water-{group.Key}",
-                LayerIndex = group.Key,
-                FeatureType = "Water"
+                LayerKey = $"{group.Key.FeatureType?.ToLowerInvariant() ?? "area"}-{group.Key.LayerIndex}",
+                LayerIndex = group.Key.LayerIndex,
+                FeatureType = group.Key.FeatureType ?? string.Empty
             })
             .ToList();
 
         var persistedLayers = map.Layers is null || map.Layers.Count == 0
-            ? waterLayers
+            ? areaLayers
             : map.Layers
                 .OrderBy(layer => layer.LayerIndex)
                 .Select(layer => new AreaLayerDto
@@ -573,7 +686,7 @@ public sealed class DemoMapController : ControllerBase
                 })
                 .ToList(),
             AreaLayers = persistedLayers,
-            AreaPolygons = waterPolygons
+            AreaPolygons = areaPolygons
         };
     }
 

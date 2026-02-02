@@ -146,6 +146,21 @@
                            disabled="@(!ShowPolygonDensity)"
                            @bind="_polygonDensity" />
                 </div>
+                @if (ShowChaoticEdgesToggle)
+                {
+                    <div class="map-editor-topbar-block">
+                        <div class="small text-muted">Chaotic Edges</div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="land-chaos-toggle"
+                                   @bind="UseChaoticLandEdges" />
+                            <label class="form-check-label" for="land-chaos-toggle">
+                                @(_useChaoticLandEdges ? "On" : "Off")
+                            </label>
+                        </div>
+                    </div>
+                }
                 <div class="map-editor-topbar-actions">
                     <button class="btn btn-primary btn-sm"
                             disabled="@(PendingCount == 0 || _isSaving || !IsLoggedIn || !_hasMap)"
@@ -236,7 +251,8 @@
     {
         { PlacementType.Tree, "Oak" },
         { PlacementType.House, "Cottage" },
-        { PlacementType.Water, "Water" }
+        { PlacementType.Water, "Water" },
+        { PlacementType.Land, "Land" }
     };
     private MapToolType _activeTool = MapToolType.Point;
     private bool _isBrushing;
@@ -272,6 +288,10 @@
     private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
     private readonly Dictionary<int, AreaPolygonDto> _editedWaterPolygons = new();
     private readonly HashSet<int> _deletedWaterPolygonIds = new();
+    private readonly List<AreaPolygonDto> _landPolygons = new();
+    private readonly List<AreaPolygonDto> _stagedLandPolygons = new();
+    private readonly Dictionary<int, AreaPolygonDto> _editedLandPolygons = new();
+    private readonly HashSet<int> _deletedLandPolygonIds = new();
     private readonly Dictionary<int, TreeFeatureDto> _editedTrees = new();
     private readonly Dictionary<int, HouseFeatureDto> _editedHouses = new();
     private readonly HashSet<int> _deletedTreeIds = new();
@@ -285,11 +305,15 @@
     private MapPointDto? _editingPointOriginalPosition;
     private bool _isDraggingEditPointFeature;
     private EraserTarget _eraserTarget = EraserTarget.All;
+    private bool _useChaoticLandEdges = true;
     private int PendingCount => _stagedTrees.Count
         + _stagedHouses.Count
         + _stagedWaterPolygons.Count
         + _editedWaterPolygons.Count
         + _deletedWaterPolygonIds.Count
+        + _stagedLandPolygons.Count
+        + _editedLandPolygons.Count
+        + _deletedLandPolygonIds.Count
         + _editedTrees.Count
         + _editedHouses.Count
         + _deletedTreeIds.Count
@@ -313,10 +337,15 @@
     {
         "Water"
     };
+    private static readonly IReadOnlyList<string> LandStyles = new List<string>
+    {
+        "Land"
+    };
     private static readonly IReadOnlyList<PlacementDefinition> PlacementDefinitions = new List<PlacementDefinition>
     {
         new(PlacementType.Tree, "Tree", "/assets/Summer%20Set/tree_1.png"),
         new(PlacementType.House, "House", "/assets/Summer%20Set/building_2.png"),
+        new(PlacementType.Land, "Land", "/assets/Summer%20Set/land_1.png"),
         new(PlacementType.Water, "Water", "/assets/Summer%20Set/river.png")
     };
     private static readonly IReadOnlyList<EraserTargetDefinition> EraserTargetDefinitions = new List<EraserTargetDefinition>
@@ -324,12 +353,14 @@
         new(EraserTarget.All, "All"),
         new(EraserTarget.Tree, "Trees"),
         new(EraserTarget.House, "Houses"),
+        new(EraserTarget.Land, "Land"),
         new(EraserTarget.Water, "Water")
     };
     private static readonly IReadOnlyList<FeatureStyleDefinition> FeatureStyleDefinitions = new List<FeatureStyleDefinition>
     {
         new(PlacementType.Tree, "Tree Style", TreeStyles),
         new(PlacementType.House, "House Style", HouseStyles),
+        new(PlacementType.Land, "Land Type", LandStyles),
         new(PlacementType.Water, "Water Type", WaterStyles)
     };
     private readonly Dictionary<PlacementType, float> _pointSizeByPlacement = new()
@@ -361,6 +392,7 @@
         => FeatureStyleDefinitions.First(definition => definition.PlacementType == _placementType);
     private bool ShowPolygonDensity => _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType);
     private bool ShowPointSize => IsPointPlacement(_placementType);
+    private bool ShowChaoticEdgesToggle => _placementType == PlacementType.Land;
     private string SelectedPlacementStyle
     {
         get => GetStyleForPlacement(_placementType);
@@ -370,6 +402,20 @@
     {
         get => GetPointSizeForPlacement(_placementType);
         set => SetPointSizeForPlacement(_placementType, value);
+    }
+    private bool UseChaoticLandEdges
+    {
+        get => _useChaoticLandEdges;
+        set
+        {
+            if (_useChaoticLandEdges == value)
+            {
+                return;
+            }
+
+            _useChaoticLandEdges = value;
+            _ = InvokeAsync(DrawAsync);
+        }
     }
 
     protected override async Task OnInitializedAsync()
@@ -412,6 +458,12 @@
         {
             if (args.Button != 0)
             {
+                return;
+            }
+
+            if (_placementType == PlacementType.Land)
+            {
+                _statusMessage = "Land can only be placed with the Polygon tool.";
                 return;
             }
 
@@ -753,14 +805,21 @@
 
             var polygon = new AreaPolygonDto
             {
-                FeatureType = layer.FeatureType,
+                FeatureType = GetAreaPlacementFeatureType(),
                 LayerIndex = layer.LayerIndex,
                 Points = _activePolygonPoints
                     .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                     .ToList()
             };
 
-            _stagedWaterPolygons.Add(polygon);
+            if (IsLandFeatureType(polygon.FeatureType))
+            {
+                _stagedLandPolygons.Add(polygon);
+            }
+            else
+            {
+                _stagedWaterPolygons.Add(polygon);
+            }
             _activePolygonPoints.Clear();
             _statusMessage = $"Polygon placed on {GetLayerLabel(layer)} (unsaved).";
         }
@@ -906,6 +965,12 @@
 
     private async Task HandlePointToolAsync(MouseEventArgs args)
     {
+        if (_placementType == PlacementType.Land)
+        {
+            _statusMessage = "Land can only be placed with the Polygon tool.";
+            return;
+        }
+
         if (_placementType == PlacementType.Water)
         {
             _statusMessage = "Water can only be placed with the Polygon tool.";
@@ -1041,6 +1106,11 @@
             DeletedWaterPolygonIds = _deletedWaterPolygonIds.ToList(),
             UpdatedWaterPolygons = _editedWaterPolygons.Values
                 .Select(ClonePolygon)
+                .ToList(),
+            AddedLandPolygons = new List<AreaPolygonDto>(_stagedLandPolygons),
+            DeletedLandPolygonIds = _deletedLandPolygonIds.ToList(),
+            UpdatedLandPolygons = _editedLandPolygons.Values
+                .Select(ClonePolygon)
                 .ToList()
         };
 
@@ -1052,12 +1122,12 @@
             _trees = map?.Trees ?? new List<TreeFeatureDto>();
             _houses = map?.Houses ?? new List<HouseFeatureDto>();
             _waterPolygons.Clear();
-            if (map?.AreaPolygons is not null && map.AreaPolygons.Count > 0)
-            {
-                _waterPolygons.AddRange(map.AreaPolygons);
-            }
+            _landPolygons.Clear();
+            LoadAreaPolygons(map);
             _editedWaterPolygons.Clear();
             _deletedWaterPolygonIds.Clear();
+            _editedLandPolygons.Clear();
+            _deletedLandPolygonIds.Clear();
             _editedTrees.Clear();
             _editedHouses.Clear();
             _deletedTreeIds.Clear();
@@ -1093,6 +1163,7 @@
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
             _waterPolygons.Clear();
+            _landPolygons.Clear();
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
@@ -1106,6 +1177,7 @@
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
             _waterPolygons.Clear();
+            _landPolygons.Clear();
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
@@ -1118,11 +1190,10 @@
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
         _waterPolygons.Clear();
-        if (map?.AreaPolygons is not null && map.AreaPolygons.Count > 0)
-        {
-            _waterPolygons.AddRange(map.AreaPolygons);
-        }
+        _landPolygons.Clear();
+        LoadAreaPolygons(map);
         _editedWaterPolygons.Clear();
+        _editedLandPolygons.Clear();
         _editedTrees.Clear();
         _editedHouses.Clear();
         _hasMap = map?.Id > 0;
@@ -1206,11 +1277,12 @@
     {
         if (_areaLayers.Count == 0)
         {
+            var featureType = GetAreaPlacementFeatureType();
             var layer = new AreaLayerDto
             {
-                LayerKey = "water-0",
+                LayerKey = $"{featureType.ToLowerInvariant()}-0",
                 LayerIndex = 0,
-                FeatureType = "Water"
+                FeatureType = featureType
             };
             _areaLayers.Add(layer);
             _activeAreaLayer = layer;
@@ -1244,6 +1316,31 @@
         EnsureAreaLayers();
     }
 
+    private void LoadAreaPolygons(MapDto? map)
+    {
+        if (map?.AreaPolygons is null || map.AreaPolygons.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var polygon in map.AreaPolygons)
+        {
+            if (polygon is null || polygon.Points.Count == 0)
+            {
+                continue;
+            }
+
+            if (IsLandFeatureType(polygon.FeatureType))
+            {
+                _landPolygons.Add(polygon);
+            }
+            else if (IsWaterFeatureType(polygon.FeatureType))
+            {
+                _waterPolygons.Add(polygon);
+            }
+        }
+    }
+
     private void ResetAreaLayers()
     {
         _areaLayers.Clear();
@@ -1268,11 +1365,12 @@
     private void AddAreaLayer()
     {
         var nextIndex = GetNextLayerIndex();
+        var featureType = GetAreaPlacementFeatureType();
         var layer = new AreaLayerDto
         {
-            LayerKey = $"water-{nextIndex}",
+            LayerKey = $"{featureType.ToLowerInvariant()}-{nextIndex}",
             LayerIndex = nextIndex,
-            FeatureType = "Water"
+            FeatureType = featureType
         };
         _areaLayers.Add(layer);
         NormalizeAreaLayers();
@@ -1316,6 +1414,7 @@
         }
 
         _stagedWaterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
+        _stagedLandPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
 
         foreach (var polygonId in _editedWaterPolygons
                      .Where(entry => entry.Value.LayerIndex == layerIndex)
@@ -1325,6 +1424,14 @@
             _editedWaterPolygons.Remove(polygonId);
         }
 
+        foreach (var polygonId in _editedLandPolygons
+                     .Where(entry => entry.Value.LayerIndex == layerIndex)
+                     .Select(entry => entry.Key)
+                     .ToList())
+        {
+            _editedLandPolygons.Remove(polygonId);
+        }
+
         foreach (var polygonId in _waterPolygons
                      .Where(polygon => polygon.LayerIndex == layerIndex && polygon.Id > 0)
                      .Select(polygon => polygon.Id))
@@ -1332,7 +1439,15 @@
             _deletedWaterPolygonIds.Add(polygonId);
         }
 
+        foreach (var polygonId in _landPolygons
+                     .Where(polygon => polygon.LayerIndex == layerIndex && polygon.Id > 0)
+                     .Select(polygon => polygon.Id))
+        {
+            _deletedLandPolygonIds.Add(polygonId);
+        }
+
         _waterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
+        _landPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
         _areaLayers.RemoveAll(existing => existing.LayerIndex == layerIndex);
 
         if (_activeAreaLayer == layer)
@@ -1398,8 +1513,11 @@
         _stagedTrees.Clear();
         _stagedHouses.Clear();
         _stagedWaterPolygons.Clear();
+        _stagedLandPolygons.Clear();
         _editedWaterPolygons.Clear();
         _deletedWaterPolygonIds.Clear();
+        _editedLandPolygons.Clear();
+        _deletedLandPolygonIds.Clear();
         _editedTrees.Clear();
         _editedHouses.Clear();
         _deletedTreeIds.Clear();
@@ -1462,6 +1580,21 @@
         return placementType == PlacementType.Tree || placementType == PlacementType.House;
     }
 
+    private static bool IsLandFeatureType(string? featureType)
+    {
+        return string.Equals(featureType, "Land", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWaterFeatureType(string? featureType)
+    {
+        return string.Equals(featureType, "Water", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetAreaPlacementFeatureType()
+    {
+        return _placementType == PlacementType.Land ? "Land" : "Water";
+    }
+
     private static float NormalizePointSize(float size)
     {
         return float.IsFinite(size) && size > 0f ? size : 1f;
@@ -1508,7 +1641,14 @@
             return;
         }
 
-        _editedWaterPolygons[polygon.Id] = ClonePolygon(polygon);
+        if (IsLandFeatureType(polygon.FeatureType))
+        {
+            _editedLandPolygons[polygon.Id] = ClonePolygon(polygon);
+        }
+        else
+        {
+            _editedWaterPolygons[polygon.Id] = ClonePolygon(polygon);
+        }
     }
 
     private void TrackEditedPointFeature(EditingPointFeature feature)
@@ -1542,13 +1682,18 @@
 
     private AreaPolygonDto? FindPolygonAtPoint(float mapX, float mapY)
     {
-        return FindPolygonAtPoint(mapX, mapY, true);
+        return FindPolygonAtPoint(mapX, mapY, true, null);
     }
 
     private AreaPolygonDto? FindPolygonAtPoint(float mapX, float mapY, bool restrictToActiveLayer)
     {
+        return FindPolygonAtPoint(mapX, mapY, restrictToActiveLayer, null);
+    }
+
+    private AreaPolygonDto? FindPolygonAtPoint(float mapX, float mapY, bool restrictToActiveLayer, string? featureTypeFilter)
+    {
         var activeLayerIndex = restrictToActiveLayer ? _activeAreaLayer?.LayerIndex : null;
-        var candidates = _waterPolygons.Concat(_stagedWaterPolygons).ToList();
+        var candidates = GetPolygonCandidates(featureTypeFilter);
         AreaPolygonDto? selected = null;
         var selectedLayer = int.MinValue;
         var selectedOrder = -1;
@@ -1581,6 +1726,23 @@
         }
 
         return selected;
+    }
+
+    private List<AreaPolygonDto> GetPolygonCandidates(string? featureTypeFilter)
+    {
+        IEnumerable<AreaPolygonDto> candidates = _waterPolygons.Concat(_stagedWaterPolygons)
+            .Concat(_landPolygons)
+            .Concat(_stagedLandPolygons);
+
+        if (!string.IsNullOrWhiteSpace(featureTypeFilter))
+        {
+            candidates = candidates.Where(polygon => string.Equals(
+                polygon.FeatureType,
+                featureTypeFilter,
+                StringComparison.OrdinalIgnoreCase));
+        }
+
+        return candidates.ToList();
     }
 
     private async Task DuplicateFeatureAsync(MouseEventArgs args)
@@ -1662,7 +1824,14 @@
             point.Y = Math.Clamp(point.Y + offsetY, 0f, MapHeight);
         }
 
-        _stagedWaterPolygons.Add(clone);
+        if (IsLandFeatureType(clone.FeatureType))
+        {
+            _stagedLandPolygons.Add(clone);
+        }
+        else
+        {
+            _stagedWaterPolygons.Add(clone);
+        }
     }
 
     private static T CloneDto<T>(T source)
@@ -1749,9 +1918,9 @@
         return MathF.Max(16f, GetEditHitRadius() * 1.5f);
     }
 
-    private bool TryErasePolygonAtPoint(float mapX, float mapY)
+    private bool TryErasePolygonAtPoint(float mapX, float mapY, string? featureTypeFilter = null)
     {
-        var polygon = FindPolygonAtPoint(mapX, mapY);
+        var polygon = FindPolygonAtPoint(mapX, mapY, true, featureTypeFilter);
         if (polygon is null)
         {
             return false;
@@ -1762,14 +1931,28 @@
             ClearEditSelection(true);
         }
 
-        if (polygon.Id > 0)
+        if (IsLandFeatureType(polygon.FeatureType))
         {
-            _deletedWaterPolygonIds.Add(polygon.Id);
-            _editedWaterPolygons.Remove(polygon.Id);
-        }
+            if (polygon.Id > 0)
+            {
+                _deletedLandPolygonIds.Add(polygon.Id);
+                _editedLandPolygons.Remove(polygon.Id);
+            }
 
-        _waterPolygons.Remove(polygon);
-        _stagedWaterPolygons.Remove(polygon);
+            _landPolygons.Remove(polygon);
+            _stagedLandPolygons.Remove(polygon);
+        }
+        else
+        {
+            if (polygon.Id > 0)
+            {
+                _deletedWaterPolygonIds.Add(polygon.Id);
+                _editedWaterPolygons.Remove(polygon.Id);
+            }
+
+            _waterPolygons.Remove(polygon);
+            _stagedWaterPolygons.Remove(polygon);
+        }
 
         return true;
     }
@@ -1859,7 +2042,27 @@
                 return false;
             }
 
-            erased = TryErasePolygonAtPoint(mapX, mapY);
+            erased = TryErasePolygonAtPoint(mapX, mapY, "Water");
+            if (showEmptyStatus)
+            {
+                status = erased
+                    ? $"Polygon erased from {GetLayerLabel(_activeAreaLayer)} (unsaved)."
+                    : $"Nothing to erase on {GetLayerLabel(_activeAreaLayer)}.";
+            }
+
+            return erased;
+        }
+
+        if (_eraserTarget == EraserTarget.Land)
+        {
+            EnsureAreaLayers();
+            if (_activeAreaLayer is null)
+            {
+                status = "Select a layer before erasing.";
+                return false;
+            }
+
+            erased = TryErasePolygonAtPoint(mapX, mapY, "Land");
             if (showEmptyStatus)
             {
                 status = erased
@@ -1905,6 +2108,11 @@
         bool restrictToActiveLayer)
     {
         if (target == EraserTarget.Water)
+        {
+            return null;
+        }
+
+        if (target == EraserTarget.Land)
         {
             return null;
         }
@@ -2440,6 +2648,8 @@
                 .ToList(),
             AreaPolygons = _waterPolygons
                 .Concat(_stagedWaterPolygons)
+                .Concat(_landPolygons)
+                .Concat(_stagedLandPolygons)
                 .OrderBy(polygon => polygon.LayerIndex)
                 .ToList(),
             ActivePolygon = _activePolygonPoints.Count >= 1
@@ -2447,7 +2657,7 @@
                 {
                     FeatureType = IsPointPlacement(_placementType)
                         ? _placementType.ToString()
-                        : _activeAreaLayer?.FeatureType ?? "Water",
+                        : GetAreaPlacementFeatureType(),
                     LayerIndex = _activeAreaLayer?.LayerIndex ?? 0,
                     Points = _activePolygonPoints
                         .Select(point => new MapPointDto { X = point.X, Y = point.Y })
@@ -2498,6 +2708,7 @@
                     IsActive = _isBrushing
                 }
                 : null,
+            UseChaoticLandEdges = _useChaoticLandEdges,
             ViewState = new MapViewStateDto
             {
                 ViewX = _viewX,
@@ -2513,6 +2724,7 @@
     {
         Tree,
         House,
+        Land,
         Water
     }
 
@@ -2521,6 +2733,7 @@
         All,
         Tree,
         House,
+        Land,
         Water
     }
 

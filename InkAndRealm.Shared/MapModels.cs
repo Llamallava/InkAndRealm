@@ -67,6 +67,9 @@ public sealed class MapEditsRequest
     public List<AreaPolygonDto> AddedWaterPolygons { get; set; } = new();
     public List<int> DeletedWaterPolygonIds { get; set; } = new();
     public List<AreaPolygonDto> UpdatedWaterPolygons { get; set; } = new();
+    public List<AreaPolygonDto> AddedLandPolygons { get; set; } = new();
+    public List<int> DeletedLandPolygonIds { get; set; } = new();
+    public List<AreaPolygonDto> UpdatedLandPolygons { get; set; } = new();
 }
 
 public sealed class CreateMapRequest
@@ -109,6 +112,7 @@ public sealed class MapRenderStateDto
     public int? EditPolygonPointIndex { get; set; }
     public int? EditPolygonEdgeIndex { get; set; }
     public BrushPreviewDto? BrushPreview { get; set; }
+    public bool UseChaoticLandEdges { get; set; }
     public MapViewStateDto ViewState { get; set; } = new();
 }
 
