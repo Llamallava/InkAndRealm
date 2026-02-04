@@ -306,7 +306,6 @@ window.inkAndRealmDemo = {
             }
 
             ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.textAlign = "center";
             ctx.textBaseline = "bottom";
             ctx.font = "16px 'Segoe UI', sans-serif";
@@ -316,17 +315,11 @@ window.inkAndRealmDemo = {
                     return;
                 }
 
-                const screenX = (title.x - viewX) * zoom;
-                const screenY = (title.y - viewY) * zoom;
-                if (screenX < -50 || screenX > canvas.width + 50 || screenY < -50 || screenY > canvas.height + 50) {
-                    return;
-                }
-
                 ctx.lineWidth = 3;
                 ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
                 ctx.fillStyle = title.isStaged ? "rgba(45, 58, 74, 0.8)" : "#2b3a4a";
-                ctx.strokeText(title.name, screenX, screenY);
-                ctx.fillText(title.name, screenX, screenY);
+                ctx.strokeText(title.name, title.x, title.y);
+                ctx.fillText(title.name, title.x, title.y);
             });
 
             ctx.restore();
