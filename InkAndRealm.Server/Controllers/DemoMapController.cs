@@ -438,12 +438,28 @@ public sealed class DemoMapController : ControllerBase
                 if (!feature.TargetFeatureId.HasValue)
                 {
                     feature.Points.Clear();
-                    feature.Points.Add(new FeaturePointEntity
+                    if (title.Points is not null && title.Points.Count >= 3)
                     {
-                        X = title.X,
-                        Y = title.Y,
-                        SortOrder = 0
-                    });
+                        for (var i = 0; i < title.Points.Count; i += 1)
+                        {
+                            var point = title.Points[i];
+                            feature.Points.Add(new FeaturePointEntity
+                            {
+                                X = point.X,
+                                Y = point.Y,
+                                SortOrder = i
+                            });
+                        }
+                    }
+                    else
+                    {
+                        feature.Points.Add(new FeaturePointEntity
+                        {
+                            X = title.X,
+                            Y = title.Y,
+                            SortOrder = 0
+                        });
+                    }
                 }
 
                 hasChanges = true;
@@ -657,12 +673,28 @@ public sealed class DemoMapController : ControllerBase
             ZIndex = 0
         };
 
-        feature.Points.Add(new FeaturePointEntity
+        if (title.Points is not null && title.Points.Count >= 3)
         {
-            X = title.X,
-            Y = title.Y,
-            SortOrder = 0
-        });
+            for (var i = 0; i < title.Points.Count; i += 1)
+            {
+                var point = title.Points[i];
+                feature.Points.Add(new FeaturePointEntity
+                {
+                    X = point.X,
+                    Y = point.Y,
+                    SortOrder = i
+                });
+            }
+        }
+        else
+        {
+            feature.Points.Add(new FeaturePointEntity
+            {
+                X = title.X,
+                Y = title.Y,
+                SortOrder = 0
+            });
+        }
 
         return feature;
     }
@@ -785,11 +817,20 @@ public sealed class DemoMapController : ControllerBase
             .OfType<TitleFeatureEntity>()
             .Select(title =>
             {
-                var point = title.Points.OrderBy(p => p.SortOrder).FirstOrDefault();
+                var orderedPoints = title.Points
+                    .OrderBy(p => p.SortOrder)
+                    .ToList();
+                var point = orderedPoints.FirstOrDefault();
                 var targetPoint = title.TargetFeatureId.HasValue
                     ? map.Features.FirstOrDefault(feature => feature.Id == title.TargetFeatureId.Value)?
                         .Points.OrderBy(p => p.SortOrder).FirstOrDefault()
                     : null;
+                var anchor = targetPoint ?? (orderedPoints.Count >= 3
+                    ? GetPolygonCentroid(orderedPoints)
+                    : point);
+                var mappedPoints = orderedPoints
+                    .Select(p => new MapPointDto { X = p.X, Y = p.Y })
+                    .ToList();
 
                 return new TitleFeatureDto
                 {
@@ -797,8 +838,9 @@ public sealed class DemoMapController : ControllerBase
                     Name = title.Name,
                     Description = title.Description,
                     TargetFeatureId = title.TargetFeatureId,
-                    X = targetPoint?.X ?? point?.X ?? 0f,
-                    Y = targetPoint?.Y ?? point?.Y ?? 0f
+                    X = anchor?.X ?? 0f,
+                    Y = anchor?.Y ?? 0f,
+                    Points = mappedPoints
                 };
             })
             .ToList();
@@ -854,6 +896,45 @@ public sealed class DemoMapController : ControllerBase
 
         var trimmed = name.Trim();
         return trimmed.Length <= TitleNameMaxLength ? trimmed : trimmed[..TitleNameMaxLength];
+    }
+
+    private static FeaturePointEntity? GetPolygonCentroid(IReadOnlyList<FeaturePointEntity> points)
+    {
+        if (points is null || points.Count == 0)
+        {
+            return null;
+        }
+
+        if (points.Count == 1)
+        {
+            return points[0];
+        }
+
+        float area = 0f;
+        float cx = 0f;
+        float cy = 0f;
+
+        for (var i = 0; i < points.Count; i += 1)
+        {
+            var j = (i + 1) % points.Count;
+            var p1 = points[i];
+            var p2 = points[j];
+            var cross = (p1.X * p2.Y) - (p2.X * p1.Y);
+            area += cross;
+            cx += (p1.X + p2.X) * cross;
+            cy += (p1.Y + p2.Y) * cross;
+        }
+
+        area *= 0.5f;
+        if (MathF.Abs(area) < 0.001f)
+        {
+            var avgX = points.Average(point => point.X);
+            var avgY = points.Average(point => point.Y);
+            return new FeaturePointEntity { X = avgX, Y = avgY };
+        }
+
+        var factor = 1f / (6f * area);
+        return new FeaturePointEntity { X = cx * factor, Y = cy * factor };
     }
 
     private static float NormalizePointSize(float size)

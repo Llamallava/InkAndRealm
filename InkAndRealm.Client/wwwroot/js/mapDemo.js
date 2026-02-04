@@ -325,6 +325,34 @@ window.inkAndRealmDemo = {
             ctx.restore();
         };
 
+        const drawTitleOutlines = (titles) => {
+            if (!Array.isArray(titles) || titles.length === 0) {
+                return;
+            }
+
+            ctx.save();
+            ctx.strokeStyle = "rgba(43, 58, 74, 0.35)";
+            ctx.lineWidth = 1 / zoom;
+            ctx.setLineDash([6 / zoom, 4 / zoom]);
+
+            titles.forEach(title => {
+                const points = title && Array.isArray(title.points) ? title.points : null;
+                if (!points || points.length < 3) {
+                    return;
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i += 1) {
+                    ctx.lineTo(points[i].x, points[i].y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        };
+
         const drawBrushCursor = (targetCtx, brushPreview) => {
             if (!brushPreview || !Number.isFinite(brushPreview.x) || !Number.isFinite(brushPreview.y)) {
                 return;
@@ -856,6 +884,7 @@ window.inkAndRealmDemo = {
         }
 
         if (renderState && Array.isArray(renderState.titleFeatures)) {
+            drawTitleOutlines(renderState.titleFeatures);
             drawTitles(renderState.titleFeatures);
         }
 

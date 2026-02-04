@@ -580,7 +580,7 @@
                     }
                     _editingTitleFeature = titleFeature;
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
-                    _isDraggingTitleFeature = !titleFeature.Title.TargetFeatureId.HasValue;
+                    _isDraggingTitleFeature = CanDragTitle(titleFeature.Title);
                     _statusMessage = _isDraggingTitleFeature
                         ? "Moving title..."
                         : "Title selected. Right-click to edit name.";
@@ -614,7 +614,7 @@
                     }
                     _editingTitleFeature = titleFeature;
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
-                    _isDraggingTitleFeature = !titleFeature.Title.TargetFeatureId.HasValue;
+                    _isDraggingTitleFeature = CanDragTitle(titleFeature.Title);
                     _statusMessage = _isDraggingTitleFeature
                         ? "Moving title..."
                         : "Title selected. Right-click to edit name.";
@@ -947,7 +947,14 @@
         if (_placementType == PlacementType.Title)
         {
             var centroid = GetPolygonCentroid(_activePolygonPoints);
-            var placed = await PlaceTitleAtPointAsync(centroid.X, centroid.Y, allowTargetSearch: false);
+            var points = _activePolygonPoints
+                .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                .ToList();
+            var placed = await PlaceTitleAtPointAsync(
+                centroid.X,
+                centroid.Y,
+                allowTargetSearch: false,
+                polygonPoints: points);
             _activePolygonPoints.Clear();
             _statusMessage = placed
                 ? "Title placed for area (unsaved)."
@@ -2053,6 +2060,12 @@
         return placementType == PlacementType.Title;
     }
 
+    private static bool CanDragTitle(TitleFeatureDto title)
+    {
+        return !title.TargetFeatureId.HasValue
+            && (title.Points is null || title.Points.Count < 3);
+    }
+
     private static bool IsLandFeatureType(string? featureType)
     {
         return string.Equals(featureType, "Land", StringComparison.OrdinalIgnoreCase);
@@ -2361,7 +2374,18 @@
         var clone = CloneDto(feature.Title);
         clone.Id = 0;
 
-        if (!clone.TargetFeatureId.HasValue)
+        if (clone.Points is not null && clone.Points.Count >= 3)
+        {
+            var (offsetX, offsetY) = GetAdjacentOffsetForPoints(clone.Points);
+            foreach (var point in clone.Points)
+            {
+                point.X = Math.Clamp(point.X + offsetX, 0f, MapWidth);
+                point.Y = Math.Clamp(point.Y + offsetY, 0f, MapHeight);
+            }
+            clone.X = Math.Clamp(clone.X + offsetX, 0f, MapWidth);
+            clone.Y = Math.Clamp(clone.Y + offsetY, 0f, MapHeight);
+        }
+        else if (!clone.TargetFeatureId.HasValue)
         {
             var position = GetTitlePosition(feature.Title);
             var (newX, newY) = GetAdjacentPoint(position.X, position.Y);
@@ -2447,6 +2471,46 @@
         var maxX = polygon.Points.Max(point => point.X);
         var minY = polygon.Points.Min(point => point.Y);
         var maxY = polygon.Points.Max(point => point.Y);
+        var minDx = -minX;
+        var maxDx = MapWidth - maxX;
+        var minDy = -minY;
+        var maxDy = MapHeight - maxY;
+
+        var candidates = new (float Dx, float Dy)[]
+        {
+            (offset, 0f),
+            (0f, offset),
+            (-offset, 0f),
+            (0f, -offset),
+            (offset, offset),
+            (-offset, offset),
+            (offset, -offset),
+            (-offset, -offset)
+        };
+
+        foreach (var (dx, dy) in candidates)
+        {
+            if (dx >= minDx && dx <= maxDx && dy >= minDy && dy <= maxDy)
+            {
+                return (dx, dy);
+            }
+        }
+
+        return (Math.Clamp(offset, minDx, maxDx), Math.Clamp(offset, minDy, maxDy));
+    }
+
+    private (float Dx, float Dy) GetAdjacentOffsetForPoints(IReadOnlyList<MapPointDto> points)
+    {
+        if (points is null || points.Count == 0)
+        {
+            return (0f, 0f);
+        }
+
+        var offset = GetDuplicateOffset();
+        var minX = points.Min(point => point.X);
+        var maxX = points.Max(point => point.X);
+        var minY = points.Min(point => point.Y);
+        var maxY = points.Max(point => point.Y);
         var minDx = -minX;
         var maxDx = MapWidth - maxX;
         var minDy = -minY;
@@ -2902,6 +2966,11 @@
             }
         }
 
+        if (title.Points is not null && title.Points.Count >= 3)
+        {
+            return GetPolygonCentroid(title.Points);
+        }
+
         return new MapPointDto { X = title.X, Y = title.Y };
     }
 
@@ -3068,7 +3137,11 @@
         }
     }
 
-    private async Task<bool> PlaceTitleAtPointAsync(float mapX, float mapY, bool allowTargetSearch = true)
+    private async Task<bool> PlaceTitleAtPointAsync(
+        float mapX,
+        float mapY,
+        bool allowTargetSearch = true,
+        IReadOnlyList<MapPointDto>? polygonPoints = null)
     {
         int? targetId = null;
 
@@ -3110,7 +3183,10 @@
             X = mapX,
             Y = mapY,
             Name = name,
-            TargetFeatureId = targetId
+            TargetFeatureId = targetId,
+            Points = polygonPoints is null
+                ? new List<MapPointDto>()
+                : polygonPoints.Select(point => new MapPointDto { X = point.X, Y = point.Y }).ToList()
         };
         PushUndoState();
         _lastX = mapX;
@@ -3455,7 +3531,10 @@
                 Name = title.Name,
                 X = position.X,
                 Y = position.Y,
-                IsStaged = false
+                IsStaged = false,
+                Points = title.Points
+                    .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                    .ToList()
             });
         }
 
@@ -3468,7 +3547,10 @@
                 Name = title.Name,
                 X = position.X,
                 Y = position.Y,
-                IsStaged = true
+                IsStaged = true,
+                Points = title.Points
+                    .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                    .ToList()
             });
         }
 

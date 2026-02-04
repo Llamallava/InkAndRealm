@@ -45,6 +45,7 @@ public sealed class TitleFeatureDto
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int? TargetFeatureId { get; set; }
+    public List<MapPointDto> Points { get; set; } = new();
 }
 
 public sealed class AddTreeRequest
@@ -156,6 +157,7 @@ public sealed class MapTitleFeatureDto
     public float X { get; set; }
     public float Y { get; set; }
     public bool IsStaged { get; set; }
+    public List<MapPointDto> Points { get; set; } = new();
 }
 
 public sealed class MapViewStateDto
