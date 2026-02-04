@@ -27,7 +27,7 @@
                 @foreach (var tool in ToolDefinitions)
                 {
                     <button class="btn btn-sm @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
-                            disabled="@(tool.Tool == MapToolType.Undo && !CanUndo)"
+                            disabled="@(tool.Tool == MapToolType.Undo && !CanUndo || tool.Tool == MapToolType.Redo && !CanRedo)"
                             @onclick="() => SelectTool(tool.Tool)">
                         @tool.Label
                     </button>
@@ -249,9 +249,12 @@
     private bool _hasMap;
     private string _statusMessage = string.Empty;
     private readonly List<UndoState> _undoStack = new();
+    private readonly List<UndoState> _redoStack = new();
     private UndoBatchKind _undoBatchKind = UndoBatchKind.None;
     private bool _undoBatchPushed;
     private bool _isUndoing;
+    private bool _isRedoing;
+    private DotNetObjectReference<MapEditor>? _undoShortcutRef;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
     private readonly Dictionary<PlacementType, string> _selectedStyleByPlacement = new()
@@ -336,6 +339,7 @@
         + _deletedHouseIds.Count
         + _deletedTitleIds.Count;
     private bool CanUndo => _undoStack.Count > 0;
+    private bool CanRedo => _redoStack.Count > 0;
     [Parameter] public int MapId { get; set; }
     private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
@@ -401,7 +405,8 @@
         new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", true),
         new(MapToolType.Edit, "Edit", "Move or update an existing feature.", true),
         new(MapToolType.Duplicate, "Duplicate", "Clone an existing feature.", true),
-        new(MapToolType.Undo, "Undo", "Undo the most recent change.", true)
+        new(MapToolType.Undo, "Undo", "Undo the most recent change.", true),
+        new(MapToolType.Redo, "Redo", "Redo the most recent undone change.", true)
     };
     private ToolDefinition ActiveToolDefinition => ToolDefinitions.First(tool => tool.Tool == _activeTool);
     private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
@@ -454,6 +459,8 @@
         if (firstRender)
         {
             await UpdateCanvasClientSizeAsync();
+            _undoShortcutRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("inkAndRealmDemo.registerUndoShortcut", CanvasId, _undoShortcutRef);
             await DrawAsync();
         }
     }
@@ -1360,6 +1367,7 @@
             return;
         }
 
+        _redoStack.Add(CaptureUndoState());
         _isUndoing = true;
         _undoBatchKind = UndoBatchKind.None;
         _undoBatchPushed = false;
@@ -1370,6 +1378,28 @@
         ClearEditSelection(true);
         _statusMessage = "Undo complete.";
         _isUndoing = false;
+        await DrawAsync();
+    }
+
+    private async Task PerformRedoAsync()
+    {
+        if (_redoStack.Count == 0)
+        {
+            _statusMessage = "Nothing to redo.";
+            return;
+        }
+
+        _undoStack.Add(CaptureUndoState());
+        _isRedoing = true;
+        _undoBatchKind = UndoBatchKind.None;
+        _undoBatchPushed = false;
+
+        var state = _redoStack[^1];
+        _redoStack.RemoveAt(_redoStack.Count - 1);
+        ApplyUndoState(state);
+        ClearEditSelection(true);
+        _statusMessage = "Redo complete.";
+        _isRedoing = false;
         await DrawAsync();
     }
 
@@ -1432,6 +1462,12 @@
         _isLoading = false;
     }
 
+    [JSInvokable]
+    public Task HandleUndoShortcut()
+    {
+        return PerformUndoAsync();
+    }
+
     private async Task DrawAsync()
     {
         var renderState = BuildRenderState();
@@ -1461,6 +1497,11 @@
         if (tool == MapToolType.Undo)
         {
             await PerformUndoAsync();
+            return;
+        }
+        if (tool == MapToolType.Redo)
+        {
+            await PerformRedoAsync();
             return;
         }
 
@@ -1750,6 +1791,12 @@
     public void Dispose()
     {
         UserState.Changed -= OnUserChanged;
+        if (_undoShortcutRef is not null)
+        {
+            _ = JS.InvokeVoidAsync("inkAndRealmDemo.unregisterUndoShortcut", CanvasId);
+            _undoShortcutRef.Dispose();
+            _undoShortcutRef = null;
+        }
     }
 
     private void ClearStaged()
@@ -1782,6 +1829,7 @@
     private void ClearUndoHistory()
     {
         _undoStack.Clear();
+        _redoStack.Clear();
         _undoBatchKind = UndoBatchKind.None;
         _undoBatchPushed = false;
     }
@@ -1818,6 +1866,11 @@
         if (_undoBatchKind != UndoBatchKind.None && _undoBatchPushed)
         {
             return;
+        }
+
+        if (!_isRedoing && _redoStack.Count > 0)
+        {
+            _redoStack.Clear();
         }
 
         _undoStack.Add(CaptureUndoState());
@@ -3529,7 +3582,8 @@
         Eraser,
         Edit,
         Duplicate,
-        Undo
+        Undo,
+        Redo
     }
 
     private enum UndoBatchKind

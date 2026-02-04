@@ -886,6 +886,66 @@ window.inkAndRealmDemo = {
             width: rect.width,
             height: rect.height
         };
+    },
+    registerUndoShortcut: (key, dotNetRef) => {
+        if (!key || !dotNetRef) {
+            return;
+        }
+
+        if (!window.__inkAndRealmUndoHandlers) {
+            window.__inkAndRealmUndoHandlers = new Map();
+        }
+
+        const existing = window.__inkAndRealmUndoHandlers.get(key);
+        if (existing) {
+            window.removeEventListener("keydown", existing);
+        }
+
+        const isEditableTarget = (target) => {
+            if (!target) {
+                return false;
+            }
+
+            if (target.isContentEditable) {
+                return true;
+            }
+
+            const tag = (target.tagName || "").toLowerCase();
+            return tag === "input" || tag === "textarea" || tag === "select";
+        };
+
+        const handler = (event) => {
+            if (!event) {
+                return;
+            }
+
+            if (!(event.ctrlKey || event.metaKey)) {
+                return;
+            }
+
+            if (isEditableTarget(event.target)) {
+                return;
+            }
+
+            if (event.key === "z" || event.key === "Z") {
+                event.preventDefault();
+                dotNetRef.invokeMethodAsync("HandleUndoShortcut");
+            }
+        };
+
+        window.addEventListener("keydown", handler);
+        window.__inkAndRealmUndoHandlers.set(key, handler);
+    },
+    unregisterUndoShortcut: (key) => {
+        if (!window.__inkAndRealmUndoHandlers || !key) {
+            return;
+        }
+
+        const handler = window.__inkAndRealmUndoHandlers.get(key);
+        if (handler) {
+            window.removeEventListener("keydown", handler);
+            window.__inkAndRealmUndoHandlers.delete(key);
+        }
     }
 };
 
