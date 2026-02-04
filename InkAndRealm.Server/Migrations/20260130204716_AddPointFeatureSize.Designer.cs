@@ -343,6 +343,9 @@ namespace InkAndRealm.Server.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("TargetFeatureId")
+                        .HasColumnType("int");
+
                     b.ToTable("Features", t =>
                         {
                             t.Property("Name")

@@ -11,6 +11,7 @@ namespace InkAndRealm.Server.Controllers;
 public sealed class DemoMapController : ControllerBase
 {
     private const string DefaultMapName = "Untitled Map";
+    private const int TitleNameMaxLength = 128;
     private readonly DemoMapContext _context;
 
     public DemoMapController(DemoMapContext context)
@@ -181,6 +182,21 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.AddedTitles is not null && request.AddedTitles.Count > 0)
+        {
+            foreach (var title in request.AddedTitles)
+            {
+                if (title is null)
+                {
+                    continue;
+                }
+
+                map.Features.Add(CreateTitleFeature(title));
+            }
+
+            hasChanges = true;
+        }
+
         if (request.DeletedTreeIds is not null && request.DeletedTreeIds.Count > 0)
         {
             var deletedSet = request.DeletedTreeIds
@@ -197,7 +213,24 @@ public sealed class DemoMapController : ControllerBase
                     map.Features.Remove(feature);
                 }
 
-                hasChanges = hasChanges || featuresToRemove.Count > 0;
+                if (featuresToRemove.Count > 0)
+                {
+                    var titleRemovals = map.Features
+                        .OfType<TitleFeatureEntity>()
+                        .Where(title => title.TargetFeatureId.HasValue
+                            && deletedSet.Contains(title.TargetFeatureId.Value))
+                        .ToList();
+                    foreach (var title in titleRemovals)
+                    {
+                        map.Features.Remove(title);
+                    }
+
+                    hasChanges = true;
+                }
+                else
+                {
+                    hasChanges = hasChanges || featuresToRemove.Count > 0;
+                }
             }
         }
 
@@ -210,6 +243,43 @@ public sealed class DemoMapController : ControllerBase
             {
                 var featuresToRemove = map.Features
                     .OfType<HouseFeatureEntity>()
+                    .Where(feature => deletedSet.Contains(feature.Id))
+                    .ToList();
+                foreach (var feature in featuresToRemove)
+                {
+                    map.Features.Remove(feature);
+                }
+
+                if (featuresToRemove.Count > 0)
+                {
+                    var titleRemovals = map.Features
+                        .OfType<TitleFeatureEntity>()
+                        .Where(title => title.TargetFeatureId.HasValue
+                            && deletedSet.Contains(title.TargetFeatureId.Value))
+                        .ToList();
+                    foreach (var title in titleRemovals)
+                    {
+                        map.Features.Remove(title);
+                    }
+
+                    hasChanges = true;
+                }
+                else
+                {
+                    hasChanges = hasChanges || featuresToRemove.Count > 0;
+                }
+            }
+        }
+
+        if (request.DeletedTitleIds is not null && request.DeletedTitleIds.Count > 0)
+        {
+            var deletedSet = request.DeletedTitleIds
+                .Where(id => id > 0)
+                .ToHashSet();
+            if (deletedSet.Count > 0)
+            {
+                var featuresToRemove = map.Features
+                    .OfType<TitleFeatureEntity>()
                     .Where(feature => deletedSet.Contains(feature.Id))
                     .ToList();
                 foreach (var feature in featuresToRemove)
@@ -340,6 +410,41 @@ public sealed class DemoMapController : ControllerBase
                     Y = house.Y,
                     SortOrder = 0
                 });
+
+                hasChanges = true;
+            }
+        }
+
+        if (request.UpdatedTitles is not null && request.UpdatedTitles.Count > 0)
+        {
+            foreach (var title in request.UpdatedTitles)
+            {
+                if (title is null || title.Id <= 0)
+                {
+                    continue;
+                }
+
+                var feature = map.Features
+                    .OfType<TitleFeatureEntity>()
+                    .FirstOrDefault(existing => existing.Id == title.Id);
+                if (feature is null)
+                {
+                    continue;
+                }
+
+                feature.Name = NormalizeTitleName(title.Name);
+                feature.Description = string.IsNullOrWhiteSpace(title.Description) ? null : title.Description.Trim();
+
+                if (!feature.TargetFeatureId.HasValue)
+                {
+                    feature.Points.Clear();
+                    feature.Points.Add(new FeaturePointEntity
+                    {
+                        X = title.X,
+                        Y = title.Y,
+                        SortOrder = 0
+                    });
+                }
 
                 hasChanges = true;
             }
@@ -535,6 +640,33 @@ public sealed class DemoMapController : ControllerBase
         };
     }
 
+    private static TitleFeatureEntity CreateTitleFeature(TitleFeatureDto title)
+    {
+        var name = NormalizeTitleName(title.Name);
+        var description = string.IsNullOrWhiteSpace(title.Description) ? null : title.Description.Trim();
+
+        var targetId = title.TargetFeatureId.HasValue && title.TargetFeatureId.Value > 0
+            ? title.TargetFeatureId
+            : null;
+
+        var feature = new TitleFeatureEntity
+        {
+            Name = name,
+            Description = description,
+            TargetFeatureId = targetId,
+            ZIndex = 0
+        };
+
+        feature.Points.Add(new FeaturePointEntity
+        {
+            X = title.X,
+            Y = title.Y,
+            SortOrder = 0
+        });
+
+        return feature;
+    }
+
     private static WaterFeatureEntity CreateWaterFeature(AreaPolygonDto polygon)
     {
         var feature = new WaterFeatureEntity
@@ -649,6 +781,28 @@ public sealed class DemoMapController : ControllerBase
                 })
                 .ToList();
 
+        var titles = map.Features
+            .OfType<TitleFeatureEntity>()
+            .Select(title =>
+            {
+                var point = title.Points.OrderBy(p => p.SortOrder).FirstOrDefault();
+                var targetPoint = title.TargetFeatureId.HasValue
+                    ? map.Features.FirstOrDefault(feature => feature.Id == title.TargetFeatureId.Value)?
+                        .Points.OrderBy(p => p.SortOrder).FirstOrDefault()
+                    : null;
+
+                return new TitleFeatureDto
+                {
+                    Id = title.Id,
+                    Name = title.Name,
+                    Description = title.Description,
+                    TargetFeatureId = title.TargetFeatureId,
+                    X = targetPoint?.X ?? point?.X ?? 0f,
+                    Y = targetPoint?.Y ?? point?.Y ?? 0f
+                };
+            })
+            .ToList();
+
         return new MapDto
         {
             Id = map.Id,
@@ -685,9 +839,21 @@ public sealed class DemoMapController : ControllerBase
                     };
                 })
                 .ToList(),
+            Titles = titles,
             AreaLayers = persistedLayers,
             AreaPolygons = areaPolygons
         };
+    }
+
+    private static string NormalizeTitleName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Untitled";
+        }
+
+        var trimmed = name.Trim();
+        return trimmed.Length <= TitleNameMaxLength ? trimmed : trimmed[..TitleNameMaxLength];
     }
 
     private static float NormalizePointSize(float size)

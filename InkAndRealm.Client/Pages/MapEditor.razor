@@ -217,8 +217,10 @@
     private const string CanvasId = "map-demo-canvas";
     private List<TreeFeatureDto> _trees = new();
     private List<HouseFeatureDto> _houses = new();
+    private List<TitleFeatureDto> _titles = new();
     private readonly List<TreeFeatureDto> _stagedTrees = new();
     private readonly List<HouseFeatureDto> _stagedHouses = new();
+    private readonly List<TitleFeatureDto> _stagedTitles = new();
     private const float MapWidth = 2000f;
     private const float MapHeight = 1200f;
     private const float MinZoom = 0.5f;
@@ -252,7 +254,8 @@
         { PlacementType.Tree, "Oak" },
         { PlacementType.House, "Cottage" },
         { PlacementType.Water, "Water" },
-        { PlacementType.Land, "Land" }
+        { PlacementType.Land, "Land" },
+        { PlacementType.Title, "Title" }
     };
     private MapToolType _activeTool = MapToolType.Point;
     private bool _isBrushing;
@@ -277,6 +280,7 @@
     private const float PointSizeMin = 0.1f;
     private const float PointSizeMax = 5f;
     private const float PointSizeStep = 0.1f;
+    private const int TitleNameMaxLength = 128;
     private const float EraseMinSpacing = 8f;
     private const float PolygonMinSpacing = 18f;
     private const float PolygonMaxSpacing = 120f;
@@ -294,8 +298,10 @@
     private readonly HashSet<int> _deletedLandPolygonIds = new();
     private readonly Dictionary<int, TreeFeatureDto> _editedTrees = new();
     private readonly Dictionary<int, HouseFeatureDto> _editedHouses = new();
+    private readonly Dictionary<int, TitleFeatureDto> _editedTitles = new();
     private readonly HashSet<int> _deletedTreeIds = new();
     private readonly HashSet<int> _deletedHouseIds = new();
+    private readonly HashSet<int> _deletedTitleIds = new();
     private AreaPolygonDto? _editingPolygon;
     private List<MapPointDto>? _editingOriginalPoints;
     private int _editingPointIndex = -1;
@@ -304,10 +310,14 @@
     private EditingPointFeature? _editingPointFeature;
     private MapPointDto? _editingPointOriginalPosition;
     private bool _isDraggingEditPointFeature;
+    private EditingTitleFeature? _editingTitleFeature;
+    private MapPointDto? _editingTitleOriginalPosition;
+    private bool _isDraggingTitleFeature;
     private EraserTarget _eraserTarget = EraserTarget.All;
     private bool _useChaoticLandEdges = true;
     private int PendingCount => _stagedTrees.Count
         + _stagedHouses.Count
+        + _stagedTitles.Count
         + _stagedWaterPolygons.Count
         + _editedWaterPolygons.Count
         + _deletedWaterPolygonIds.Count
@@ -316,8 +326,10 @@
         + _deletedLandPolygonIds.Count
         + _editedTrees.Count
         + _editedHouses.Count
+        + _editedTitles.Count
         + _deletedTreeIds.Count
-        + _deletedHouseIds.Count;
+        + _deletedHouseIds.Count
+        + _deletedTitleIds.Count;
     [Parameter] public int MapId { get; set; }
     private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
@@ -341,10 +353,15 @@
     {
         "Land"
     };
+    private static readonly IReadOnlyList<string> TitleStyles = new List<string>
+    {
+        "Title"
+    };
     private static readonly IReadOnlyList<PlacementDefinition> PlacementDefinitions = new List<PlacementDefinition>
     {
         new(PlacementType.Tree, "Tree", "/assets/Summer%20Set/tree_1.png"),
         new(PlacementType.House, "House", "/assets/Summer%20Set/building_2.png"),
+        new(PlacementType.Title, "Title", "/assets/Summer%20Set/decor_1.png"),
         new(PlacementType.Land, "Land", "/assets/Summer%20Set/land_1.png"),
         new(PlacementType.Water, "Water", "/assets/Summer%20Set/river.png")
     };
@@ -360,6 +377,7 @@
     {
         new(PlacementType.Tree, "Tree Style", TreeStyles),
         new(PlacementType.House, "House Style", HouseStyles),
+        new(PlacementType.Title, "Title", TitleStyles),
         new(PlacementType.Land, "Land Type", LandStyles),
         new(PlacementType.Water, "Water Type", WaterStyles)
     };
@@ -461,6 +479,12 @@
                 return;
             }
 
+            if (_placementType == PlacementType.Title)
+            {
+                _statusMessage = "Titles can only be placed with the Point or Polygon tool.";
+                return;
+            }
+
             if (_placementType == PlacementType.Land)
             {
                 _statusMessage = "Land can only be placed with the Polygon tool.";
@@ -531,6 +555,23 @@
                 }
             }
 
+            if (_placementType == PlacementType.Title)
+            {
+                var titleFeature = FindTitleFeatureAtPoint(mapX, mapY, hitRadius);
+                if (titleFeature is not null)
+                {
+                    ClearEditSelection(true);
+                    _editingTitleFeature = titleFeature;
+                    _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
+                    _isDraggingTitleFeature = !titleFeature.Title.TargetFeatureId.HasValue;
+                    _statusMessage = _isDraggingTitleFeature
+                        ? "Moving title..."
+                        : "Title selected. Right-click to edit name.";
+                    await DrawAsync();
+                    return;
+                }
+            }
+
             var pointFeature = FindPointFeatureAtPoint(mapX, mapY, hitRadius);
             if (pointFeature is not null)
             {
@@ -541,6 +582,23 @@
                 _statusMessage = "Moving point feature...";
                 await DrawAsync();
                 return;
+            }
+
+            if (_placementType != PlacementType.Title)
+            {
+                var titleFeature = FindTitleFeatureAtPoint(mapX, mapY, hitRadius);
+                if (titleFeature is not null)
+                {
+                    ClearEditSelection(true);
+                    _editingTitleFeature = titleFeature;
+                    _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
+                    _isDraggingTitleFeature = !titleFeature.Title.TargetFeatureId.HasValue;
+                    _statusMessage = _isDraggingTitleFeature
+                        ? "Moving title..."
+                        : "Title selected. Right-click to edit name.";
+                    await DrawAsync();
+                    return;
+                }
             }
 
             if (IsPointPlacement(_placementType))
@@ -651,6 +709,22 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Edit && _isDraggingTitleFeature && _editingTitleFeature is not null)
+        {
+            if (!TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                return;
+            }
+
+            if (!_editingTitleFeature.Title.TargetFeatureId.HasValue)
+            {
+                _editingTitleFeature.Title.X = mapX;
+                _editingTitleFeature.Title.Y = mapY;
+                await DrawAsync();
+            }
+            return;
+        }
+
         if (_activeTool == MapToolType.Edit && _isDraggingEditPoint && _editingPolygon is not null && _editingPointIndex >= 0)
         {
             if (!TryGetMapPoint(args, out var mapX, out var mapY))
@@ -747,6 +821,13 @@
             return;
         }
 
+        if (_activeTool == MapToolType.Edit && _isDraggingTitleFeature)
+        {
+            _isDraggingTitleFeature = false;
+            _statusMessage = "Title updated. Right-click to confirm.";
+            return;
+        }
+
         return;
     }
 
@@ -768,6 +849,21 @@
                 _statusMessage = "Point feature edit confirmed.";
                 await DrawAsync();
             }
+            else if (_editingTitleFeature is not null)
+            {
+                var updated = await PromptTitleRenameAsync(_editingTitleFeature.Title);
+                if (updated)
+                {
+                    TrackEditedTitleFeature(_editingTitleFeature);
+                    _statusMessage = "Title updated.";
+                }
+                else
+                {
+                    _statusMessage = "Title edit canceled.";
+                }
+                ClearEditSelection(true);
+                await DrawAsync();
+            }
             return;
         }
 
@@ -784,7 +880,16 @@
             return;
         }
 
-        if (IsPointPlacement(_placementType))
+        if (_placementType == PlacementType.Title)
+        {
+            var centroid = GetPolygonCentroid(_activePolygonPoints);
+            var placed = await PlaceTitleAtPointAsync(centroid.X, centroid.Y, allowTargetSearch: false);
+            _activePolygonPoints.Clear();
+            _statusMessage = placed
+                ? "Title placed for area (unsaved)."
+                : "Title placement canceled.";
+        }
+        else if (IsPointPlacement(_placementType))
         {
             var placedCount = PlacePolygonPointFeatures(_activePolygonPoints);
             _activePolygonPoints.Clear();
@@ -867,6 +972,12 @@
         if (_activeTool == MapToolType.Edit && _isDraggingEditPointFeature)
         {
             _isDraggingEditPointFeature = false;
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && _isDraggingTitleFeature)
+        {
+            _isDraggingTitleFeature = false;
             return;
         }
 
@@ -965,6 +1076,18 @@
 
     private async Task HandlePointToolAsync(MouseEventArgs args)
     {
+        if (_placementType == PlacementType.Title)
+        {
+            if (!TryGetMapPoint(args, out var titleMapX, out var titleMapY))
+            {
+                return;
+            }
+
+            await PlaceTitleAtPointAsync(titleMapX, titleMapY);
+            await DrawAsync();
+            return;
+        }
+
         if (_placementType == PlacementType.Land)
         {
             _statusMessage = "Land can only be placed with the Polygon tool.";
@@ -1098,10 +1221,13 @@
                 .ToList(),
             AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
             AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
+            AddedTitles = new List<TitleFeatureDto>(_stagedTitles),
             UpdatedTrees = _editedTrees.Values.ToList(),
             UpdatedHouses = _editedHouses.Values.ToList(),
+            UpdatedTitles = _editedTitles.Values.ToList(),
             DeletedTreeIds = _deletedTreeIds.ToList(),
             DeletedHouseIds = _deletedHouseIds.ToList(),
+            DeletedTitleIds = _deletedTitleIds.ToList(),
             AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons),
             DeletedWaterPolygonIds = _deletedWaterPolygonIds.ToList(),
             UpdatedWaterPolygons = _editedWaterPolygons.Values
@@ -1121,6 +1247,7 @@
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
             _trees = map?.Trees ?? new List<TreeFeatureDto>();
             _houses = map?.Houses ?? new List<HouseFeatureDto>();
+            _titles = map?.Titles ?? new List<TitleFeatureDto>();
             _waterPolygons.Clear();
             _landPolygons.Clear();
             LoadAreaPolygons(map);
@@ -1130,11 +1257,14 @@
             _deletedLandPolygonIds.Clear();
             _editedTrees.Clear();
             _editedHouses.Clear();
+            _editedTitles.Clear();
             _deletedTreeIds.Clear();
             _deletedHouseIds.Clear();
+            _deletedTitleIds.Clear();
             LoadAreaLayers(map);
             _stagedTrees.Clear();
             _stagedHouses.Clear();
+            _stagedTitles.Clear();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             ClearEditSelection(true);
             await DrawAsync();
@@ -1162,6 +1292,7 @@
         {
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
+            _titles = new List<TitleFeatureDto>();
             _waterPolygons.Clear();
             _landPolygons.Clear();
             _hasMap = false;
@@ -1176,6 +1307,7 @@
         {
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
+            _titles = new List<TitleFeatureDto>();
             _waterPolygons.Clear();
             _landPolygons.Clear();
             _hasMap = false;
@@ -1189,6 +1321,7 @@
         var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
+        _titles = map?.Titles ?? new List<TitleFeatureDto>();
         _waterPolygons.Clear();
         _landPolygons.Clear();
         LoadAreaPolygons(map);
@@ -1512,6 +1645,7 @@
     {
         _stagedTrees.Clear();
         _stagedHouses.Clear();
+        _stagedTitles.Clear();
         _stagedWaterPolygons.Clear();
         _stagedLandPolygons.Clear();
         _editedWaterPolygons.Clear();
@@ -1520,8 +1654,10 @@
         _deletedLandPolygonIds.Clear();
         _editedTrees.Clear();
         _editedHouses.Clear();
+        _editedTitles.Clear();
         _deletedTreeIds.Clear();
         _deletedHouseIds.Clear();
+        _deletedTitleIds.Clear();
         _activePolygonPoints.Clear();
         ClearEditSelection(false);
         _hasLastPlacement = false;
@@ -1580,6 +1716,11 @@
         return placementType == PlacementType.Tree || placementType == PlacementType.House;
     }
 
+    private static bool IsTitlePlacement(PlacementType placementType)
+    {
+        return placementType == PlacementType.Title;
+    }
+
     private static bool IsLandFeatureType(string? featureType)
     {
         return string.Equals(featureType, "Land", StringComparison.OrdinalIgnoreCase);
@@ -1598,6 +1739,17 @@
     private static float NormalizePointSize(float size)
     {
         return float.IsFinite(size) && size > 0f ? size : 1f;
+    }
+
+    private static string NormalizeTitleName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Untitled";
+        }
+
+        var trimmed = name.Trim();
+        return trimmed.Length <= TitleNameMaxLength ? trimmed : trimmed[..TitleNameMaxLength];
     }
 
     private float GetCanvasScaleX()
@@ -1624,6 +1776,12 @@
             UpdatePointFeaturePosition(_editingPointFeature, _editingPointOriginalPosition.X, _editingPointOriginalPosition.Y);
         }
 
+        if (!keepChanges && _editingTitleFeature is not null && _editingTitleOriginalPosition is not null)
+        {
+            _editingTitleFeature.Title.X = _editingTitleOriginalPosition.X;
+            _editingTitleFeature.Title.Y = _editingTitleOriginalPosition.Y;
+        }
+
         _editingPolygon = null;
         _editingOriginalPoints = null;
         _editingPointIndex = -1;
@@ -1632,6 +1790,9 @@
         _editingPointFeature = null;
         _editingPointOriginalPosition = null;
         _isDraggingEditPointFeature = false;
+        _editingTitleFeature = null;
+        _editingTitleOriginalPosition = null;
+        _isDraggingTitleFeature = false;
     }
 
     private void TrackEditedPolygon(AreaPolygonDto polygon)
@@ -1673,6 +1834,16 @@
 
             _editedHouses[feature.House.Id] = feature.House;
         }
+    }
+
+    private void TrackEditedTitleFeature(EditingTitleFeature feature)
+    {
+        if (feature.IsStaged || feature.Title.Id <= 0)
+        {
+            return;
+        }
+
+        _editedTitles[feature.Title.Id] = feature.Title;
     }
 
     private static AreaPolygonDto ClonePolygon(AreaPolygonDto polygon)
@@ -1753,6 +1924,23 @@
         }
 
         var hitRadius = GetEditHitRadius();
+        if (_placementType == PlacementType.Title)
+        {
+            var titleFeature = FindTitleFeatureAtPoint(mapX, mapY, hitRadius);
+            if (titleFeature is not null)
+            {
+                var placed = DuplicateTitleFeature(titleFeature);
+                _statusMessage = placed
+                    ? "Title duplicated (unsaved)."
+                    : "Duplicate failed (feature out of bounds).";
+                if (placed)
+                {
+                    await DrawAsync();
+                }
+                return;
+            }
+        }
+
         var pointFeature = FindPointFeatureAtPoint(mapX, mapY, hitRadius);
         if (pointFeature is not null)
         {
@@ -1765,6 +1953,23 @@
                 await DrawAsync();
             }
             return;
+        }
+
+        if (_placementType != PlacementType.Title)
+        {
+            var titleFeature = FindTitleFeatureAtPoint(mapX, mapY, hitRadius);
+            if (titleFeature is not null)
+            {
+                var placed = DuplicateTitleFeature(titleFeature);
+                _statusMessage = placed
+                    ? "Title duplicated (unsaved)."
+                    : "Duplicate failed (feature out of bounds).";
+                if (placed)
+                {
+                    await DrawAsync();
+                }
+                return;
+            }
         }
 
         var polygon = FindPolygonAtPoint(mapX, mapY, false);
@@ -1810,6 +2015,23 @@
         }
 
         return false;
+    }
+
+    private bool DuplicateTitleFeature(EditingTitleFeature feature)
+    {
+        var clone = CloneDto(feature.Title);
+        clone.Id = 0;
+
+        if (!clone.TargetFeatureId.HasValue)
+        {
+            var position = GetTitlePosition(feature.Title);
+            var (newX, newY) = GetAdjacentPoint(position.X, position.Y);
+            clone.X = newX;
+            clone.Y = newY;
+        }
+
+        _stagedTitles.Add(clone);
+        return true;
     }
 
     private void DuplicatePolygon(AreaPolygonDto polygon)
@@ -1988,6 +2210,7 @@
                 }
                 _editedTrees.Remove(feature.Tree.Id);
                 _trees.Remove(feature.Tree);
+                RemoveTitlesForTargetFeature(feature.Tree.Id);
             }
 
             status = "Tree erased (unsaved).";
@@ -2008,6 +2231,7 @@
                 }
                 _editedHouses.Remove(feature.House.Id);
                 _houses.Remove(feature.House);
+                RemoveTitlesForTargetFeature(feature.House.Id);
             }
 
             status = "House erased (unsaved).";
@@ -2015,6 +2239,67 @@
         }
 
         return false;
+    }
+
+    private bool TryEraseTitleAtPoint(float mapX, float mapY, out string? status)
+    {
+        status = null;
+        var title = FindTitleFeatureAtPoint(mapX, mapY, GetEditHitRadius());
+        if (title is null)
+        {
+            return false;
+        }
+
+        if (_editingTitleFeature is not null && _editingTitleFeature.Title == title.Title)
+        {
+            ClearEditSelection(true);
+        }
+
+        if (title.IsStaged)
+        {
+            _stagedTitles.Remove(title.Title);
+        }
+        else
+        {
+            if (title.Title.Id > 0)
+            {
+                _deletedTitleIds.Add(title.Title.Id);
+            }
+            _editedTitles.Remove(title.Title.Id);
+            _titles.Remove(title.Title);
+        }
+
+        status = "Title erased (unsaved).";
+        return true;
+    }
+
+    private void RemoveTitlesForTargetFeature(int featureId)
+    {
+        if (featureId <= 0)
+        {
+            return;
+        }
+
+        var stagedMatches = _stagedTitles
+            .Where(title => title.TargetFeatureId == featureId)
+            .ToList();
+        foreach (var title in stagedMatches)
+        {
+            _stagedTitles.Remove(title);
+        }
+
+        var matches = _titles
+            .Where(title => title.TargetFeatureId == featureId)
+            .ToList();
+        foreach (var title in matches)
+        {
+            _titles.Remove(title);
+            if (title.Id > 0)
+            {
+                _deletedTitleIds.Add(title.Id);
+            }
+            _editedTitles.Remove(title.Id);
+        }
     }
 
     private bool TryEraseAtPoint(float mapX, float mapY, out string? status, bool showEmptyStatus)
@@ -2073,7 +2358,12 @@
             return erased;
         }
 
-        erased = TryErasePointFeatureAtPoint(mapX, mapY, EraserTarget.All, out status);
+        erased = TryEraseTitleAtPoint(mapX, mapY, out status);
+        if (!erased)
+        {
+            erased = TryErasePointFeatureAtPoint(mapX, mapY, EraserTarget.All, out status);
+        }
+
         if (!erased)
         {
             EnsureAreaLayers();
@@ -2201,6 +2491,44 @@
         return best;
     }
 
+    private EditingTitleFeature? FindTitleFeatureAtPoint(float mapX, float mapY, float threshold)
+    {
+        var thresholdSquared = threshold * threshold;
+        EditingTitleFeature? best = null;
+        var bestDistance = float.MaxValue;
+
+        void ConsiderTitle(TitleFeatureDto title, bool isStaged)
+        {
+            var position = GetTitlePosition(title);
+            var dx = position.X - mapX;
+            var dy = position.Y - mapY;
+            var distance = (dx * dx) + (dy * dy);
+            if (distance > thresholdSquared || distance >= bestDistance)
+            {
+                return;
+            }
+
+            bestDistance = distance;
+            best = new EditingTitleFeature
+            {
+                Title = title,
+                IsStaged = isStaged
+            };
+        }
+
+        foreach (var title in _titles)
+        {
+            ConsiderTitle(title, false);
+        }
+
+        foreach (var title in _stagedTitles)
+        {
+            ConsiderTitle(title, true);
+        }
+
+        return best;
+    }
+
     private static MapPointDto? GetPointFeaturePosition(EditingPointFeature feature)
     {
         if (feature.Tree is not null)
@@ -2214,6 +2542,27 @@
         }
 
         return null;
+    }
+
+    private MapPointDto GetTitlePosition(TitleFeatureDto title)
+    {
+        if (title.TargetFeatureId.HasValue)
+        {
+            var targetId = title.TargetFeatureId.Value;
+            var tree = _trees.FirstOrDefault(candidate => candidate.Id == targetId);
+            if (tree is not null)
+            {
+                return new MapPointDto { X = tree.X, Y = tree.Y };
+            }
+
+            var house = _houses.FirstOrDefault(candidate => candidate.Id == targetId);
+            if (house is not null)
+            {
+                return new MapPointDto { X = house.X, Y = house.Y };
+            }
+        }
+
+        return new MapPointDto { X = title.X, Y = title.Y };
     }
 
     private static void UpdatePointFeaturePosition(EditingPointFeature feature, float mapX, float mapY)
@@ -2377,6 +2726,81 @@
                 Size = selectedSize
             });
         }
+    }
+
+    private async Task<bool> PlaceTitleAtPointAsync(float mapX, float mapY, bool allowTargetSearch = true)
+    {
+        int? targetId = null;
+
+        if (allowTargetSearch)
+        {
+            var hitRadius = GetEditHitRadius();
+            var target = FindPointFeatureAtPoint(mapX, mapY, hitRadius, EraserTarget.All, false);
+            if (target is null)
+            {
+                _statusMessage = "Click a tree or house to attach a title, or use Polygon for area titles.";
+                return false;
+            }
+
+            var targetIdValue = target.Tree?.Id ?? target.House?.Id ?? 0;
+            if (target.IsStaged || targetIdValue <= 0)
+            {
+                _statusMessage = "Save the feature before adding a title.";
+                return false;
+            }
+
+            targetId = targetIdValue;
+            var targetPosition = GetPointFeaturePosition(target);
+            if (targetPosition is not null)
+            {
+                mapX = targetPosition.X;
+                mapY = targetPosition.Y;
+            }
+        }
+
+        var name = await PromptTitleNameAsync("New Title");
+        if (name is null)
+        {
+            _statusMessage = "Title placement canceled.";
+            return false;
+        }
+
+        var title = new TitleFeatureDto
+        {
+            X = mapX,
+            Y = mapY,
+            Name = name,
+            TargetFeatureId = targetId
+        };
+        _lastX = mapX;
+        _lastY = mapY;
+        _hasLastPlacement = true;
+        _stagedTitles.Add(title);
+        _statusMessage = "Title placed (unsaved).";
+        return true;
+    }
+
+    private async Task<string?> PromptTitleNameAsync(string initialName)
+    {
+        var result = await JS.InvokeAsync<string?>("prompt", "Title name:", initialName);
+        if (result is null)
+        {
+            return null;
+        }
+
+        return NormalizeTitleName(result);
+    }
+
+    private async Task<bool> PromptTitleRenameAsync(TitleFeatureDto title)
+    {
+        var result = await JS.InvokeAsync<string?>("prompt", "Edit title name:", title.Name);
+        if (result is null)
+        {
+            return false;
+        }
+
+        title.Name = NormalizeTitleName(result);
+        return true;
     }
 
     private int PlacePolygonPointFeatures(IReadOnlyList<MapPointDto> points)
@@ -2584,9 +3008,49 @@
         return inside;
     }
 
+    private static MapPointDto GetPolygonCentroid(IReadOnlyList<MapPointDto> points)
+    {
+        if (points is null || points.Count == 0)
+        {
+            return new MapPointDto();
+        }
+
+        if (points.Count == 1)
+        {
+            return new MapPointDto { X = points[0].X, Y = points[0].Y };
+        }
+
+        float area = 0f;
+        float cx = 0f;
+        float cy = 0f;
+
+        for (var i = 0; i < points.Count; i += 1)
+        {
+            var j = (i + 1) % points.Count;
+            var p1 = points[i];
+            var p2 = points[j];
+            var cross = (p1.X * p2.Y) - (p2.X * p1.Y);
+            area += cross;
+            cx += (p1.X + p2.X) * cross;
+            cy += (p1.Y + p2.Y) * cross;
+        }
+
+        area *= 0.5f;
+        if (MathF.Abs(area) < 0.001f)
+        {
+            var avgX = points.Average(point => point.X);
+            var avgY = points.Average(point => point.Y);
+            return new MapPointDto { X = avgX, Y = avgY };
+        }
+
+        var factor = 1f / (6f * area);
+        return new MapPointDto { X = cx * factor, Y = cy * factor };
+    }
+
     private MapRenderStateDto BuildRenderState()
     {
         var pointFeatures = new List<MapPointFeatureDto>();
+        var titleFeatures = new List<MapTitleFeatureDto>();
 
         foreach (var tree in _trees)
         {
@@ -2640,9 +3104,36 @@
             });
         }
 
+        foreach (var title in _titles)
+        {
+            var position = GetTitlePosition(title);
+            titleFeatures.Add(new MapTitleFeatureDto
+            {
+                Id = title.Id,
+                Name = title.Name,
+                X = position.X,
+                Y = position.Y,
+                IsStaged = false
+            });
+        }
+
+        foreach (var title in _stagedTitles)
+        {
+            var position = GetTitlePosition(title);
+            titleFeatures.Add(new MapTitleFeatureDto
+            {
+                Id = title.Id,
+                Name = title.Name,
+                X = position.X,
+                Y = position.Y,
+                IsStaged = true
+            });
+        }
+
         return new MapRenderStateDto
         {
             PointFeatures = pointFeatures,
+            TitleFeatures = titleFeatures,
             AreaLayers = _areaLayers
                 .OrderBy(layer => layer.LayerIndex)
                 .ToList(),
@@ -2655,9 +3146,11 @@
             ActivePolygon = _activePolygonPoints.Count >= 1
                 ? new AreaPolygonDto
                 {
-                    FeatureType = IsPointPlacement(_placementType)
-                        ? _placementType.ToString()
-                        : GetAreaPlacementFeatureType(),
+                    FeatureType = IsTitlePlacement(_placementType)
+                        ? "Title"
+                        : IsPointPlacement(_placementType)
+                            ? _placementType.ToString()
+                            : GetAreaPlacementFeatureType(),
                     LayerIndex = _activeAreaLayer?.LayerIndex ?? 0,
                     Points = _activePolygonPoints
                         .Select(point => new MapPointDto { X = point.X, Y = point.Y })
@@ -2724,6 +3217,7 @@
     {
         Tree,
         House,
+        Title,
         Land,
         Water
     }
@@ -2753,6 +3247,12 @@
     {
         public TreeFeatureDto? Tree { get; init; }
         public HouseFeatureDto? House { get; init; }
+        public bool IsStaged { get; init; }
+    }
+
+    private sealed class EditingTitleFeature
+    {
+        public TitleFeatureDto Title { get; init; } = new();
         public bool IsStaged { get; init; }
     }
 

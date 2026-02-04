@@ -69,6 +69,7 @@ public sealed class TitleFeatureEntity : FeatureEntity
 {
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public int? TargetFeatureId { get; set; }
 }
 
 public sealed class TreeFeatureEntity : PointFeatureEntity

@@ -300,6 +300,38 @@ window.inkAndRealmDemo = {
             targetCtx.restore();
         };
 
+        const drawTitles = (titles) => {
+            if (!Array.isArray(titles) || titles.length === 0) {
+                return;
+            }
+
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.font = "16px 'Segoe UI', sans-serif";
+
+            titles.forEach(title => {
+                if (!title || !title.name) {
+                    return;
+                }
+
+                const screenX = (title.x - viewX) * zoom;
+                const screenY = (title.y - viewY) * zoom;
+                if (screenX < -50 || screenX > canvas.width + 50 || screenY < -50 || screenY > canvas.height + 50) {
+                    return;
+                }
+
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.fillStyle = title.isStaged ? "rgba(45, 58, 74, 0.8)" : "#2b3a4a";
+                ctx.strokeText(title.name, screenX, screenY);
+                ctx.fillText(title.name, screenX, screenY);
+            });
+
+            ctx.restore();
+        };
+
         const drawBrushCursor = (targetCtx, brushPreview) => {
             if (!brushPreview || !Number.isFinite(brushPreview.x) || !Number.isFinite(brushPreview.y)) {
                 return;
@@ -828,6 +860,10 @@ window.inkAndRealmDemo = {
                     renderer(feature);
                 }
             });
+        }
+
+        if (renderState && Array.isArray(renderState.titleFeatures)) {
+            drawTitles(renderState.titleFeatures);
         }
 
         if (renderState && renderState.editPointFeature) {

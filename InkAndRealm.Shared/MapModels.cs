@@ -6,6 +6,7 @@ public sealed class MapDto
     public string Name { get; set; } = string.Empty;
     public List<TreeFeatureDto> Trees { get; set; } = new();
     public List<HouseFeatureDto> Houses { get; set; } = new();
+    public List<TitleFeatureDto> Titles { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
 }
@@ -36,6 +37,16 @@ public sealed class HouseFeatureDto
     public float Size { get; set; } = 1f;
 }
 
+public sealed class TitleFeatureDto
+{
+    public int Id { get; set; }
+    public float X { get; set; }
+    public float Y { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public int? TargetFeatureId { get; set; }
+}
+
 public sealed class AddTreeRequest
 {
     public int? UserId { get; set; }
@@ -60,10 +71,13 @@ public sealed class MapEditsRequest
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
+    public List<TitleFeatureDto> AddedTitles { get; set; } = new();
     public List<TreeFeatureDto> UpdatedTrees { get; set; } = new();
     public List<HouseFeatureDto> UpdatedHouses { get; set; } = new();
+    public List<TitleFeatureDto> UpdatedTitles { get; set; } = new();
     public List<int> DeletedTreeIds { get; set; } = new();
     public List<int> DeletedHouseIds { get; set; } = new();
+    public List<int> DeletedTitleIds { get; set; } = new();
     public List<AreaPolygonDto> AddedWaterPolygons { get; set; } = new();
     public List<int> DeletedWaterPolygonIds { get; set; } = new();
     public List<AreaPolygonDto> UpdatedWaterPolygons { get; set; } = new();
@@ -103,6 +117,7 @@ public sealed class MapPointDto
 public sealed class MapRenderStateDto
 {
     public List<MapPointFeatureDto> PointFeatures { get; set; } = new();
+    public List<MapTitleFeatureDto> TitleFeatures { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
     public AreaPolygonDto? ActivePolygon { get; set; }
@@ -132,6 +147,15 @@ public sealed class MapPointFeatureDto
     public string StyleKey { get; set; } = string.Empty;
     public bool IsStaged { get; set; }
     public float Size { get; set; } = 1f;
+}
+
+public sealed class MapTitleFeatureDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public float X { get; set; }
+    public float Y { get; set; }
+    public bool IsStaged { get; set; }
 }
 
 public sealed class MapViewStateDto
