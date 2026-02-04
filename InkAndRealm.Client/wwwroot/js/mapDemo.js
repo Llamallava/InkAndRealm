@@ -315,6 +315,9 @@ window.inkAndRealmDemo = {
                     return;
                 }
 
+                const sizeScale = Number.isFinite(title.size) ? title.size : 1;
+                const fontSize = Math.max(8, 16 * sizeScale);
+                ctx.font = `${fontSize}px 'Segoe UI', sans-serif`;
                 ctx.lineWidth = 3;
                 ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
                 ctx.fillStyle = title.isStaged ? "rgba(45, 58, 74, 0.8)" : "#2b3a4a";

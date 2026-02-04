@@ -79,6 +79,10 @@ public sealed class DemoMapContext : DbContext
             .Property(feature => feature.HouseType)
             .HasConversion<string>();
 
+        modelBuilder.Entity<TitleFeatureEntity>()
+            .Property(feature => feature.Size)
+            .HasColumnName("TitleFeatureEntity_Size");
+
         modelBuilder.Entity<LandFeatureEntity>()
             .Property(feature => feature.LandType)
             .HasConversion<string>();

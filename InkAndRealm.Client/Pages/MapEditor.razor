@@ -117,6 +117,19 @@
                                @bind:event="oninput" />
                     </div>
                 }
+                @if (ShowTitleSize)
+                {
+                    <div class="map-editor-topbar-block">
+                        <div class="small text-muted">Title Size (@($"{SelectedTitleSize:0.0}x"))</div>
+                        <input class="form-range"
+                               type="range"
+                               min="@TitleSizeMin"
+                               max="@TitleSizeMax"
+                               step="@TitleSizeStep"
+                               @bind="SelectedTitleSize"
+                               @bind:event="oninput" />
+                    </div>
+                }
                 <div class="map-editor-topbar-block">
                     <div class="small text-muted">Brush Tightness</div>
                     <input class="form-range"
@@ -289,6 +302,9 @@
     private const float PointSizeMax = 5f;
     private const float PointSizeStep = 0.1f;
     private const int TitleNameMaxLength = 128;
+    private const float TitleSizeMin = 0.5f;
+    private const float TitleSizeMax = 3f;
+    private const float TitleSizeStep = 0.1f;
     private const float EraseMinSpacing = 8f;
     private const float PolygonMinSpacing = 18f;
     private const float PolygonMaxSpacing = 120f;
@@ -421,6 +437,7 @@
         => FeatureStyleDefinitions.First(definition => definition.PlacementType == _placementType);
     private bool ShowPolygonDensity => _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType);
     private bool ShowPointSize => IsPointPlacement(_placementType);
+    private bool ShowTitleSize => _placementType == PlacementType.Title;
     private bool ShowChaoticEdgesToggle => _placementType == PlacementType.Land;
     private string SelectedPlacementStyle
     {
@@ -431,6 +448,22 @@
     {
         get => GetPointSizeForPlacement(_placementType);
         set => SetPointSizeForPlacement(_placementType, value);
+    }
+    private float _selectedTitleSize = 1f;
+    private float SelectedTitleSize
+    {
+        get => _selectedTitleSize;
+        set
+        {
+            var normalized = NormalizeTitleSize(value);
+            _selectedTitleSize = normalized;
+            if (_editingTitleFeature is not null)
+            {
+                _editingTitleFeature.Title.Size = normalized;
+                TrackEditedTitleFeature(_editingTitleFeature);
+                _ = InvokeAsync(DrawAsync);
+            }
+        }
     }
     private bool UseChaoticLandEdges
     {
@@ -581,6 +614,7 @@
                     _editingTitleFeature = titleFeature;
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
                     _isDraggingTitleFeature = CanDragTitle(titleFeature.Title);
+                    _selectedTitleSize = NormalizeTitleSize(titleFeature.Title.Size);
                     _statusMessage = _isDraggingTitleFeature
                         ? "Moving title..."
                         : "Title selected. Right-click to edit name.";
@@ -615,6 +649,7 @@
                     _editingTitleFeature = titleFeature;
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
                     _isDraggingTitleFeature = CanDragTitle(titleFeature.Title);
+                    _selectedTitleSize = NormalizeTitleSize(titleFeature.Title.Size);
                     _statusMessage = _isDraggingTitleFeature
                         ? "Moving title..."
                         : "Title selected. Right-click to edit name.";
@@ -2097,6 +2132,26 @@
         return trimmed.Length <= TitleNameMaxLength ? trimmed : trimmed[..TitleNameMaxLength];
     }
 
+    private static float NormalizeTitleSize(float size)
+    {
+        if (!float.IsFinite(size))
+        {
+            return 1f;
+        }
+
+        if (size < TitleSizeMin)
+        {
+            return TitleSizeMin;
+        }
+
+        if (size > TitleSizeMax)
+        {
+            return TitleSizeMax;
+        }
+
+        return size;
+    }
+
     private float GetCanvasScaleX()
     {
         return _canvasClientWidth > 0 ? (CanvasWidth / _canvasClientWidth) : 1f;
@@ -3184,6 +3239,7 @@
             Y = mapY,
             Name = name,
             TargetFeatureId = targetId,
+            Size = _selectedTitleSize,
             Points = polygonPoints is null
                 ? new List<MapPointDto>()
                 : polygonPoints.Select(point => new MapPointDto { X = point.X, Y = point.Y }).ToList()
@@ -3532,6 +3588,7 @@
                 X = position.X,
                 Y = position.Y,
                 IsStaged = false,
+                Size = NormalizeTitleSize(title.Size),
                 Points = title.Points
                     .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                     .ToList()
@@ -3548,6 +3605,7 @@
                 X = position.X,
                 Y = position.Y,
                 IsStaged = true,
+                Size = NormalizeTitleSize(title.Size),
                 Points = title.Points
                     .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                     .ToList()

@@ -12,6 +12,8 @@ public sealed class DemoMapController : ControllerBase
 {
     private const string DefaultMapName = "Untitled Map";
     private const int TitleNameMaxLength = 128;
+    private const float TitleSizeMin = 0.5f;
+    private const float TitleSizeMax = 3f;
     private readonly DemoMapContext _context;
 
     public DemoMapController(DemoMapContext context)
@@ -434,6 +436,7 @@ public sealed class DemoMapController : ControllerBase
 
                 feature.Name = NormalizeTitleName(title.Name);
                 feature.Description = string.IsNullOrWhiteSpace(title.Description) ? null : title.Description.Trim();
+                feature.Size = NormalizeTitleSize(title.Size);
 
                 if (!feature.TargetFeatureId.HasValue)
                 {
@@ -670,6 +673,7 @@ public sealed class DemoMapController : ControllerBase
             Name = name,
             Description = description,
             TargetFeatureId = targetId,
+            Size = NormalizeTitleSize(title.Size),
             ZIndex = 0
         };
 
@@ -838,6 +842,7 @@ public sealed class DemoMapController : ControllerBase
                     Name = title.Name,
                     Description = title.Description,
                     TargetFeatureId = title.TargetFeatureId,
+                    Size = NormalizeTitleSize(title.Size),
                     X = anchor?.X ?? 0f,
                     Y = anchor?.Y ?? 0f,
                     Points = mappedPoints
@@ -896,6 +901,26 @@ public sealed class DemoMapController : ControllerBase
 
         var trimmed = name.Trim();
         return trimmed.Length <= TitleNameMaxLength ? trimmed : trimmed[..TitleNameMaxLength];
+    }
+
+    private static float NormalizeTitleSize(float size)
+    {
+        if (!float.IsFinite(size))
+        {
+            return 1f;
+        }
+
+        if (size < TitleSizeMin)
+        {
+            return TitleSizeMin;
+        }
+
+        if (size > TitleSizeMax)
+        {
+            return TitleSizeMax;
+        }
+
+        return size;
     }
 
     private static FeaturePointEntity? GetPolygonCentroid(IReadOnlyList<FeaturePointEntity> points)

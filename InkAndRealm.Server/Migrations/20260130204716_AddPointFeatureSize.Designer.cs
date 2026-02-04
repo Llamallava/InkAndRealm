@@ -343,6 +343,9 @@ namespace InkAndRealm.Server.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<float>("Size")
+                        .HasColumnType("real");
+
                     b.Property<int?>("TargetFeatureId")
                         .HasColumnType("int");
 
@@ -350,6 +353,8 @@ namespace InkAndRealm.Server.Migrations
                         {
                             t.Property("Name")
                                 .HasColumnName("TitleFeatureEntity_Name");
+                            t.Property("Size")
+                                .HasColumnName("TitleFeatureEntity_Size");
                         });
 
                     b.HasDiscriminator().HasValue("Title");

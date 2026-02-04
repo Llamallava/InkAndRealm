@@ -7,15 +7,15 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace InkAndRealm.Server.Migrations
 {
     [DbContext(typeof(DemoMapContext))]
-    [Migration("20260203120000_AddTitleTargetFeatureId")]
-    public partial class AddTitleTargetFeatureId : Migration
+    [Migration("20260204120000_AddTitleFeatureSize")]
+    public partial class AddTitleFeatureSize : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-                IF COL_LENGTH('Features', 'TargetFeatureId') IS NULL
+                IF COL_LENGTH('Features', 'TitleFeatureEntity_Size') IS NULL
                 BEGIN
-                    ALTER TABLE [Features] ADD [TargetFeatureId] int NULL;
+                    ALTER TABLE [Features] ADD [TitleFeatureEntity_Size] real NULL;
                 END
                 """);
         }
@@ -23,9 +23,9 @@ namespace InkAndRealm.Server.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-                IF COL_LENGTH('Features', 'TargetFeatureId') IS NOT NULL
+                IF COL_LENGTH('Features', 'TitleFeatureEntity_Size') IS NOT NULL
                 BEGIN
-                    ALTER TABLE [Features] DROP COLUMN [TargetFeatureId];
+                    ALTER TABLE [Features] DROP COLUMN [TitleFeatureEntity_Size];
                 END
                 """);
         }
