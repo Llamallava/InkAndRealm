@@ -27,6 +27,7 @@
                 @foreach (var tool in ToolDefinitions)
                 {
                     <button class="btn btn-sm @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
+                            disabled="@(tool.Tool == MapToolType.Undo && !CanUndo)"
                             @onclick="() => SelectTool(tool.Tool)">
                         @tool.Label
                     </button>
@@ -247,6 +248,10 @@
     private bool _isSaving;
     private bool _hasMap;
     private string _statusMessage = string.Empty;
+    private readonly List<UndoState> _undoStack = new();
+    private UndoBatchKind _undoBatchKind = UndoBatchKind.None;
+    private bool _undoBatchPushed;
+    private bool _isUndoing;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
     private readonly Dictionary<PlacementType, string> _selectedStyleByPlacement = new()
@@ -330,6 +335,7 @@
         + _deletedTreeIds.Count
         + _deletedHouseIds.Count
         + _deletedTitleIds.Count;
+    private bool CanUndo => _undoStack.Count > 0;
     [Parameter] public int MapId { get; set; }
     private const float PanDragThreshold = 6f;
     private static readonly IReadOnlyList<string> TreeStyles = new List<string>
@@ -395,7 +401,7 @@
         new(MapToolType.Eraser, "Eraser", "Remove a feature from the map.", true),
         new(MapToolType.Edit, "Edit", "Move or update an existing feature.", true),
         new(MapToolType.Duplicate, "Duplicate", "Clone an existing feature.", true),
-        new(MapToolType.Undo, "Undo", "Undo the most recent change.", false)
+        new(MapToolType.Undo, "Undo", "Undo the most recent change.", true)
     };
     private ToolDefinition ActiveToolDefinition => ToolDefinitions.First(tool => tool.Tool == _activeTool);
     private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
@@ -561,6 +567,10 @@
                 if (titleFeature is not null)
                 {
                     ClearEditSelection(true);
+                    if (!titleFeature.Title.TargetFeatureId.HasValue)
+                    {
+                        BeginUndoBatch(UndoBatchKind.Edit);
+                    }
                     _editingTitleFeature = titleFeature;
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
                     _isDraggingTitleFeature = !titleFeature.Title.TargetFeatureId.HasValue;
@@ -576,6 +586,7 @@
             if (pointFeature is not null)
             {
                 ClearEditSelection(true);
+                BeginUndoBatch(UndoBatchKind.Edit);
                 _editingPointFeature = pointFeature;
                 _editingPointOriginalPosition = GetPointFeaturePosition(pointFeature);
                 _isDraggingEditPointFeature = true;
@@ -590,6 +601,10 @@
                 if (titleFeature is not null)
                 {
                     ClearEditSelection(true);
+                    if (!titleFeature.Title.TargetFeatureId.HasValue)
+                    {
+                        BeginUndoBatch(UndoBatchKind.Edit);
+                    }
                     _editingTitleFeature = titleFeature;
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
                     _isDraggingTitleFeature = !titleFeature.Title.TargetFeatureId.HasValue;
@@ -617,12 +632,14 @@
                 _editingOriginalPoints = polygon.Points
                     .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                     .ToList();
+                BeginUndoBatch(UndoBatchKind.Edit);
 
                 var edgeIndex = FindEdgeIndex(polygon, mapX, mapY, hitRadius);
                 if (edgeIndex >= 0)
                 {
                     var closestPoint = GetClosestPointOnSegment(polygon, edgeIndex, mapX, mapY);
                     var insertIndex = edgeIndex + 1;
+                    PushUndoState();
                     polygon.Points.Insert(insertIndex, closestPoint);
                     _editingPointIndex = insertIndex;
                     _editingEdgeIndex = -1;
@@ -704,6 +721,15 @@
                 return;
             }
 
+            if (_undoBatchKind == UndoBatchKind.Edit && !_undoBatchPushed && _editingPointOriginalPosition is not null)
+            {
+                if (MathF.Abs(mapX - _editingPointOriginalPosition.X) > 0.01f
+                    || MathF.Abs(mapY - _editingPointOriginalPosition.Y) > 0.01f)
+                {
+                    PushUndoState();
+                }
+            }
+
             UpdatePointFeaturePosition(_editingPointFeature, mapX, mapY);
             await DrawAsync();
             return;
@@ -718,6 +744,15 @@
 
             if (!_editingTitleFeature.Title.TargetFeatureId.HasValue)
             {
+                if (_undoBatchKind == UndoBatchKind.Edit && !_undoBatchPushed && _editingTitleOriginalPosition is not null)
+                {
+                    if (MathF.Abs(mapX - _editingTitleOriginalPosition.X) > 0.01f
+                        || MathF.Abs(mapY - _editingTitleOriginalPosition.Y) > 0.01f)
+                    {
+                        PushUndoState();
+                    }
+                }
+
                 _editingTitleFeature.Title.X = mapX;
                 _editingTitleFeature.Title.Y = mapY;
                 await DrawAsync();
@@ -730,6 +765,21 @@
             if (!TryGetMapPoint(args, out var mapX, out var mapY))
             {
                 return;
+            }
+
+            if (_undoBatchKind == UndoBatchKind.Edit && !_undoBatchPushed && _editingOriginalPoints is not null)
+            {
+                var shouldPush = true;
+                if (_editingPointIndex >= 0 && _editingPointIndex < _editingOriginalPoints.Count)
+                {
+                    var original = _editingOriginalPoints[_editingPointIndex];
+                    shouldPush = MathF.Abs(mapX - original.X) > 0.01f || MathF.Abs(mapY - original.Y) > 0.01f;
+                }
+
+                if (shouldPush)
+                {
+                    PushUndoState();
+                }
             }
 
             _editingPolygon.Points[_editingPointIndex] = new MapPointDto { X = mapX, Y = mapY };
@@ -805,6 +855,7 @@
             _statusMessage = _brushStrokeCount == 0
                 ? "Brush stroke canceled."
                 : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
+            EndUndoBatch(_brushStrokeCount > 0);
             return;
         }
 
@@ -851,15 +902,21 @@
             }
             else if (_editingTitleFeature is not null)
             {
-                var updated = await PromptTitleRenameAsync(_editingTitleFeature.Title);
-                if (updated)
+                var newName = await PromptTitleRenameAsync(_editingTitleFeature.Title);
+                if (newName is null)
                 {
-                    TrackEditedTitleFeature(_editingTitleFeature);
-                    _statusMessage = "Title updated.";
+                    _statusMessage = "Title edit canceled.";
+                }
+                else if (string.Equals(newName, _editingTitleFeature.Title.Name, StringComparison.Ordinal))
+                {
+                    _statusMessage = "Title unchanged.";
                 }
                 else
                 {
-                    _statusMessage = "Title edit canceled.";
+                    PushUndoState();
+                    _editingTitleFeature.Title.Name = newName;
+                    TrackEditedTitleFeature(_editingTitleFeature);
+                    _statusMessage = "Title updated.";
                 }
                 ClearEditSelection(true);
                 await DrawAsync();
@@ -891,12 +948,17 @@
         }
         else if (IsPointPlacement(_placementType))
         {
+            PushUndoState();
             var placedCount = PlacePolygonPointFeatures(_activePolygonPoints);
             _activePolygonPoints.Clear();
             var label = _placementType == PlacementType.House ? "house" : "tree";
             _statusMessage = placedCount == 0
                 ? "Polygon placed with no points (adjust density)."
                 : $"Polygon filled with {placedCount} {label} item{(placedCount == 1 ? string.Empty : "s")} (unsaved).";
+            if (placedCount == 0 && _undoStack.Count > 0)
+            {
+                _undoStack.RemoveAt(_undoStack.Count - 1);
+            }
         }
         else
         {
@@ -908,6 +970,7 @@
                 return;
             }
 
+            PushUndoState();
             var polygon = new AreaPolygonDto
             {
                 FeatureType = GetAreaPlacementFeatureType(),
@@ -947,6 +1010,7 @@
             _statusMessage = _brushStrokeCount == 0
                 ? "Brush stroke canceled."
                 : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
+            EndUndoBatch(_brushStrokeCount > 0);
             return;
         }
 
@@ -1105,6 +1169,7 @@
             return;
         }
 
+        PushUndoState();
         PlacePointFeature(mapX, mapY);
         if (_placementType == PlacementType.House)
         {
@@ -1125,6 +1190,8 @@
             return;
         }
 
+        BeginUndoBatch(UndoBatchKind.Eraser);
+        PushUndoState();
         _isErasing = true;
         _eraseCount = 0;
         _eraseLastX = mapX;
@@ -1140,6 +1207,7 @@
         if (!erased && status == "Select a layer before erasing.")
         {
             _isErasing = false;
+            EndUndoBatch(false);
         }
 
         if (erased)
@@ -1180,6 +1248,7 @@
         _statusMessage = _eraseCount == 0
             ? "Nothing erased."
             : $"Erased {_eraseCount} item{(_eraseCount == 1 ? string.Empty : "s")}.";
+        EndUndoBatch(_eraseCount > 0);
     }
 
     private async Task SaveEditsAsync()
@@ -1283,6 +1352,27 @@
         await DrawAsync();
     }
 
+    private async Task PerformUndoAsync()
+    {
+        if (_undoStack.Count == 0)
+        {
+            _statusMessage = "Nothing to undo.";
+            return;
+        }
+
+        _isUndoing = true;
+        _undoBatchKind = UndoBatchKind.None;
+        _undoBatchPushed = false;
+
+        var state = _undoStack[^1];
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+        ApplyUndoState(state);
+        ClearEditSelection(true);
+        _statusMessage = "Undo complete.";
+        _isUndoing = false;
+        await DrawAsync();
+    }
+
     private async Task LoadMapAsync()
     {
         _isLoading = true;
@@ -1298,6 +1388,7 @@
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
+            ClearUndoHistory();
             _statusMessage = "Log in, then return to Start to create a map.";
             _isLoading = false;
             return;
@@ -1313,6 +1404,7 @@
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
+            ClearUndoHistory();
             _statusMessage = "Select a map from Start.";
             _isLoading = false;
             return;
@@ -1332,6 +1424,7 @@
         _hasMap = map?.Id > 0;
         LoadAreaLayers(map);
         ClearStaged();
+        ClearUndoHistory();
 
         _statusMessage = _hasMap
             ? "Map loaded from the database."
@@ -1363,18 +1456,34 @@
         return Task.CompletedTask;
     }
 
-    private void SelectTool(MapToolType tool)
+    private async Task SelectTool(MapToolType tool)
     {
+        if (tool == MapToolType.Undo)
+        {
+            await PerformUndoAsync();
+            return;
+        }
+
         _activeTool = tool;
         if (_isBrushing)
         {
+            var keepUndo = _brushStrokeCount > 0;
             _isBrushing = false;
             _brushStrokeCount = 0;
+            if (_undoBatchKind == UndoBatchKind.Brush)
+            {
+                EndUndoBatch(keepUndo);
+            }
         }
         if (_isErasing)
         {
+            var keepUndo = _eraseCount > 0;
             _isErasing = false;
             _eraseCount = 0;
+            if (_undoBatchKind == UndoBatchKind.Eraser)
+            {
+                EndUndoBatch(keepUndo);
+            }
         }
         if (_activeTool != MapToolType.Brush)
         {
@@ -1497,6 +1606,7 @@
 
     private void AddAreaLayer()
     {
+        PushUndoState();
         var nextIndex = GetNextLayerIndex();
         var featureType = GetAreaPlacementFeatureType();
         var layer = new AreaLayerDto
@@ -1528,6 +1638,7 @@
             return;
         }
 
+        PushUndoState();
         DeleteAreaLayer(layer);
         _statusMessage = $"{label} deleted.";
         await DrawAsync();
@@ -1668,6 +1779,174 @@
         _hasBrushCursor = false;
     }
 
+    private void ClearUndoHistory()
+    {
+        _undoStack.Clear();
+        _undoBatchKind = UndoBatchKind.None;
+        _undoBatchPushed = false;
+    }
+
+    private void BeginUndoBatch(UndoBatchKind kind)
+    {
+        _undoBatchKind = kind;
+        _undoBatchPushed = false;
+    }
+
+    private void EndUndoBatch(bool keepChanges)
+    {
+        if (_undoBatchKind == UndoBatchKind.None)
+        {
+            return;
+        }
+
+        if (!keepChanges && _undoBatchPushed && _undoStack.Count > 0)
+        {
+            _undoStack.RemoveAt(_undoStack.Count - 1);
+        }
+
+        _undoBatchKind = UndoBatchKind.None;
+        _undoBatchPushed = false;
+    }
+
+    private void PushUndoState()
+    {
+        if (_isUndoing)
+        {
+            return;
+        }
+
+        if (_undoBatchKind != UndoBatchKind.None && _undoBatchPushed)
+        {
+            return;
+        }
+
+        _undoStack.Add(CaptureUndoState());
+
+        if (_undoBatchKind != UndoBatchKind.None)
+        {
+            _undoBatchPushed = true;
+        }
+    }
+
+    private UndoState CaptureUndoState()
+    {
+        return new UndoState
+        {
+            Trees = CloneList(_trees),
+            Houses = CloneList(_houses),
+            Titles = CloneList(_titles),
+            StagedTrees = CloneList(_stagedTrees),
+            StagedHouses = CloneList(_stagedHouses),
+            StagedTitles = CloneList(_stagedTitles),
+            WaterPolygons = CloneList(_waterPolygons),
+            StagedWaterPolygons = CloneList(_stagedWaterPolygons),
+            EditedWaterPolygons = CloneDictionary(_editedWaterPolygons),
+            DeletedWaterPolygonIds = new HashSet<int>(_deletedWaterPolygonIds),
+            LandPolygons = CloneList(_landPolygons),
+            StagedLandPolygons = CloneList(_stagedLandPolygons),
+            EditedLandPolygons = CloneDictionary(_editedLandPolygons),
+            DeletedLandPolygonIds = new HashSet<int>(_deletedLandPolygonIds),
+            EditedTrees = CloneDictionary(_editedTrees),
+            EditedHouses = CloneDictionary(_editedHouses),
+            EditedTitles = CloneDictionary(_editedTitles),
+            DeletedTreeIds = new HashSet<int>(_deletedTreeIds),
+            DeletedHouseIds = new HashSet<int>(_deletedHouseIds),
+            DeletedTitleIds = new HashSet<int>(_deletedTitleIds),
+            AreaLayers = CloneList(_areaLayers),
+            ActiveAreaLayerKey = _activeAreaLayer?.LayerKey,
+            ActiveAreaLayerIndex = _activeAreaLayer?.LayerIndex,
+            LastX = _lastX,
+            LastY = _lastY,
+            HasLastPlacement = _hasLastPlacement
+        };
+    }
+
+    private void ApplyUndoState(UndoState state)
+    {
+        ReplaceListContents(_trees, state.Trees);
+        ReplaceListContents(_houses, state.Houses);
+        ReplaceListContents(_titles, state.Titles);
+        ReplaceListContents(_stagedTrees, state.StagedTrees);
+        ReplaceListContents(_stagedHouses, state.StagedHouses);
+        ReplaceListContents(_stagedTitles, state.StagedTitles);
+        ReplaceListContents(_waterPolygons, state.WaterPolygons);
+        ReplaceListContents(_stagedWaterPolygons, state.StagedWaterPolygons);
+        ReplaceDictionaryContents(_editedWaterPolygons, state.EditedWaterPolygons);
+        ReplaceSetContents(_deletedWaterPolygonIds, state.DeletedWaterPolygonIds);
+        ReplaceListContents(_landPolygons, state.LandPolygons);
+        ReplaceListContents(_stagedLandPolygons, state.StagedLandPolygons);
+        ReplaceDictionaryContents(_editedLandPolygons, state.EditedLandPolygons);
+        ReplaceSetContents(_deletedLandPolygonIds, state.DeletedLandPolygonIds);
+        ReplaceDictionaryContents(_editedTrees, state.EditedTrees);
+        ReplaceDictionaryContents(_editedHouses, state.EditedHouses);
+        ReplaceDictionaryContents(_editedTitles, state.EditedTitles);
+        ReplaceSetContents(_deletedTreeIds, state.DeletedTreeIds);
+        ReplaceSetContents(_deletedHouseIds, state.DeletedHouseIds);
+        ReplaceSetContents(_deletedTitleIds, state.DeletedTitleIds);
+        ReplaceListContents(_areaLayers, state.AreaLayers);
+
+        _activeAreaLayer = null;
+        if (!string.IsNullOrWhiteSpace(state.ActiveAreaLayerKey))
+        {
+            _activeAreaLayer = _areaLayers.FirstOrDefault(layer => layer.LayerKey == state.ActiveAreaLayerKey);
+        }
+
+        if (_activeAreaLayer is null && state.ActiveAreaLayerIndex is not null)
+        {
+            _activeAreaLayer = _areaLayers.FirstOrDefault(layer => layer.LayerIndex == state.ActiveAreaLayerIndex.Value);
+        }
+
+        if (_activeAreaLayer is null && _areaLayers.Count > 0)
+        {
+            _activeAreaLayer = _areaLayers.OrderBy(layer => layer.LayerIndex).First();
+        }
+
+        _lastX = state.LastX;
+        _lastY = state.LastY;
+        _hasLastPlacement = state.HasLastPlacement;
+
+        _activePolygonPoints.Clear();
+        _isBrushing = false;
+        _brushStrokeCount = 0;
+        _isErasing = false;
+        _eraseCount = 0;
+        _hasBrushCursor = false;
+    }
+
+    private static List<T> CloneList<T>(IEnumerable<T> source)
+    {
+        return CloneDto(source.ToList());
+    }
+
+    private static Dictionary<int, T> CloneDictionary<T>(Dictionary<int, T> source)
+    {
+        return source.ToDictionary(entry => entry.Key, entry => CloneDto(entry.Value));
+    }
+
+    private static void ReplaceListContents<T>(List<T> target, List<T> source)
+    {
+        target.Clear();
+        target.AddRange(source);
+    }
+
+    private static void ReplaceDictionaryContents<T>(Dictionary<int, T> target, Dictionary<int, T> source)
+    {
+        target.Clear();
+        foreach (var entry in source)
+        {
+            target[entry.Key] = entry.Value;
+        }
+    }
+
+    private static void ReplaceSetContents<T>(HashSet<T> target, HashSet<T> source)
+    {
+        target.Clear();
+        foreach (var value in source)
+        {
+            target.Add(value);
+        }
+    }
+
     private async Task UpdateCanvasClientSizeAsync()
     {
         var size = await JS.InvokeAsync<CanvasClientSize?>("inkAndRealmDemo.getCanvasClientSize", CanvasId);
@@ -1780,6 +2059,11 @@
         {
             _editingTitleFeature.Title.X = _editingTitleOriginalPosition.X;
             _editingTitleFeature.Title.Y = _editingTitleOriginalPosition.Y;
+        }
+
+        if (!_isUndoing && _undoBatchKind == UndoBatchKind.Edit)
+        {
+            EndUndoBatch(keepChanges && _undoBatchPushed);
         }
 
         _editingPolygon = null;
@@ -1992,6 +2276,7 @@
             return false;
         }
 
+        PushUndoState();
         var (newX, newY) = GetAdjacentPoint(source.X, source.Y);
 
         if (feature.Tree is not null)
@@ -2019,6 +2304,7 @@
 
     private bool DuplicateTitleFeature(EditingTitleFeature feature)
     {
+        PushUndoState();
         var clone = CloneDto(feature.Title);
         clone.Id = 0;
 
@@ -2036,6 +2322,7 @@
 
     private void DuplicatePolygon(AreaPolygonDto polygon)
     {
+        PushUndoState();
         var clone = CloneDto(polygon);
         clone.Id = 0;
         var (offsetX, offsetY) = GetAdjacentOffsetForPolygon(clone);
@@ -2772,6 +3059,7 @@
             Name = name,
             TargetFeatureId = targetId
         };
+        PushUndoState();
         _lastX = mapX;
         _lastY = mapY;
         _hasLastPlacement = true;
@@ -2791,16 +3079,15 @@
         return NormalizeTitleName(result);
     }
 
-    private async Task<bool> PromptTitleRenameAsync(TitleFeatureDto title)
+    private async Task<string?> PromptTitleRenameAsync(TitleFeatureDto title)
     {
         var result = await JS.InvokeAsync<string?>("prompt", "Edit title name:", title.Name);
         if (result is null)
         {
-            return false;
+            return null;
         }
 
-        title.Name = NormalizeTitleName(result);
-        return true;
+        return NormalizeTitleName(result);
     }
 
     private int PlacePolygonPointFeatures(IReadOnlyList<MapPointDto> points)
@@ -2940,6 +3227,8 @@
             return;
         }
 
+        BeginUndoBatch(UndoBatchKind.Brush);
+        PushUndoState();
         _isBrushing = true;
         _hasBrushCursor = true;
         _brushCursorX = mapX;
@@ -3241,6 +3530,44 @@
         Edit,
         Duplicate,
         Undo
+    }
+
+    private enum UndoBatchKind
+    {
+        None,
+        Brush,
+        Eraser,
+        Edit
+    }
+
+    private sealed class UndoState
+    {
+        public List<TreeFeatureDto> Trees { get; init; } = new();
+        public List<HouseFeatureDto> Houses { get; init; } = new();
+        public List<TitleFeatureDto> Titles { get; init; } = new();
+        public List<TreeFeatureDto> StagedTrees { get; init; } = new();
+        public List<HouseFeatureDto> StagedHouses { get; init; } = new();
+        public List<TitleFeatureDto> StagedTitles { get; init; } = new();
+        public List<AreaPolygonDto> WaterPolygons { get; init; } = new();
+        public List<AreaPolygonDto> StagedWaterPolygons { get; init; } = new();
+        public Dictionary<int, AreaPolygonDto> EditedWaterPolygons { get; init; } = new();
+        public HashSet<int> DeletedWaterPolygonIds { get; init; } = new();
+        public List<AreaPolygonDto> LandPolygons { get; init; } = new();
+        public List<AreaPolygonDto> StagedLandPolygons { get; init; } = new();
+        public Dictionary<int, AreaPolygonDto> EditedLandPolygons { get; init; } = new();
+        public HashSet<int> DeletedLandPolygonIds { get; init; } = new();
+        public Dictionary<int, TreeFeatureDto> EditedTrees { get; init; } = new();
+        public Dictionary<int, HouseFeatureDto> EditedHouses { get; init; } = new();
+        public Dictionary<int, TitleFeatureDto> EditedTitles { get; init; } = new();
+        public HashSet<int> DeletedTreeIds { get; init; } = new();
+        public HashSet<int> DeletedHouseIds { get; init; } = new();
+        public HashSet<int> DeletedTitleIds { get; init; } = new();
+        public List<AreaLayerDto> AreaLayers { get; init; } = new();
+        public string? ActiveAreaLayerKey { get; init; }
+        public int? ActiveAreaLayerIndex { get; init; }
+        public float LastX { get; init; }
+        public float LastY { get; init; }
+        public bool HasLastPlacement { get; init; }
     }
 
     private sealed class EditingPointFeature
