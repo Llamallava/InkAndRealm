@@ -596,9 +596,56 @@
                 {
                     _editingPointIndex = pointIndex;
                     _isDraggingEditPoint = true;
-                    _statusMessage = "Adjusting polygon point...";
+                    _statusMessage = IsEditingTitlePolygon()
+                        ? "Adjusting title vertex..."
+                        : "Adjusting polygon point...";
                     return;
                 }
+            }
+
+            var titlePolygon = FindTitlePolygonAtPoint(mapX, mapY, hitRadius, out var titlePointIndex, out var titleEdgeIndex);
+            if (titlePolygon is not null)
+            {
+                ClearEditSelection(true);
+                BeginUndoBatch(UndoBatchKind.Edit);
+                _editingTitleFeature = titlePolygon;
+                _editingTitleOriginalPosition = new MapPointDto { X = titlePolygon.Title.X, Y = titlePolygon.Title.Y };
+                _editingPolygon = BuildTitlePolygon(titlePolygon.Title);
+                _editingOriginalPoints = titlePolygon.Title.Points
+                    .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                    .ToList();
+                _editingPointIndex = -1;
+                _editingEdgeIndex = -1;
+                _isDraggingEditPoint = false;
+                _isDraggingTitleFeature = false;
+                _selectedTitleSize = NormalizeTitleSize(titlePolygon.Title.Size);
+
+                if (titlePointIndex >= 0)
+                {
+                    _editingPointIndex = titlePointIndex;
+                    _isDraggingEditPoint = true;
+                    _statusMessage = "Adjusting title vertex...";
+                    await DrawAsync();
+                    return;
+                }
+
+                if (titleEdgeIndex >= 0)
+                {
+                    var closestPoint = GetClosestPointOnSegment(_editingPolygon, titleEdgeIndex, mapX, mapY);
+                    var insertIndex = titleEdgeIndex + 1;
+                    PushUndoState();
+                    _editingPolygon.Points.Insert(insertIndex, closestPoint);
+                    _editingPointIndex = insertIndex;
+                    _editingEdgeIndex = -1;
+                    _isDraggingEditPoint = true;
+                    _statusMessage = "Title vertex added. Drag to position.";
+                    await DrawAsync();
+                    return;
+                }
+
+                _statusMessage = "Title area selected. Drag a point to edit; right-click to edit name.";
+                await DrawAsync();
+                return;
             }
 
             if (_placementType == PlacementType.Title)
@@ -615,9 +662,22 @@
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
                     _isDraggingTitleFeature = CanDragTitle(titleFeature.Title);
                     _selectedTitleSize = NormalizeTitleSize(titleFeature.Title.Size);
-                    _statusMessage = _isDraggingTitleFeature
-                        ? "Moving title..."
-                        : "Title selected. Right-click to edit name.";
+                    if (titleFeature.Title.Points is not null && titleFeature.Title.Points.Count >= 3)
+                    {
+                        _editingPolygon = BuildTitlePolygon(titleFeature.Title);
+                        _editingOriginalPoints = titleFeature.Title.Points
+                            .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                            .ToList();
+                        _editingPointIndex = -1;
+                        _editingEdgeIndex = -1;
+                        _statusMessage = "Title area selected. Drag a point to edit; right-click to edit name.";
+                    }
+                    else
+                    {
+                        _statusMessage = _isDraggingTitleFeature
+                            ? "Moving title..."
+                            : "Title selected. Right-click to edit name.";
+                    }
                     await DrawAsync();
                     return;
                 }
@@ -650,9 +710,22 @@
                     _editingTitleOriginalPosition = new MapPointDto { X = titleFeature.Title.X, Y = titleFeature.Title.Y };
                     _isDraggingTitleFeature = CanDragTitle(titleFeature.Title);
                     _selectedTitleSize = NormalizeTitleSize(titleFeature.Title.Size);
-                    _statusMessage = _isDraggingTitleFeature
-                        ? "Moving title..."
-                        : "Title selected. Right-click to edit name.";
+                    if (titleFeature.Title.Points is not null && titleFeature.Title.Points.Count >= 3)
+                    {
+                        _editingPolygon = BuildTitlePolygon(titleFeature.Title);
+                        _editingOriginalPoints = titleFeature.Title.Points
+                            .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                            .ToList();
+                        _editingPointIndex = -1;
+                        _editingEdgeIndex = -1;
+                        _statusMessage = "Title area selected. Drag a point to edit; right-click to edit name.";
+                    }
+                    else
+                    {
+                        _statusMessage = _isDraggingTitleFeature
+                            ? "Moving title..."
+                            : "Title selected. Right-click to edit name.";
+                    }
                     await DrawAsync();
                     return;
                 }
@@ -886,7 +959,9 @@
         if (_activeTool == MapToolType.Edit && _isDraggingEditPoint)
         {
             _isDraggingEditPoint = false;
-            _statusMessage = "Polygon point updated. Right-click to confirm.";
+            _statusMessage = IsEditingTitlePolygon()
+                ? "Title vertex updated. Right-click to confirm."
+                : "Polygon point updated. Right-click to confirm.";
             return;
         }
 
@@ -928,7 +1003,36 @@
     {
         if (_activeTool == MapToolType.Edit)
         {
-            if (_editingPolygon is not null)
+            if (_editingTitleFeature is not null)
+            {
+                var updated = false;
+                if (IsEditingTitlePolygon())
+                {
+                    TrackEditedTitleFeature(_editingTitleFeature);
+                    updated = true;
+                }
+
+                var newName = await PromptTitleRenameAsync(_editingTitleFeature.Title);
+                if (newName is null)
+                {
+                    _statusMessage = updated ? "Title updated." : "Title edit canceled.";
+                }
+                else if (string.Equals(newName, _editingTitleFeature.Title.Name, StringComparison.Ordinal))
+                {
+                    _statusMessage = updated ? "Title updated." : "Title unchanged.";
+                }
+                else
+                {
+                    PushUndoState();
+                    _editingTitleFeature.Title.Name = newName;
+                    TrackEditedTitleFeature(_editingTitleFeature);
+                    _statusMessage = "Title updated.";
+                }
+
+                ClearEditSelection(true);
+                await DrawAsync();
+            }
+            else if (_editingPolygon is not null)
             {
                 TrackEditedPolygon(_editingPolygon);
                 ClearEditSelection(true);
@@ -940,27 +1044,6 @@
                 TrackEditedPointFeature(_editingPointFeature);
                 ClearEditSelection(true);
                 _statusMessage = "Point feature edit confirmed.";
-                await DrawAsync();
-            }
-            else if (_editingTitleFeature is not null)
-            {
-                var newName = await PromptTitleRenameAsync(_editingTitleFeature.Title);
-                if (newName is null)
-                {
-                    _statusMessage = "Title edit canceled.";
-                }
-                else if (string.Equals(newName, _editingTitleFeature.Title.Name, StringComparison.Ordinal))
-                {
-                    _statusMessage = "Title unchanged.";
-                }
-                else
-                {
-                    PushUndoState();
-                    _editingTitleFeature.Title.Name = newName;
-                    TrackEditedTitleFeature(_editingTitleFeature);
-                    _statusMessage = "Title updated.";
-                }
-                ClearEditSelection(true);
                 await DrawAsync();
             }
             return;
@@ -2101,6 +2184,13 @@
             && (title.Points is null || title.Points.Count < 3);
     }
 
+    private bool IsEditingTitlePolygon()
+    {
+        return _editingTitleFeature is not null
+            && _editingPolygon is not null
+            && string.Equals(_editingPolygon.FeatureType, "Title", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsLandFeatureType(string? featureType)
     {
         return string.Equals(featureType, "Land", StringComparison.OrdinalIgnoreCase);
@@ -2166,9 +2256,18 @@
     {
         if (!keepChanges && _editingPolygon is not null && _editingOriginalPoints is not null)
         {
-            _editingPolygon.Points = _editingOriginalPoints
+            var restoredPoints = _editingOriginalPoints
                 .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                 .ToList();
+            if (IsEditingTitlePolygon() && _editingTitleFeature is not null)
+            {
+                _editingTitleFeature.Title.Points = restoredPoints;
+                _editingPolygon.Points = _editingTitleFeature.Title.Points;
+            }
+            else
+            {
+                _editingPolygon.Points = restoredPoints;
+            }
         }
 
         if (!keepChanges && _editingPointFeature is not null && _editingPointOriginalPosition is not null)
@@ -2985,6 +3084,103 @@
             ConsiderTitle(title, true);
         }
 
+        return best;
+    }
+
+    private static AreaPolygonDto BuildTitlePolygon(TitleFeatureDto title)
+    {
+        return new AreaPolygonDto
+        {
+            FeatureType = "Title",
+            LayerIndex = 0,
+            Points = title.Points
+        };
+    }
+
+    private EditingTitleFeature? FindTitlePolygonAtPoint(
+        float mapX,
+        float mapY,
+        float threshold,
+        out int pointIndex,
+        out int edgeIndex)
+    {
+        pointIndex = -1;
+        edgeIndex = -1;
+        var thresholdSquared = threshold * threshold;
+        EditingTitleFeature? best = null;
+        var bestDistance = float.MaxValue;
+        var bestPointIndex = -1;
+        var bestEdgeIndex = -1;
+
+        void ConsiderTitle(TitleFeatureDto title, bool isStaged)
+        {
+            if (title.TargetFeatureId.HasValue)
+            {
+                return;
+            }
+
+            if (title.Points is null || title.Points.Count < 3)
+            {
+                return;
+            }
+
+            for (var i = 0; i < title.Points.Count; i += 1)
+            {
+                var point = title.Points[i];
+                var dx = point.X - mapX;
+                var dy = point.Y - mapY;
+                var distance = (dx * dx) + (dy * dy);
+                if (distance <= thresholdSquared && distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPointIndex = i;
+                    bestEdgeIndex = -1;
+                    best = new EditingTitleFeature
+                    {
+                        Title = title,
+                        IsStaged = isStaged
+                    };
+                }
+            }
+
+            for (var i = 0; i < title.Points.Count; i += 1)
+            {
+                var j = (i + 1) % title.Points.Count;
+                var closest = GetClosestPointOnSegment(title.Points[i], title.Points[j], mapX, mapY);
+                var dx = closest.X - mapX;
+                var dy = closest.Y - mapY;
+                var distance = (dx * dx) + (dy * dy);
+                if (distance <= thresholdSquared && distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPointIndex = -1;
+                    bestEdgeIndex = i;
+                    best = new EditingTitleFeature
+                    {
+                        Title = title,
+                        IsStaged = isStaged
+                    };
+                }
+            }
+        }
+
+        foreach (var title in _titles)
+        {
+            ConsiderTitle(title, false);
+        }
+
+        foreach (var title in _stagedTitles)
+        {
+            ConsiderTitle(title, true);
+        }
+
+        if (best is null)
+        {
+            return null;
+        }
+
+        pointIndex = bestPointIndex;
+        edgeIndex = bestEdgeIndex;
         return best;
     }
 
