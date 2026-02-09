@@ -233,8 +233,12 @@
         <div class="character-editor-card">
             <div class="character-editor-header">
                 <div>
-                    <div class="fw-semibold">Character Details</div>
-                    <div class="small text-muted">Edits are unsaved until you click Save All.</div>
+                    <div class="fw-semibold">@(_isCharacterEditorReadOnly ? "Character Details (Read-only)" : "Character Details")</div>
+                    <div class="small text-muted">
+                        @(_isCharacterEditorReadOnly
+                            ? "Switch to the Edit tool to modify character details."
+                            : "Edits are unsaved until you click Save All.")
+                    </div>
                 </div>
                 <button class="btn btn-outline-secondary btn-sm" @onclick="() => ClearEditSelection(true)">
                     Close
@@ -243,7 +247,9 @@
             <div class="character-editor-body">
                 <div class="character-editor-row">
                     <label class="form-label">Type</label>
-                    <select class="form-select form-select-sm" @bind="EditingCharacterType">
+                    <select class="form-select form-select-sm"
+                            @bind="EditingCharacterType"
+                            disabled="@IsCharacterEditorReadOnly">
                         @foreach (var style in CharacterStyles)
                         {
                             <option value="@style">@style</option>
@@ -259,7 +265,8 @@
                                min="0"
                                max="@MapWidth"
                                @bind="EditingCharacterX"
-                               @bind:event="oninput" />
+                               @bind:event="oninput"
+                               readonly="@IsCharacterEditorReadOnly" />
                     </div>
                     <div>
                         <label class="form-label">Y</label>
@@ -269,7 +276,8 @@
                                min="0"
                                max="@MapHeight"
                                @bind="EditingCharacterY"
-                               @bind:event="oninput" />
+                               @bind:event="oninput"
+                               readonly="@IsCharacterEditorReadOnly" />
                     </div>
                 </div>
                 <div class="character-editor-row">
@@ -277,7 +285,8 @@
                     <input class="form-control"
                            maxlength="@CharacterFieldMaxLength"
                            @bind="EditingCharacterName"
-                           @bind:event="oninput" />
+                           @bind:event="oninput"
+                           readonly="@IsCharacterEditorReadOnly" />
                 </div>
                 <div class="character-editor-row">
                     <label class="form-label">Background</label>
@@ -285,7 +294,8 @@
                               rows="3"
                               maxlength="@CharacterFieldMaxLength"
                               @bind="EditingCharacterBackground"
-                              @bind:event="oninput"></textarea>
+                              @bind:event="oninput"
+                              readonly="@IsCharacterEditorReadOnly"></textarea>
                 </div>
                 <div class="character-editor-row">
                     <label class="form-label">Occupation</label>
@@ -293,7 +303,8 @@
                               rows="2"
                               maxlength="@CharacterFieldMaxLength"
                               @bind="EditingCharacterOccupation"
-                              @bind:event="oninput"></textarea>
+                              @bind:event="oninput"
+                              readonly="@IsCharacterEditorReadOnly"></textarea>
                 </div>
                 <div class="character-editor-row">
                     <label class="form-label">Personality</label>
@@ -301,7 +312,8 @@
                               rows="2"
                               maxlength="@CharacterFieldMaxLength"
                               @bind="EditingCharacterPersonality"
-                              @bind:event="oninput"></textarea>
+                              @bind:event="oninput"
+                              readonly="@IsCharacterEditorReadOnly"></textarea>
                 </div>
             </div>
         </div>
@@ -423,6 +435,7 @@
     private bool _isDraggingEditPointFeature;
     private CharacterFeatureDto? _editingCharacter;
     private bool _isCharacterEditorOpen;
+    private bool _isCharacterEditorReadOnly;
     private EditingTitleFeature? _editingTitleFeature;
     private MapPointDto? _editingTitleOriginalPosition;
     private bool _isDraggingTitleFeature;
@@ -514,7 +527,7 @@
     };
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
     {
-        new(MapToolType.Pointer, "Pointer", "Pan the map without placing items.", true),
+        new(MapToolType.Pointer, "Pointer", "Pan the map or click a character to view details.", true),
         new(MapToolType.Point, "Point", "Place one feature per click.", true),
         new(MapToolType.Brush, "Brush", "Paint features while dragging across the map.", true),
         new(MapToolType.Polygon, "Polygon", "Fill a polygonal area with a feature.", true),
@@ -610,7 +623,12 @@
 
         if (_activeTool == MapToolType.Pointer)
         {
-            StartPan(args);
+            if (args.Button != 0)
+            {
+                return;
+            }
+
+            BeginPanCandidate(args);
             return;
         }
 
@@ -805,7 +823,7 @@
                 _editingPointOriginalPosition = GetPointFeaturePosition(pointFeature);
                 if (pointFeature.Character is not null)
                 {
-                    OpenCharacterEditor(pointFeature.Character);
+                    OpenCharacterEditor(pointFeature.Character, readOnly: false);
                     _statusMessage = "Character selected. Edit details and close when done.";
                     await DrawAsync();
                     return;
@@ -926,7 +944,7 @@
             return;
         }
 
-        if (_isPanCandidate && _activeTool == MapToolType.Point)
+        if (_isPanCandidate && (_activeTool == MapToolType.Point || _activeTool == MapToolType.Pointer))
         {
             var dx = (float)args.OffsetX - _panCandidateStartX;
             var dy = (float)args.OffsetY - _panCandidateStartY;
@@ -1075,6 +1093,13 @@
         {
             _isPanCandidate = false;
             await HandlePointToolAsync(args);
+            return;
+        }
+
+        if (_isPanCandidate && _activeTool == MapToolType.Pointer)
+        {
+            _isPanCandidate = false;
+            await HandlePointerToolClickAsync(args);
             return;
         }
 
@@ -1622,6 +1647,29 @@
     private async Task ReloadAsync()
     {
         await LoadMapAsync();
+        await DrawAsync();
+    }
+
+    private async Task HandlePointerToolClickAsync(MouseEventArgs args)
+    {
+        if (!TryGetMapPoint(args, out var mapX, out var mapY))
+        {
+            return;
+        }
+
+        var hitRadius = GetEditHitRadius();
+        var pointFeature = FindPointFeatureAtPoint(mapX, mapY, hitRadius, EraserTarget.Character, false);
+        if (pointFeature?.Character is null)
+        {
+            _statusMessage = "Click a character to view details.";
+            return;
+        }
+
+        ClearEditSelection(true);
+        _editingPointFeature = pointFeature;
+        _editingPointOriginalPosition = GetPointFeaturePosition(pointFeature);
+        OpenCharacterEditor(pointFeature.Character, readOnly: true);
+        _statusMessage = "Viewing character details.";
         await DrawAsync();
     }
 
@@ -2453,16 +2501,18 @@
         _isDraggingTitleFeature = false;
     }
 
-    private void OpenCharacterEditor(CharacterFeatureDto character)
+    private void OpenCharacterEditor(CharacterFeatureDto character, bool readOnly)
     {
         _editingCharacter = character;
         _isCharacterEditorOpen = true;
+        _isCharacterEditorReadOnly = readOnly;
     }
 
     private void CloseCharacterEditor()
     {
         _editingCharacter = null;
         _isCharacterEditorOpen = false;
+        _isCharacterEditorReadOnly = false;
     }
 
     private void TrackEditedCharacter(CharacterFeatureDto character, bool redraw)
@@ -2478,9 +2528,11 @@
         }
     }
 
+    private bool IsCharacterEditorReadOnly => _isCharacterEditorReadOnly;
+
     private void OnCharacterDetailsChanged()
     {
-        if (_editingCharacter is null)
+        if (_editingCharacter is null || _isCharacterEditorReadOnly)
         {
             return;
         }
@@ -2490,7 +2542,7 @@
 
     private void OnCharacterTypeChanged()
     {
-        if (_editingCharacter is null)
+        if (_editingCharacter is null || _isCharacterEditorReadOnly)
         {
             return;
         }
@@ -2500,7 +2552,7 @@
 
     private void OnCharacterPositionChanged()
     {
-        if (_editingCharacter is null)
+        if (_editingCharacter is null || _isCharacterEditorReadOnly)
         {
             return;
         }
@@ -2515,7 +2567,7 @@
         get => _editingCharacter?.CharacterType ?? CharacterStyles.First();
         set
         {
-            if (_editingCharacter is null)
+            if (_editingCharacter is null || _isCharacterEditorReadOnly)
             {
                 return;
             }
@@ -2530,7 +2582,7 @@
         get => _editingCharacter?.X ?? 0f;
         set
         {
-            if (_editingCharacter is null)
+            if (_editingCharacter is null || _isCharacterEditorReadOnly)
             {
                 return;
             }
@@ -2545,7 +2597,7 @@
         get => _editingCharacter?.Y ?? 0f;
         set
         {
-            if (_editingCharacter is null)
+            if (_editingCharacter is null || _isCharacterEditorReadOnly)
             {
                 return;
             }
@@ -2560,7 +2612,7 @@
         get => _editingCharacter?.Name ?? string.Empty;
         set
         {
-            if (_editingCharacter is null)
+            if (_editingCharacter is null || _isCharacterEditorReadOnly)
             {
                 return;
             }
@@ -2575,7 +2627,7 @@
         get => _editingCharacter?.Background ?? string.Empty;
         set
         {
-            if (_editingCharacter is null)
+            if (_editingCharacter is null || _isCharacterEditorReadOnly)
             {
                 return;
             }
@@ -2590,7 +2642,7 @@
         get => _editingCharacter?.Occupation ?? string.Empty;
         set
         {
-            if (_editingCharacter is null)
+            if (_editingCharacter is null || _isCharacterEditorReadOnly)
             {
                 return;
             }
@@ -2605,7 +2657,7 @@
         get => _editingCharacter?.Personality ?? string.Empty;
         set
         {
-            if (_editingCharacter is null)
+            if (_editingCharacter is null || _isCharacterEditorReadOnly)
             {
                 return;
             }
