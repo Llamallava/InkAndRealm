@@ -541,6 +541,41 @@ window.inkAndRealmDemo = {
             );
         };
 
+        const drawCharacterAt = (x, y, isStaged) => {
+            const stroke = isStaged ? "rgba(43, 58, 74, 0.6)" : "#2b3a4a";
+            const fill = isStaged ? "rgba(43, 58, 74, 0.15)" : "rgba(43, 58, 74, 0.05)";
+            const lineWidth = 2 / zoom;
+            const headCenterY = y - 24;
+            const torsoTopY = y - 16;
+            const torsoBottomY = y - 6;
+            const armY = y - 12;
+            const footY = y;
+
+            ctx.save();
+            ctx.strokeStyle = stroke;
+            ctx.fillStyle = fill;
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = "round";
+
+            ctx.beginPath();
+            ctx.arc(x, headCenterY, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(x, torsoTopY);
+            ctx.lineTo(x, torsoBottomY);
+            ctx.moveTo(x - 6, armY);
+            ctx.lineTo(x + 6, armY);
+            ctx.moveTo(x, torsoBottomY);
+            ctx.lineTo(x - 6, footY);
+            ctx.moveTo(x, torsoBottomY);
+            ctx.lineTo(x + 6, footY);
+            ctx.stroke();
+
+            ctx.restore();
+        };
+
         const pointRenderers = {
             Tree: (feature) => {
                 const isStaged = !!feature.isStaged;
@@ -549,6 +584,10 @@ window.inkAndRealmDemo = {
             House: (feature) => {
                 const isStaged = !!feature.isStaged;
                 drawWithScale(feature, (x, y) => drawHouseAt(x, y, isStaged));
+            },
+            Character: (feature) => {
+                const isStaged = !!feature.isStaged;
+                drawWithScale(feature, (x, y) => drawCharacterAt(x, y, isStaged));
             }
         };
 

@@ -6,6 +6,7 @@ public sealed class MapDto
     public string Name { get; set; } = string.Empty;
     public List<TreeFeatureDto> Trees { get; set; } = new();
     public List<HouseFeatureDto> Houses { get; set; } = new();
+    public List<CharacterFeatureDto> Characters { get; set; } = new();
     public List<TitleFeatureDto> Titles { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
@@ -35,6 +36,19 @@ public sealed class HouseFeatureDto
     public string HouseType { get; set; } = "Cottage";
     public int LayerIndex { get; set; }
     public float Size { get; set; } = 1f;
+}
+
+public sealed class CharacterFeatureDto
+{
+    public int Id { get; set; }
+    public float X { get; set; }
+    public float Y { get; set; }
+    public string CharacterType { get; set; } = "Commoner";
+    public string Name { get; set; } = string.Empty;
+    public string Background { get; set; } = string.Empty;
+    public string Occupation { get; set; } = string.Empty;
+    public string Personality { get; set; } = string.Empty;
+    public int LayerIndex { get; set; }
 }
 
 public sealed class TitleFeatureDto
@@ -73,12 +87,15 @@ public sealed class MapEditsRequest
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();
+    public List<CharacterFeatureDto> AddedCharacters { get; set; } = new();
     public List<TitleFeatureDto> AddedTitles { get; set; } = new();
     public List<TreeFeatureDto> UpdatedTrees { get; set; } = new();
     public List<HouseFeatureDto> UpdatedHouses { get; set; } = new();
+    public List<CharacterFeatureDto> UpdatedCharacters { get; set; } = new();
     public List<TitleFeatureDto> UpdatedTitles { get; set; } = new();
     public List<int> DeletedTreeIds { get; set; } = new();
     public List<int> DeletedHouseIds { get; set; } = new();
+    public List<int> DeletedCharacterIds { get; set; } = new();
     public List<int> DeletedTitleIds { get; set; } = new();
     public List<AreaPolygonDto> AddedWaterPolygons { get; set; } = new();
     public List<int> DeletedWaterPolygonIds { get; set; } = new();

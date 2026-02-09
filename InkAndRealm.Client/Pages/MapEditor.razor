@@ -227,13 +227,96 @@
     </div>
 </div>
 
+@if (_isCharacterEditorOpen && _editingCharacter is not null)
+{
+    <div class="character-editor-overlay">
+        <div class="character-editor-card">
+            <div class="character-editor-header">
+                <div>
+                    <div class="fw-semibold">Character Details</div>
+                    <div class="small text-muted">Edits are unsaved until you click Save All.</div>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="() => ClearEditSelection(true)">
+                    Close
+                </button>
+            </div>
+            <div class="character-editor-body">
+                <div class="character-editor-row">
+                    <label class="form-label">Type</label>
+                    <select class="form-select form-select-sm" @bind="EditingCharacterType">
+                        @foreach (var style in CharacterStyles)
+                        {
+                            <option value="@style">@style</option>
+                        }
+                    </select>
+                </div>
+                <div class="character-editor-row character-editor-coordinates">
+                    <div>
+                        <label class="form-label">X</label>
+                        <input class="form-control form-control-sm"
+                               type="number"
+                               step="1"
+                               min="0"
+                               max="@MapWidth"
+                               @bind="EditingCharacterX"
+                               @bind:event="oninput" />
+                    </div>
+                    <div>
+                        <label class="form-label">Y</label>
+                        <input class="form-control form-control-sm"
+                               type="number"
+                               step="1"
+                               min="0"
+                               max="@MapHeight"
+                               @bind="EditingCharacterY"
+                               @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="character-editor-row">
+                    <label class="form-label">Name</label>
+                    <input class="form-control"
+                           maxlength="@CharacterFieldMaxLength"
+                           @bind="EditingCharacterName"
+                           @bind:event="oninput" />
+                </div>
+                <div class="character-editor-row">
+                    <label class="form-label">Background</label>
+                    <textarea class="form-control"
+                              rows="3"
+                              maxlength="@CharacterFieldMaxLength"
+                              @bind="EditingCharacterBackground"
+                              @bind:event="oninput"></textarea>
+                </div>
+                <div class="character-editor-row">
+                    <label class="form-label">Occupation</label>
+                    <textarea class="form-control"
+                              rows="2"
+                              maxlength="@CharacterFieldMaxLength"
+                              @bind="EditingCharacterOccupation"
+                              @bind:event="oninput"></textarea>
+                </div>
+                <div class="character-editor-row">
+                    <label class="form-label">Personality</label>
+                    <textarea class="form-control"
+                              rows="2"
+                              maxlength="@CharacterFieldMaxLength"
+                              @bind="EditingCharacterPersonality"
+                              @bind:event="oninput"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private const string CanvasId = "map-demo-canvas";
     private List<TreeFeatureDto> _trees = new();
     private List<HouseFeatureDto> _houses = new();
+    private List<CharacterFeatureDto> _characters = new();
     private List<TitleFeatureDto> _titles = new();
     private readonly List<TreeFeatureDto> _stagedTrees = new();
     private readonly List<HouseFeatureDto> _stagedHouses = new();
+    private readonly List<CharacterFeatureDto> _stagedCharacters = new();
     private readonly List<TitleFeatureDto> _stagedTitles = new();
     private const float MapWidth = 2000f;
     private const float MapHeight = 1200f;
@@ -274,6 +357,7 @@
     {
         { PlacementType.Tree, "Oak" },
         { PlacementType.House, "Cottage" },
+        { PlacementType.Character, "Commoner" },
         { PlacementType.Water, "Water" },
         { PlacementType.Land, "Land" },
         { PlacementType.Title, "Title" }
@@ -302,6 +386,7 @@
     private const float PointSizeMax = 5f;
     private const float PointSizeStep = 0.1f;
     private const int TitleNameMaxLength = 128;
+    private const int CharacterFieldMaxLength = 512;
     private const float TitleSizeMin = 0.5f;
     private const float TitleSizeMax = 3f;
     private const float TitleSizeStep = 0.1f;
@@ -322,9 +407,11 @@
     private readonly HashSet<int> _deletedLandPolygonIds = new();
     private readonly Dictionary<int, TreeFeatureDto> _editedTrees = new();
     private readonly Dictionary<int, HouseFeatureDto> _editedHouses = new();
+    private readonly Dictionary<int, CharacterFeatureDto> _editedCharacters = new();
     private readonly Dictionary<int, TitleFeatureDto> _editedTitles = new();
     private readonly HashSet<int> _deletedTreeIds = new();
     private readonly HashSet<int> _deletedHouseIds = new();
+    private readonly HashSet<int> _deletedCharacterIds = new();
     private readonly HashSet<int> _deletedTitleIds = new();
     private AreaPolygonDto? _editingPolygon;
     private List<MapPointDto>? _editingOriginalPoints;
@@ -334,6 +421,8 @@
     private EditingPointFeature? _editingPointFeature;
     private MapPointDto? _editingPointOriginalPosition;
     private bool _isDraggingEditPointFeature;
+    private CharacterFeatureDto? _editingCharacter;
+    private bool _isCharacterEditorOpen;
     private EditingTitleFeature? _editingTitleFeature;
     private MapPointDto? _editingTitleOriginalPosition;
     private bool _isDraggingTitleFeature;
@@ -341,6 +430,7 @@
     private bool _useChaoticLandEdges = true;
     private int PendingCount => _stagedTrees.Count
         + _stagedHouses.Count
+        + _stagedCharacters.Count
         + _stagedTitles.Count
         + _stagedWaterPolygons.Count
         + _editedWaterPolygons.Count
@@ -350,9 +440,11 @@
         + _deletedLandPolygonIds.Count
         + _editedTrees.Count
         + _editedHouses.Count
+        + _editedCharacters.Count
         + _editedTitles.Count
         + _deletedTreeIds.Count
         + _deletedHouseIds.Count
+        + _deletedCharacterIds.Count
         + _deletedTitleIds.Count;
     private bool CanUndo => _undoStack.Count > 0;
     private bool CanRedo => _redoStack.Count > 0;
@@ -371,6 +463,10 @@
         "Cabin",
         "Manor"
     };
+    private static readonly IReadOnlyList<string> CharacterStyles = new List<string>
+    {
+        "Commoner"
+    };
     private static readonly IReadOnlyList<string> WaterStyles = new List<string>
     {
         "Water"
@@ -387,6 +483,7 @@
     {
         new(PlacementType.Tree, "Tree", "/assets/Summer%20Set/tree_1.png"),
         new(PlacementType.House, "House", "/assets/Summer%20Set/building_2.png"),
+        new(PlacementType.Character, "Character", "/assets/character-placeholder.svg"),
         new(PlacementType.Title, "Title", "/assets/Summer%20Set/decor_1.png"),
         new(PlacementType.Land, "Land", "/assets/Summer%20Set/land_1.png"),
         new(PlacementType.Water, "Water", "/assets/Summer%20Set/river.png")
@@ -396,6 +493,7 @@
         new(EraserTarget.All, "All"),
         new(EraserTarget.Tree, "Trees"),
         new(EraserTarget.House, "Houses"),
+        new(EraserTarget.Character, "Characters"),
         new(EraserTarget.Land, "Land"),
         new(EraserTarget.Water, "Water")
     };
@@ -403,6 +501,7 @@
     {
         new(PlacementType.Tree, "Tree Style", TreeStyles),
         new(PlacementType.House, "House Style", HouseStyles),
+        new(PlacementType.Character, "Character Style", CharacterStyles),
         new(PlacementType.Title, "Title", TitleStyles),
         new(PlacementType.Land, "Land Type", LandStyles),
         new(PlacementType.Water, "Water Type", WaterStyles)
@@ -410,7 +509,8 @@
     private readonly Dictionary<PlacementType, float> _pointSizeByPlacement = new()
     {
         { PlacementType.Tree, 1f },
-        { PlacementType.House, 1f }
+        { PlacementType.House, 1f },
+        { PlacementType.Character, 1f }
     };
     private static readonly IReadOnlyList<ToolDefinition> ToolDefinitions = new List<ToolDefinition>
     {
@@ -428,15 +528,17 @@
     private string ActiveToolSummary => ActiveToolDefinition.IsImplemented
         ? _activeTool == MapToolType.Brush
             ? $"{ActiveToolDefinition.Description} (tightness {_brushTightness}/10, size {_brushSize}/10)."
-            : _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType)
+            : _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType) && _placementType != PlacementType.Character
                 ? $"{ActiveToolDefinition.Description} (density {_polygonDensity}/10)."
             : ActiveToolDefinition.Description
         : $"{ActiveToolDefinition.Description} (coming soon).";
     private string ActiveAreaLayerLabel => _activeAreaLayer is null ? "None" : GetLayerLabel(_activeAreaLayer);
     private FeatureStyleDefinition ActiveStyleDefinition
         => FeatureStyleDefinitions.First(definition => definition.PlacementType == _placementType);
-    private bool ShowPolygonDensity => _activeTool == MapToolType.Polygon && IsPointPlacement(_placementType);
-    private bool ShowPointSize => IsPointPlacement(_placementType);
+    private bool ShowPolygonDensity => _activeTool == MapToolType.Polygon
+        && IsPointPlacement(_placementType)
+        && _placementType != PlacementType.Character;
+    private bool ShowPointSize => IsPointPlacement(_placementType) && _placementType != PlacementType.Character;
     private bool ShowTitleSize => _placementType == PlacementType.Title;
     private bool ShowChaoticEdgesToggle => _placementType == PlacementType.Land;
     private string SelectedPlacementStyle
@@ -525,6 +627,12 @@
                 return;
             }
 
+            if (_placementType == PlacementType.Character)
+            {
+                _statusMessage = "Characters can only be placed with the Point tool.";
+                return;
+            }
+
             if (_placementType == PlacementType.Title)
             {
                 _statusMessage = "Titles can only be placed with the Point or Polygon tool.";
@@ -551,6 +659,12 @@
         {
             if (args.Button != 0)
             {
+                return;
+            }
+
+            if (_placementType == PlacementType.Character)
+            {
+                _statusMessage = "Characters can only be placed with the Point tool.";
                 return;
             }
 
@@ -687,9 +801,17 @@
             if (pointFeature is not null)
             {
                 ClearEditSelection(true);
-                BeginUndoBatch(UndoBatchKind.Edit);
                 _editingPointFeature = pointFeature;
                 _editingPointOriginalPosition = GetPointFeaturePosition(pointFeature);
+                if (pointFeature.Character is not null)
+                {
+                    OpenCharacterEditor(pointFeature.Character);
+                    _statusMessage = "Character selected. Edit details and close when done.";
+                    await DrawAsync();
+                    return;
+                }
+
+                BeginUndoBatch(UndoBatchKind.Edit);
                 _isDraggingEditPointFeature = true;
                 _statusMessage = "Moving point feature...";
                 await DrawAsync();
@@ -1062,6 +1184,14 @@
             return;
         }
 
+        if (_placementType == PlacementType.Character)
+        {
+            _activePolygonPoints.Clear();
+            _statusMessage = "Characters can only be placed with the Point tool.";
+            await DrawAsync();
+            return;
+        }
+
         if (_placementType == PlacementType.Title)
         {
             var centroid = GetPolygonCentroid(_activePolygonPoints);
@@ -1078,7 +1208,7 @@
                 ? "Title placed for area (unsaved)."
                 : "Title placement canceled.";
         }
-        else if (IsPointPlacement(_placementType))
+        else if (IsPointPlacement(_placementType) && _placementType != PlacementType.Character)
         {
             PushUndoState();
             var placedCount = PlacePolygonPointFeatures(_activePolygonPoints);
@@ -1307,6 +1437,10 @@
         {
             _statusMessage = $"Placed house at {_lastX:0}, {_lastY:0} (unsaved).";
         }
+        else if (_placementType == PlacementType.Character)
+        {
+            _statusMessage = $"Placed character at {_lastX:0}, {_lastY:0} (unsaved).";
+        }
         else
         {
             _statusMessage = $"Placed tree at {_lastX:0}, {_lastY:0} (unsaved).";
@@ -1422,12 +1556,15 @@
                 .ToList(),
             AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
             AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
+            AddedCharacters = new List<CharacterFeatureDto>(_stagedCharacters),
             AddedTitles = new List<TitleFeatureDto>(_stagedTitles),
             UpdatedTrees = _editedTrees.Values.ToList(),
             UpdatedHouses = _editedHouses.Values.ToList(),
+            UpdatedCharacters = _editedCharacters.Values.ToList(),
             UpdatedTitles = _editedTitles.Values.ToList(),
             DeletedTreeIds = _deletedTreeIds.ToList(),
             DeletedHouseIds = _deletedHouseIds.ToList(),
+            DeletedCharacterIds = _deletedCharacterIds.ToList(),
             DeletedTitleIds = _deletedTitleIds.ToList(),
             AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons),
             DeletedWaterPolygonIds = _deletedWaterPolygonIds.ToList(),
@@ -1448,6 +1585,7 @@
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
             _trees = map?.Trees ?? new List<TreeFeatureDto>();
             _houses = map?.Houses ?? new List<HouseFeatureDto>();
+            _characters = map?.Characters ?? new List<CharacterFeatureDto>();
             _titles = map?.Titles ?? new List<TitleFeatureDto>();
             _waterPolygons.Clear();
             _landPolygons.Clear();
@@ -1458,13 +1596,16 @@
             _deletedLandPolygonIds.Clear();
             _editedTrees.Clear();
             _editedHouses.Clear();
+            _editedCharacters.Clear();
             _editedTitles.Clear();
             _deletedTreeIds.Clear();
             _deletedHouseIds.Clear();
+            _deletedCharacterIds.Clear();
             _deletedTitleIds.Clear();
             LoadAreaLayers(map);
             _stagedTrees.Clear();
             _stagedHouses.Clear();
+            _stagedCharacters.Clear();
             _stagedTitles.Clear();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             ClearEditSelection(true);
@@ -1537,6 +1678,7 @@
         {
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
+            _characters = new List<CharacterFeatureDto>();
             _titles = new List<TitleFeatureDto>();
             _waterPolygons.Clear();
             _landPolygons.Clear();
@@ -1553,6 +1695,7 @@
         {
             _trees = new List<TreeFeatureDto>();
             _houses = new List<HouseFeatureDto>();
+            _characters = new List<CharacterFeatureDto>();
             _titles = new List<TitleFeatureDto>();
             _waterPolygons.Clear();
             _landPolygons.Clear();
@@ -1568,6 +1711,7 @@
         var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
+        _characters = map?.Characters ?? new List<CharacterFeatureDto>();
         _titles = map?.Titles ?? new List<TitleFeatureDto>();
         _waterPolygons.Clear();
         _landPolygons.Clear();
@@ -1576,6 +1720,7 @@
         _editedLandPolygons.Clear();
         _editedTrees.Clear();
         _editedHouses.Clear();
+        _editedCharacters.Clear();
         _hasMap = map?.Id > 0;
         LoadAreaLayers(map);
         ClearStaged();
@@ -1928,6 +2073,7 @@
     {
         _stagedTrees.Clear();
         _stagedHouses.Clear();
+        _stagedCharacters.Clear();
         _stagedTitles.Clear();
         _stagedWaterPolygons.Clear();
         _stagedLandPolygons.Clear();
@@ -1937,9 +2083,11 @@
         _deletedLandPolygonIds.Clear();
         _editedTrees.Clear();
         _editedHouses.Clear();
+        _editedCharacters.Clear();
         _editedTitles.Clear();
         _deletedTreeIds.Clear();
         _deletedHouseIds.Clear();
+        _deletedCharacterIds.Clear();
         _deletedTitleIds.Clear();
         _activePolygonPoints.Clear();
         ClearEditSelection(false);
@@ -2170,7 +2318,9 @@
 
     private static bool IsPointPlacement(PlacementType placementType)
     {
-        return placementType == PlacementType.Tree || placementType == PlacementType.House;
+        return placementType == PlacementType.Tree
+            || placementType == PlacementType.House
+            || placementType == PlacementType.Character;
     }
 
     private static bool IsTitlePlacement(PlacementType placementType)
@@ -2272,7 +2422,10 @@
 
         if (!keepChanges && _editingPointFeature is not null && _editingPointOriginalPosition is not null)
         {
-            UpdatePointFeaturePosition(_editingPointFeature, _editingPointOriginalPosition.X, _editingPointOriginalPosition.Y);
+            if (_editingPointFeature.Character is null)
+            {
+                UpdatePointFeaturePosition(_editingPointFeature, _editingPointOriginalPosition.X, _editingPointOriginalPosition.Y);
+            }
         }
 
         if (!keepChanges && _editingTitleFeature is not null && _editingTitleOriginalPosition is not null)
@@ -2294,9 +2447,172 @@
         _editingPointFeature = null;
         _editingPointOriginalPosition = null;
         _isDraggingEditPointFeature = false;
+        CloseCharacterEditor();
         _editingTitleFeature = null;
         _editingTitleOriginalPosition = null;
         _isDraggingTitleFeature = false;
+    }
+
+    private void OpenCharacterEditor(CharacterFeatureDto character)
+    {
+        _editingCharacter = character;
+        _isCharacterEditorOpen = true;
+    }
+
+    private void CloseCharacterEditor()
+    {
+        _editingCharacter = null;
+        _isCharacterEditorOpen = false;
+    }
+
+    private void TrackEditedCharacter(CharacterFeatureDto character, bool redraw)
+    {
+        if (character.Id > 0 && !_stagedCharacters.Contains(character))
+        {
+            _editedCharacters[character.Id] = character;
+        }
+
+        if (redraw)
+        {
+            _ = InvokeAsync(DrawAsync);
+        }
+    }
+
+    private void OnCharacterDetailsChanged()
+    {
+        if (_editingCharacter is null)
+        {
+            return;
+        }
+
+        TrackEditedCharacter(_editingCharacter, redraw: false);
+    }
+
+    private void OnCharacterTypeChanged()
+    {
+        if (_editingCharacter is null)
+        {
+            return;
+        }
+
+        TrackEditedCharacter(_editingCharacter, redraw: true);
+    }
+
+    private void OnCharacterPositionChanged()
+    {
+        if (_editingCharacter is null)
+        {
+            return;
+        }
+
+        _editingCharacter.X = Math.Clamp(_editingCharacter.X, 0f, MapWidth);
+        _editingCharacter.Y = Math.Clamp(_editingCharacter.Y, 0f, MapHeight);
+        TrackEditedCharacter(_editingCharacter, redraw: true);
+    }
+
+    private string EditingCharacterType
+    {
+        get => _editingCharacter?.CharacterType ?? CharacterStyles.First();
+        set
+        {
+            if (_editingCharacter is null)
+            {
+                return;
+            }
+
+            _editingCharacter.CharacterType = value ?? CharacterStyles.First();
+            OnCharacterTypeChanged();
+        }
+    }
+
+    private float EditingCharacterX
+    {
+        get => _editingCharacter?.X ?? 0f;
+        set
+        {
+            if (_editingCharacter is null)
+            {
+                return;
+            }
+
+            _editingCharacter.X = value;
+            OnCharacterPositionChanged();
+        }
+    }
+
+    private float EditingCharacterY
+    {
+        get => _editingCharacter?.Y ?? 0f;
+        set
+        {
+            if (_editingCharacter is null)
+            {
+                return;
+            }
+
+            _editingCharacter.Y = value;
+            OnCharacterPositionChanged();
+        }
+    }
+
+    private string EditingCharacterName
+    {
+        get => _editingCharacter?.Name ?? string.Empty;
+        set
+        {
+            if (_editingCharacter is null)
+            {
+                return;
+            }
+
+            _editingCharacter.Name = value ?? string.Empty;
+            OnCharacterDetailsChanged();
+        }
+    }
+
+    private string EditingCharacterBackground
+    {
+        get => _editingCharacter?.Background ?? string.Empty;
+        set
+        {
+            if (_editingCharacter is null)
+            {
+                return;
+            }
+
+            _editingCharacter.Background = value ?? string.Empty;
+            OnCharacterDetailsChanged();
+        }
+    }
+
+    private string EditingCharacterOccupation
+    {
+        get => _editingCharacter?.Occupation ?? string.Empty;
+        set
+        {
+            if (_editingCharacter is null)
+            {
+                return;
+            }
+
+            _editingCharacter.Occupation = value ?? string.Empty;
+            OnCharacterDetailsChanged();
+        }
+    }
+
+    private string EditingCharacterPersonality
+    {
+        get => _editingCharacter?.Personality ?? string.Empty;
+        set
+        {
+            if (_editingCharacter is null)
+            {
+                return;
+            }
+
+            _editingCharacter.Personality = value ?? string.Empty;
+            OnCharacterDetailsChanged();
+        }
     }
 
     private void TrackEditedPolygon(AreaPolygonDto polygon)
@@ -2337,6 +2653,17 @@
             }
 
             _editedHouses[feature.House.Id] = feature.House;
+            return;
+        }
+
+        if (feature.Character is not null)
+        {
+            if (feature.IsStaged || feature.Character.Id <= 0)
+            {
+                return;
+            }
+
+            _editedCharacters[feature.Character.Id] = feature.Character;
         }
     }
 
@@ -2516,6 +2843,16 @@
             clone.X = newX;
             clone.Y = newY;
             _stagedHouses.Add(clone);
+            return true;
+        }
+
+        if (feature.Character is not null)
+        {
+            var clone = CloneDto(feature.Character);
+            clone.Id = 0;
+            clone.X = newX;
+            clone.Y = newY;
+            _stagedCharacters.Add(clone);
             return true;
         }
 
@@ -2749,7 +3086,8 @@
 
         if (_editingPointFeature is not null
             && ((_editingPointFeature.Tree is not null && _editingPointFeature.Tree == feature.Tree)
-                || (_editingPointFeature.House is not null && _editingPointFeature.House == feature.House)))
+                || (_editingPointFeature.House is not null && _editingPointFeature.House == feature.House)
+                || (_editingPointFeature.Character is not null && _editingPointFeature.Character == feature.Character)))
         {
             ClearEditSelection(true);
         }
@@ -2793,6 +3131,31 @@
             }
 
             status = "House erased (unsaved).";
+            return true;
+        }
+
+        if (feature.Character is not null)
+        {
+            if (feature.IsStaged)
+            {
+                _stagedCharacters.Remove(feature.Character);
+            }
+            else
+            {
+                if (feature.Character.Id > 0)
+                {
+                    _deletedCharacterIds.Add(feature.Character.Id);
+                }
+                _editedCharacters.Remove(feature.Character.Id);
+                _characters.Remove(feature.Character);
+            }
+
+            if (_editingCharacter == feature.Character)
+            {
+                CloseCharacterEditor();
+            }
+
+            status = "Character erased (unsaved).";
             return true;
         }
 
@@ -2865,7 +3228,9 @@
         status = null;
         var erased = false;
 
-        if (_eraserTarget == EraserTarget.Tree || _eraserTarget == EraserTarget.House)
+        if (_eraserTarget == EraserTarget.Tree
+            || _eraserTarget == EraserTarget.House
+            || _eraserTarget == EraserTarget.Character)
         {
             erased = TryErasePointFeatureAtPoint(mapX, mapY, _eraserTarget, out status);
             if (!erased && showEmptyStatus)
@@ -2945,7 +3310,7 @@
 
     private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold)
     {
-        return FindPointFeatureAtPoint(mapX, mapY, threshold, EraserTarget.All, false);
+        return FindPointFeatureAtPoint(mapX, mapY, threshold, EraserTarget.All, false, true);
     }
 
     private EditingPointFeature? FindPointFeatureAtPoint(
@@ -2953,7 +3318,8 @@
         float mapY,
         float threshold,
         EraserTarget target,
-        bool restrictToActiveLayer)
+        bool restrictToActiveLayer,
+        bool includeCharacters = true)
     {
         if (target == EraserTarget.Water)
         {
@@ -2970,6 +3336,7 @@
         var bestDistance = float.MaxValue;
         var considerTrees = target == EraserTarget.All || target == EraserTarget.Tree;
         var considerHouses = target == EraserTarget.All || target == EraserTarget.House;
+        var considerCharacters = includeCharacters && (target == EraserTarget.All || target == EraserTarget.Character);
         var activeLayerIndex = restrictToActiveLayer ? _activeAreaLayer?.LayerIndex : null;
 
         void ConsiderTree(TreeFeatureDto tree, bool isStaged)
@@ -2992,6 +3359,7 @@
             {
                 Tree = tree,
                 House = null,
+                Character = null,
                 IsStaged = isStaged
             };
         }
@@ -3016,6 +3384,32 @@
             {
                 Tree = null,
                 House = house,
+                Character = null,
+                IsStaged = isStaged
+            };
+        }
+
+        void ConsiderCharacter(CharacterFeatureDto character, bool isStaged)
+        {
+            if (activeLayerIndex is not null && character.LayerIndex != activeLayerIndex.Value)
+            {
+                return;
+            }
+
+            var dx = character.X - mapX;
+            var dy = character.Y - mapY;
+            var distance = (dx * dx) + (dy * dy);
+            if (distance > thresholdSquared || distance >= bestDistance)
+            {
+                return;
+            }
+
+            bestDistance = distance;
+            best = new EditingPointFeature
+            {
+                Tree = null,
+                House = null,
+                Character = character,
                 IsStaged = isStaged
             };
         }
@@ -3043,6 +3437,19 @@
             foreach (var house in _stagedHouses)
             {
                 ConsiderHouse(house, true);
+            }
+        }
+
+        if (considerCharacters)
+        {
+            foreach (var character in _characters)
+            {
+                ConsiderCharacter(character, false);
+            }
+
+            foreach (var character in _stagedCharacters)
+            {
+                ConsiderCharacter(character, true);
             }
         }
 
@@ -3196,6 +3603,11 @@
             return new MapPointDto { X = feature.House.X, Y = feature.House.Y };
         }
 
+        if (feature.Character is not null)
+        {
+            return new MapPointDto { X = feature.Character.X, Y = feature.Character.Y };
+        }
+
         return null;
     }
 
@@ -3238,6 +3650,13 @@
         {
             feature.House.X = mapX;
             feature.House.Y = mapY;
+            return;
+        }
+
+        if (feature.Character is not null)
+        {
+            feature.Character.X = mapX;
+            feature.Character.Y = mapY;
         }
     }
 
@@ -3375,6 +3794,20 @@
                 Size = selectedSize
             });
         }
+        else if (_placementType == PlacementType.Character)
+        {
+            _stagedCharacters.Add(new CharacterFeatureDto
+            {
+                X = mapX,
+                Y = mapY,
+                CharacterType = selectedStyle,
+                LayerIndex = layerIndex,
+                Name = string.Empty,
+                Background = string.Empty,
+                Occupation = string.Empty,
+                Personality = string.Empty
+            });
+        }
         else
         {
             _stagedTrees.Add(new TreeFeatureDto
@@ -3399,7 +3832,7 @@
         if (allowTargetSearch)
         {
             var hitRadius = GetEditHitRadius();
-            var target = FindPointFeatureAtPoint(mapX, mapY, hitRadius, EraserTarget.All, false);
+            var target = FindPointFeatureAtPoint(mapX, mapY, hitRadius, EraserTarget.All, false, includeCharacters: false);
             if (target is null)
             {
                 _statusMessage = "Click a tree or house to attach a title, or use Polygon for area titles.";
@@ -3748,6 +4181,19 @@
             });
         }
 
+        foreach (var character in _characters)
+        {
+            pointFeatures.Add(new MapPointFeatureDto
+            {
+                FeatureType = "Character",
+                X = character.X,
+                Y = character.Y,
+                StyleKey = character.CharacterType,
+                IsStaged = false,
+                Size = 1f
+            });
+        }
+
         foreach (var tree in _stagedTrees)
         {
             pointFeatures.Add(new MapPointFeatureDto
@@ -3771,6 +4217,19 @@
                 StyleKey = house.HouseType,
                 IsStaged = true,
                 Size = NormalizePointSize(house.Size)
+            });
+        }
+
+        foreach (var character in _stagedCharacters)
+        {
+            pointFeatures.Add(new MapPointFeatureDto
+            {
+                FeatureType = "Character",
+                X = character.X,
+                Y = character.Y,
+                StyleKey = character.CharacterType,
+                IsStaged = true,
+                Size = 1f
             });
         }
 
@@ -3867,6 +4326,16 @@
                             IsStaged = _editingPointFeature.IsStaged,
                             Size = NormalizePointSize(_editingPointFeature.House.Size)
                         }
+                        : _editingPointFeature.Character is not null
+                            ? new MapPointFeatureDto
+                            {
+                                FeatureType = "Character",
+                                X = _editingPointFeature.Character.X,
+                                Y = _editingPointFeature.Character.Y,
+                                StyleKey = _editingPointFeature.Character.CharacterType,
+                                IsStaged = _editingPointFeature.IsStaged,
+                                Size = 1f
+                            }
                         : null,
             EditPolygonPointIndex = _editingPointIndex >= 0 ? _editingPointIndex : null,
             EditPolygonEdgeIndex = _editingEdgeIndex >= 0 ? _editingEdgeIndex : null,
@@ -3895,6 +4364,7 @@
     {
         Tree,
         House,
+        Character,
         Title,
         Land,
         Water
@@ -3905,6 +4375,7 @@
         All,
         Tree,
         House,
+        Character,
         Land,
         Water
     }
@@ -3964,6 +4435,7 @@
     {
         public TreeFeatureDto? Tree { get; init; }
         public HouseFeatureDto? House { get; init; }
+        public CharacterFeatureDto? Character { get; init; }
         public bool IsStaged { get; init; }
     }
 

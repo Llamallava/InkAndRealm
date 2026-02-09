@@ -12,6 +12,7 @@ public sealed class DemoMapController : ControllerBase
 {
     private const string DefaultMapName = "Untitled Map";
     private const int TitleNameMaxLength = 128;
+    private const int CharacterFieldMaxLength = 512;
     private const float TitleSizeMin = 0.5f;
     private const float TitleSizeMax = 3f;
     private readonly DemoMapContext _context;
@@ -184,6 +185,21 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.AddedCharacters is not null && request.AddedCharacters.Count > 0)
+        {
+            foreach (var character in request.AddedCharacters)
+            {
+                if (character is null)
+                {
+                    continue;
+                }
+
+                map.Features.Add(CreateCharacterFeature(character));
+            }
+
+            hasChanges = true;
+        }
+
         if (request.AddedTitles is not null && request.AddedTitles.Count > 0)
         {
             foreach (var title in request.AddedTitles)
@@ -270,6 +286,26 @@ public sealed class DemoMapController : ControllerBase
                 {
                     hasChanges = hasChanges || featuresToRemove.Count > 0;
                 }
+            }
+        }
+
+        if (request.DeletedCharacterIds is not null && request.DeletedCharacterIds.Count > 0)
+        {
+            var deletedSet = request.DeletedCharacterIds
+                .Where(id => id > 0)
+                .ToHashSet();
+            if (deletedSet.Count > 0)
+            {
+                var featuresToRemove = map.Features
+                    .OfType<CharacterFeatureEntity>()
+                    .Where(feature => deletedSet.Contains(feature.Id))
+                    .ToList();
+                foreach (var feature in featuresToRemove)
+                {
+                    map.Features.Remove(feature);
+                }
+
+                hasChanges = hasChanges || featuresToRemove.Count > 0;
             }
         }
 
@@ -410,6 +446,43 @@ public sealed class DemoMapController : ControllerBase
                 {
                     X = house.X,
                     Y = house.Y,
+                    SortOrder = 0
+                });
+
+                hasChanges = true;
+            }
+        }
+
+        if (request.UpdatedCharacters is not null && request.UpdatedCharacters.Count > 0)
+        {
+            foreach (var character in request.UpdatedCharacters)
+            {
+                if (character is null || character.Id <= 0)
+                {
+                    continue;
+                }
+
+                var feature = map.Features
+                    .OfType<CharacterFeatureEntity>()
+                    .FirstOrDefault(existing => existing.Id == character.Id);
+                if (feature is null)
+                {
+                    continue;
+                }
+
+                feature.CharacterType = Enum.TryParse<CharacterType>(character.CharacterType, out var characterType)
+                    ? characterType
+                    : CharacterType.Commoner;
+                feature.Name = NormalizeCharacterText(character.Name);
+                feature.Background = NormalizeCharacterText(character.Background);
+                feature.Occupation = NormalizeCharacterText(character.Occupation);
+                feature.Personality = NormalizeCharacterText(character.Personality);
+                feature.ZIndex = character.LayerIndex;
+                feature.Points.Clear();
+                feature.Points.Add(new FeaturePointEntity
+                {
+                    X = character.X,
+                    Y = character.Y,
                     SortOrder = 0
                 });
 
@@ -659,6 +732,30 @@ public sealed class DemoMapController : ControllerBase
         };
     }
 
+    private static CharacterFeatureEntity CreateCharacterFeature(CharacterFeatureDto character)
+    {
+        return new CharacterFeatureEntity
+        {
+            CharacterType = Enum.TryParse<CharacterType>(character.CharacterType, out var characterType)
+                ? characterType
+                : CharacterType.Commoner,
+            Name = NormalizeCharacterText(character.Name),
+            Background = NormalizeCharacterText(character.Background),
+            Occupation = NormalizeCharacterText(character.Occupation),
+            Personality = NormalizeCharacterText(character.Personality),
+            ZIndex = character.LayerIndex,
+            Points =
+            {
+                new FeaturePointEntity
+                {
+                    X = character.X,
+                    Y = character.Y,
+                    SortOrder = 0
+                }
+            }
+        };
+    }
+
     private static TitleFeatureEntity CreateTitleFeature(TitleFeatureDto title)
     {
         var name = NormalizeTitleName(title.Name);
@@ -886,6 +983,25 @@ public sealed class DemoMapController : ControllerBase
                     };
                 })
                 .ToList(),
+            Characters = map.Features
+                .OfType<CharacterFeatureEntity>()
+                .Select(character =>
+                {
+                    var point = character.Points.OrderBy(p => p.SortOrder).FirstOrDefault();
+                    return new CharacterFeatureDto
+                    {
+                        Id = character.Id,
+                        X = point?.X ?? 0f,
+                        Y = point?.Y ?? 0f,
+                        CharacterType = character.CharacterType.ToString(),
+                        Name = character.Name,
+                        Background = character.Background,
+                        Occupation = character.Occupation,
+                        Personality = character.Personality,
+                        LayerIndex = character.ZIndex
+                    };
+                })
+                .ToList(),
             Titles = titles,
             AreaLayers = persistedLayers,
             AreaPolygons = areaPolygons
@@ -901,6 +1017,17 @@ public sealed class DemoMapController : ControllerBase
 
         var trimmed = name.Trim();
         return trimmed.Length <= TitleNameMaxLength ? trimmed : trimmed[..TitleNameMaxLength];
+    }
+
+    private static string NormalizeCharacterText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= CharacterFieldMaxLength ? trimmed : trimmed[..CharacterFieldMaxLength];
     }
 
     private static float NormalizeTitleSize(float size)
