@@ -49,6 +49,16 @@ public sealed class CharacterFeatureDto
     public string Occupation { get; set; } = string.Empty;
     public string Personality { get; set; } = string.Empty;
     public int LayerIndex { get; set; }
+    public List<CharacterRelationshipDto> Relationships { get; set; } = new();
+}
+
+public sealed class CharacterRelationshipDto
+{
+    public int Id { get; set; }
+    public int TargetFeatureId { get; set; }
+    public string TargetFeatureType { get; set; } = string.Empty;
+    public List<string> RelationshipTypes { get; set; } = new();
+    public string Description { get; set; } = string.Empty;
 }
 
 public sealed class TitleFeatureDto
@@ -93,6 +103,7 @@ public sealed class MapEditsRequest
     public List<HouseFeatureDto> UpdatedHouses { get; set; } = new();
     public List<CharacterFeatureDto> UpdatedCharacters { get; set; } = new();
     public List<TitleFeatureDto> UpdatedTitles { get; set; } = new();
+    public List<AddCharacterRelationshipDto> AddedRelationships { get; set; } = new();
     public List<int> DeletedTreeIds { get; set; } = new();
     public List<int> DeletedHouseIds { get; set; } = new();
     public List<int> DeletedCharacterIds { get; set; } = new();
@@ -103,6 +114,17 @@ public sealed class MapEditsRequest
     public List<AreaPolygonDto> AddedLandPolygons { get; set; } = new();
     public List<int> DeletedLandPolygonIds { get; set; } = new();
     public List<AreaPolygonDto> UpdatedLandPolygons { get; set; } = new();
+}
+
+public sealed class AddCharacterRelationshipDto
+{
+    public int SourceCharacterId { get; set; }
+    public int TargetFeatureId { get; set; }
+    public List<string> RelationshipTypes { get; set; } = new();
+    public string Description { get; set; } = string.Empty;
+    public bool CreateReciprocal { get; set; }
+    public List<string>? ReciprocalRelationshipTypes { get; set; }
+    public string? ReciprocalDescription { get; set; }
 }
 
 public sealed class CreateMapRequest

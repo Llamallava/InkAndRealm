@@ -72,6 +72,16 @@
                 <div class="small text-muted mt-2">Unsaved Items</div>
                 <div>@PendingCount</div>
             </div>
+            @if (_isSelectingRelationshipTarget)
+            {
+                <div class="alert alert-warning mt-3 mb-0">
+                    <div class="fw-semibold">Select relationship target</div>
+                    <div class="small">Click a saved feature on the map.</div>
+                    <button class="btn btn-outline-secondary btn-sm mt-2" @onclick="CancelRelationshipTargetSelection">
+                        Cancel
+                    </button>
+                </div>
+            }
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
                 <div class="alert alert-info mt-3 mb-0">@_statusMessage</div>
@@ -315,6 +325,94 @@
                               @bind:event="oninput"
                               readonly="@IsCharacterEditorReadOnly"></textarea>
                 </div>
+                @{
+                    var editingCharacter = _editingCharacter!;
+                    var pendingRelationships = GetPendingRelationshipsForCharacter(editingCharacter.Id);
+                }
+                <div class="character-editor-row">
+                    <label class="form-label">Relationships</label>
+                    @if (editingCharacter.Relationships is not null && editingCharacter.Relationships.Count > 0)
+                    {
+                        <div class="small">
+                            @foreach (var relationship in editingCharacter.Relationships)
+                            {
+                                <div class="mb-2">
+                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType)</div>
+                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
+                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                    {
+                                        <div class="text-muted small">@relationship.Description</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="small text-muted">No relationships yet.</div>
+                    }
+                    @if (pendingRelationships.Count > 0)
+                    {
+                        <div class="small text-muted mt-2">Pending (unsaved)</div>
+                        <div class="small">
+                            @foreach (var relationship in pendingRelationships)
+                            {
+                                <div class="mb-2">
+                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending")</div>
+                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
+                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                    {
+                                        <div class="text-muted small">@relationship.Description</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                @if (!IsCharacterEditorReadOnly)
+                {
+                    <div class="character-editor-row">
+                        <label class="form-label">Add Relationship</label>
+                        <input class="form-control mb-2"
+                               placeholder="Relationship types (comma separated)"
+                               @bind="_relationshipTypesInput"
+                               @bind:event="oninput" />
+                        <textarea class="form-control mb-2"
+                                  rows="2"
+                                  placeholder="Description (optional)"
+                                  @bind="_relationshipDescription"
+                                  @bind:event="oninput"></textarea>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="relationship-reciprocal-toggle"
+                                   @bind="_relationshipCreateReciprocal" />
+                            <label class="form-check-label" for="relationship-reciprocal-toggle">
+                                Make reciprocal (character targets only)
+                            </label>
+                        </div>
+                        @if (_relationshipCreateReciprocal)
+                        {
+                            <input class="form-control mb-2"
+                                   placeholder="Reciprocal types (comma separated, optional)"
+                                   @bind="_relationshipReciprocalTypesInput"
+                                   @bind:event="oninput" />
+                            <textarea class="form-control mb-2"
+                                      rows="2"
+                                      placeholder="Reciprocal description (optional)"
+                                      @bind="_relationshipReciprocalDescription"
+                                      @bind:event="oninput"></textarea>
+                        }
+                        <button class="btn btn-outline-primary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
+                            Add Relationship
+                        </button>
+                        <div class="small text-muted mt-2">After clicking, select a saved feature on the map.</div>
+                        @if (!string.IsNullOrWhiteSpace(_relationshipStatusMessage))
+                        {
+                            <div class="small text-muted mt-2">@_relationshipStatusMessage</div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -330,6 +428,7 @@
     private readonly List<HouseFeatureDto> _stagedHouses = new();
     private readonly List<CharacterFeatureDto> _stagedCharacters = new();
     private readonly List<TitleFeatureDto> _stagedTitles = new();
+    private readonly List<AddCharacterRelationshipDto> _stagedRelationships = new();
     private const float MapWidth = 2000f;
     private const float MapHeight = 1200f;
     private const float MinZoom = 0.5f;
@@ -436,6 +535,17 @@
     private CharacterFeatureDto? _editingCharacter;
     private bool _isCharacterEditorOpen;
     private bool _isCharacterEditorReadOnly;
+    private string _relationshipTypesInput = string.Empty;
+    private string _relationshipDescription = string.Empty;
+    private bool _relationshipCreateReciprocal;
+    private string _relationshipReciprocalTypesInput = string.Empty;
+    private string _relationshipReciprocalDescription = string.Empty;
+    private string _relationshipStatusMessage = string.Empty;
+    private bool _isSelectingRelationshipTarget;
+    private CharacterFeatureDto? _relationshipSourceCharacter;
+    private MapToolType _relationshipReturnTool;
+    private PlacementType _relationshipReturnPlacement;
+    private bool _relationshipReturnReadOnly;
     private EditingTitleFeature? _editingTitleFeature;
     private MapPointDto? _editingTitleOriginalPosition;
     private bool _isDraggingTitleFeature;
@@ -455,6 +565,7 @@
         + _editedHouses.Count
         + _editedCharacters.Count
         + _editedTitles.Count
+        + _stagedRelationships.Count
         + _deletedTreeIds.Count
         + _deletedHouseIds.Count
         + _deletedCharacterIds.Count
@@ -618,6 +729,22 @@
         if (!ActiveToolDefinition.IsImplemented)
         {
             _statusMessage = $"{ActiveToolDefinition.Label} tool is not available yet.";
+            return;
+        }
+
+        if (_isSelectingRelationshipTarget)
+        {
+            if (args.Button != 0)
+            {
+                return;
+            }
+
+            if (!TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                return;
+            }
+
+            HandleRelationshipTargetSelection(mapX, mapY);
             return;
         }
 
@@ -823,7 +950,7 @@
                 _editingPointOriginalPosition = GetPointFeaturePosition(pointFeature);
                 if (pointFeature.Character is not null)
                 {
-                    OpenCharacterEditor(pointFeature.Character, readOnly: false);
+                    OpenCharacterEditor(pointFeature.Character, readOnly: false, resetRelationshipForm: true);
                     _statusMessage = "Character selected. Edit details and close when done.";
                     await DrawAsync();
                     return;
@@ -1587,6 +1714,7 @@
             UpdatedHouses = _editedHouses.Values.ToList(),
             UpdatedCharacters = _editedCharacters.Values.ToList(),
             UpdatedTitles = _editedTitles.Values.ToList(),
+            AddedRelationships = new List<AddCharacterRelationshipDto>(_stagedRelationships),
             DeletedTreeIds = _deletedTreeIds.ToList(),
             DeletedHouseIds = _deletedHouseIds.ToList(),
             DeletedCharacterIds = _deletedCharacterIds.ToList(),
@@ -1632,6 +1760,7 @@
             _stagedHouses.Clear();
             _stagedCharacters.Clear();
             _stagedTitles.Clear();
+            _stagedRelationships.Clear();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             ClearEditSelection(true);
             await DrawAsync();
@@ -1668,7 +1797,7 @@
         ClearEditSelection(true);
         _editingPointFeature = pointFeature;
         _editingPointOriginalPosition = GetPointFeaturePosition(pointFeature);
-        OpenCharacterEditor(pointFeature.Character, readOnly: true);
+        OpenCharacterEditor(pointFeature.Character, readOnly: true, resetRelationshipForm: true);
         _statusMessage = "Viewing character details.";
         await DrawAsync();
     }
@@ -2123,6 +2252,7 @@
         _stagedHouses.Clear();
         _stagedCharacters.Clear();
         _stagedTitles.Clear();
+        _stagedRelationships.Clear();
         _stagedWaterPolygons.Clear();
         _stagedLandPolygons.Clear();
         _editedWaterPolygons.Clear();
@@ -2145,6 +2275,9 @@
         _isErasing = false;
         _eraseCount = 0;
         _hasBrushCursor = false;
+        _relationshipStatusMessage = string.Empty;
+        _isSelectingRelationshipTarget = false;
+        _relationshipSourceCharacter = null;
     }
 
     private void ClearUndoHistory()
@@ -2501,11 +2634,15 @@
         _isDraggingTitleFeature = false;
     }
 
-    private void OpenCharacterEditor(CharacterFeatureDto character, bool readOnly)
+    private void OpenCharacterEditor(CharacterFeatureDto character, bool readOnly, bool resetRelationshipForm)
     {
         _editingCharacter = character;
         _isCharacterEditorOpen = true;
         _isCharacterEditorReadOnly = readOnly;
+        if (resetRelationshipForm)
+        {
+            ResetRelationshipForm();
+        }
     }
 
     private void CloseCharacterEditor()
@@ -2513,6 +2650,20 @@
         _editingCharacter = null;
         _isCharacterEditorOpen = false;
         _isCharacterEditorReadOnly = false;
+        if (!_isSelectingRelationshipTarget)
+        {
+            ResetRelationshipForm();
+        }
+    }
+
+    private void ResetRelationshipForm()
+    {
+        _relationshipTypesInput = string.Empty;
+        _relationshipDescription = string.Empty;
+        _relationshipCreateReciprocal = false;
+        _relationshipReciprocalTypesInput = string.Empty;
+        _relationshipReciprocalDescription = string.Empty;
+        _relationshipStatusMessage = string.Empty;
     }
 
     private void TrackEditedCharacter(CharacterFeatureDto character, bool redraw)
@@ -2665,6 +2816,383 @@
             _editingCharacter.Personality = value ?? string.Empty;
             OnCharacterDetailsChanged();
         }
+    }
+
+    private void BeginRelationshipTargetSelection()
+    {
+        if (_isSelectingRelationshipTarget)
+        {
+            return;
+        }
+
+        if (_editingCharacter is null || _isCharacterEditorReadOnly)
+        {
+            return;
+        }
+
+        if (_editingCharacter.Id <= 0)
+        {
+            _relationshipStatusMessage = "Save this character before adding relationships.";
+            return;
+        }
+
+        var types = NormalizeRelationshipTypes(ParseRelationshipTypes(_relationshipTypesInput));
+        if (types.Count == 0)
+        {
+            _relationshipStatusMessage = "Enter at least one relationship type.";
+            return;
+        }
+
+        _relationshipSourceCharacter = _editingCharacter;
+        _relationshipReturnTool = _activeTool;
+        _relationshipReturnPlacement = _placementType;
+        _relationshipReturnReadOnly = _isCharacterEditorReadOnly;
+        _isSelectingRelationshipTarget = true;
+        _isCharacterEditorOpen = false;
+        _relationshipStatusMessage = "Click a target on the map.";
+        _statusMessage = "Select a relationship target on the map. Click Cancel to stop.";
+    }
+
+    private void CancelRelationshipTargetSelection()
+    {
+        if (!_isSelectingRelationshipTarget)
+        {
+            return;
+        }
+
+        _isSelectingRelationshipTarget = false;
+        _statusMessage = "Relationship selection canceled.";
+        _relationshipStatusMessage = "Relationship selection canceled.";
+        RestoreRelationshipReturnState();
+
+        if (_relationshipSourceCharacter is not null)
+        {
+            OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
+        }
+
+        _relationshipSourceCharacter = null;
+    }
+
+    private void HandleRelationshipTargetSelection(float mapX, float mapY)
+    {
+        if (!_isSelectingRelationshipTarget || _relationshipSourceCharacter is null)
+        {
+            _isSelectingRelationshipTarget = false;
+            return;
+        }
+
+        var selection = TryGetRelationshipTargetAtPoint(mapX, mapY, out var error);
+        if (selection is null)
+        {
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                _statusMessage = error;
+                _relationshipStatusMessage = error;
+            }
+            return;
+        }
+
+        var request = BuildRelationshipRequest(selection.TargetId, selection.IsCharacter);
+        if (request is null)
+        {
+            _relationshipStatusMessage = "Enter at least one relationship type.";
+            return;
+        }
+
+        StageRelationship(request);
+        _isSelectingRelationshipTarget = false;
+        RestoreRelationshipReturnState();
+        OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
+        _relationshipTypesInput = string.Empty;
+        _relationshipDescription = string.Empty;
+        _relationshipReciprocalTypesInput = string.Empty;
+        _relationshipReciprocalDescription = string.Empty;
+        _relationshipCreateReciprocal = false;
+        _relationshipStatusMessage = "Relationship staged. Save All to persist.";
+        _statusMessage = "Relationship staged (unsaved).";
+        _relationshipSourceCharacter = null;
+    }
+
+    private void RestoreRelationshipReturnState()
+    {
+        _activeTool = _relationshipReturnTool;
+        _placementType = _relationshipReturnPlacement;
+    }
+
+    private AddCharacterRelationshipDto? BuildRelationshipRequest(int targetId, bool isCharacterTarget)
+    {
+        if (_relationshipSourceCharacter is null)
+        {
+            return null;
+        }
+
+        var types = NormalizeRelationshipTypes(ParseRelationshipTypes(_relationshipTypesInput));
+        if (types.Count == 0)
+        {
+            return null;
+        }
+
+        var description = NormalizeRelationshipDescription(_relationshipDescription);
+
+        var request = new AddCharacterRelationshipDto
+        {
+            SourceCharacterId = _relationshipSourceCharacter.Id,
+            TargetFeatureId = targetId,
+            RelationshipTypes = types,
+            Description = description,
+            CreateReciprocal = _relationshipCreateReciprocal && isCharacterTarget
+        };
+
+        if (request.CreateReciprocal)
+        {
+            var reciprocalTypes = NormalizeRelationshipTypes(ParseRelationshipTypes(_relationshipReciprocalTypesInput));
+            request.ReciprocalRelationshipTypes = reciprocalTypes.Count > 0 ? reciprocalTypes : null;
+            request.ReciprocalDescription = string.IsNullOrWhiteSpace(_relationshipReciprocalDescription)
+                ? null
+                : _relationshipReciprocalDescription.Trim();
+        }
+
+        return request;
+    }
+
+    private RelationshipTargetSelection? TryGetRelationshipTargetAtPoint(float mapX, float mapY, out string? error)
+    {
+        error = null;
+        var hitRadius = GetEditHitRadius();
+        var pointFeature = FindPointFeatureAtPoint(mapX, mapY, hitRadius, EraserTarget.All, false, true);
+
+        if (pointFeature is not null)
+        {
+            if (pointFeature.IsStaged)
+            {
+                error = "Target must be saved before adding relationships.";
+                return null;
+            }
+
+            if (pointFeature.Character is not null)
+            {
+                if (pointFeature.Character.Id <= 0)
+                {
+                    error = "Target must be saved before adding relationships.";
+                    return null;
+                }
+
+                if (_relationshipSourceCharacter is not null && pointFeature.Character.Id == _relationshipSourceCharacter.Id)
+                {
+                    error = "Pick a different character as the target.";
+                    return null;
+                }
+
+                return new RelationshipTargetSelection(pointFeature.Character.Id, true);
+            }
+
+            if (pointFeature.Tree is not null)
+            {
+                if (pointFeature.Tree.Id <= 0)
+                {
+                    error = "Target must be saved before adding relationships.";
+                    return null;
+                }
+
+                return new RelationshipTargetSelection(pointFeature.Tree.Id, false);
+            }
+
+            if (pointFeature.House is not null)
+            {
+                if (pointFeature.House.Id <= 0)
+                {
+                    error = "Target must be saved before adding relationships.";
+                    return null;
+                }
+
+                return new RelationshipTargetSelection(pointFeature.House.Id, false);
+            }
+        }
+
+        var polygon = FindSavedPolygonAtPoint(mapX, mapY);
+        if (polygon is not null)
+        {
+            return new RelationshipTargetSelection(polygon.Id, false);
+        }
+
+        var titleFeature = FindTitleFeatureAtPoint(mapX, mapY, hitRadius);
+        if (titleFeature is not null)
+        {
+            error = "Titles cannot be relationship targets.";
+            return null;
+        }
+
+        error = "Click a saved feature to select it.";
+        return null;
+    }
+
+    private AreaPolygonDto? FindSavedPolygonAtPoint(float mapX, float mapY)
+    {
+        AreaPolygonDto? selected = null;
+        var selectedLayer = int.MinValue;
+        var selectedOrder = -1;
+        var candidates = _waterPolygons.Concat(_landPolygons).ToList();
+
+        for (var i = 0; i < candidates.Count; i += 1)
+        {
+            var polygon = candidates[i];
+            if (polygon.Id <= 0 || polygon.Points.Count < 3)
+            {
+                continue;
+            }
+
+            if (!IsPointInPolygon(mapX, mapY, polygon))
+            {
+                continue;
+            }
+
+            var layerIndex = polygon.LayerIndex;
+            if (layerIndex > selectedLayer || (layerIndex == selectedLayer && i > selectedOrder))
+            {
+                selected = polygon;
+                selectedLayer = layerIndex;
+                selectedOrder = i;
+            }
+        }
+
+        return selected;
+    }
+
+    private void StageRelationship(AddCharacterRelationshipDto request)
+    {
+        var existing = _stagedRelationships.FirstOrDefault(relationship =>
+            relationship.SourceCharacterId == request.SourceCharacterId
+            && relationship.TargetFeatureId == request.TargetFeatureId);
+
+        if (existing is null)
+        {
+            _stagedRelationships.Add(request);
+            return;
+        }
+
+        existing.RelationshipTypes = NormalizeRelationshipTypes(existing.RelationshipTypes.Concat(request.RelationshipTypes));
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            existing.Description = request.Description;
+        }
+
+        if (request.CreateReciprocal)
+        {
+            existing.CreateReciprocal = true;
+            if (request.ReciprocalRelationshipTypes is not null && request.ReciprocalRelationshipTypes.Count > 0)
+            {
+                var current = existing.ReciprocalRelationshipTypes ?? new List<string>();
+                existing.ReciprocalRelationshipTypes = NormalizeRelationshipTypes(current.Concat(request.ReciprocalRelationshipTypes));
+            }
+            if (!string.IsNullOrWhiteSpace(request.ReciprocalDescription))
+            {
+                existing.ReciprocalDescription = request.ReciprocalDescription;
+            }
+        }
+    }
+
+    private IReadOnlyList<AddCharacterRelationshipDto> GetPendingRelationshipsForCharacter(int characterId)
+    {
+        return _stagedRelationships
+            .Where(relationship => relationship.SourceCharacterId == characterId)
+            .ToList();
+    }
+
+    private string GetRelationshipTargetLabel(int targetId, string targetType)
+    {
+        if (targetId <= 0)
+        {
+            return "Unknown target";
+        }
+
+        var existingLabel = TryGetTargetLabelById(targetId);
+        if (!string.IsNullOrWhiteSpace(existingLabel))
+        {
+            return existingLabel;
+        }
+
+        if (string.IsNullOrWhiteSpace(targetType) || string.Equals(targetType, "Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Feature #{targetId}";
+        }
+
+        return $"{targetType} #{targetId}";
+    }
+
+    private string? TryGetTargetLabelById(int targetId)
+    {
+        var character = _characters.FirstOrDefault(item => item.Id == targetId);
+        if (character is not null)
+        {
+            return string.IsNullOrWhiteSpace(character.Name)
+                ? $"Character #{character.Id}"
+                : $"{character.Name} (Character #{character.Id})";
+        }
+
+        if (_trees.Any(item => item.Id == targetId))
+        {
+            return $"Tree #{targetId}";
+        }
+
+        if (_houses.Any(item => item.Id == targetId))
+        {
+            return $"House #{targetId}";
+        }
+
+        if (_landPolygons.Any(item => item.Id == targetId))
+        {
+            return $"Land #{targetId}";
+        }
+
+        if (_waterPolygons.Any(item => item.Id == targetId))
+        {
+            return $"Water #{targetId}";
+        }
+
+        return null;
+    }
+
+    private static List<string> ParseRelationshipTypes(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return new List<string>();
+        }
+
+        return input
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+    }
+
+    private static List<string> NormalizeRelationshipTypes(IEnumerable<string>? values)
+    {
+        if (values is null)
+        {
+            return new List<string>();
+        }
+
+        return values
+            .Select(value => value?.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(value => value!)
+            .ToList();
+    }
+
+    private static string NormalizeRelationshipDescription(string? description)
+    {
+        return string.IsNullOrWhiteSpace(description) ? string.Empty : description.Trim();
+    }
+
+    private static string FormatRelationshipTypes(IEnumerable<string>? values)
+    {
+        if (values is null)
+        {
+            return string.Empty;
+        }
+
+        var list = values.Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+        return list.Count == 0 ? string.Empty : string.Join(", ", list);
     }
 
     private void TrackEditedPolygon(AreaPolygonDto polygon)
@@ -4501,6 +5029,7 @@
     private sealed record PlacementDefinition(PlacementType PlacementType, string Label, string ImageUrl);
     private sealed record EraserTargetDefinition(EraserTarget Target, string Label);
     private sealed record FeatureStyleDefinition(PlacementType PlacementType, string MenuLabel, IReadOnlyList<string> Styles);
+    private sealed record RelationshipTargetSelection(int TargetId, bool IsCharacter);
     private sealed record CanvasClientSize(float Width, float Height);
 }
 

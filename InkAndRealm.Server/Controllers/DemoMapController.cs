@@ -3,6 +3,7 @@ using InkAndRealm.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Text.Json;
 
 namespace InkAndRealm.Server.Controllers;
 
@@ -74,7 +75,8 @@ public sealed class DemoMapController : ControllerBase
             return NotFound("Map not found.");
         }
 
-        return Ok(ToDto(map));
+        var relationships = await LoadRelationshipsAsync(map);
+        return Ok(ToDto(map, relationships));
     }
 
     [HttpPost("new")]
@@ -109,7 +111,7 @@ public sealed class DemoMapController : ControllerBase
         _context.Maps.Add(map);
         await _context.SaveChangesAsync();
 
-        return Ok(ToDto(map));
+        return Ok(ToDto(map, Array.Empty<FeatureRelationshipEntity>()));
     }
 
     [HttpPost("edits")]
@@ -141,6 +143,14 @@ public sealed class DemoMapController : ControllerBase
         {
             return NotFound("Map not found.");
         }
+
+        var deletedTargetIds = new HashSet<int>();
+        CollectDeletedIds(request.DeletedTreeIds, deletedTargetIds);
+        CollectDeletedIds(request.DeletedHouseIds, deletedTargetIds);
+        CollectDeletedIds(request.DeletedCharacterIds, deletedTargetIds);
+        CollectDeletedIds(request.DeletedTitleIds, deletedTargetIds);
+        CollectDeletedIds(request.DeletedWaterPolygonIds, deletedTargetIds);
+        CollectDeletedIds(request.DeletedLandPolygonIds, deletedTargetIds);
 
         var hasChanges = false;
         if (request.AreaLayers is not null)
@@ -213,6 +223,12 @@ public sealed class DemoMapController : ControllerBase
             }
 
             hasChanges = true;
+        }
+
+        if (request.AddedRelationships is not null && request.AddedRelationships.Count > 0)
+        {
+            var relationshipsChanged = await ApplyAddedRelationshipsAsync(map, request.AddedRelationships, deletedTargetIds);
+            hasChanges = hasChanges || relationshipsChanged;
         }
 
         if (request.DeletedTreeIds is not null && request.DeletedTreeIds.Count > 0)
@@ -616,12 +632,30 @@ public sealed class DemoMapController : ControllerBase
             }
         }
 
+        if (deletedTargetIds.Count > 0)
+        {
+            var mapFeatureIds = map.Features
+                .Select(feature => feature.Id)
+                .Where(id => id > 0)
+                .ToHashSet();
+            var removalTargets = deletedTargetIds
+                .Where(id => mapFeatureIds.Contains(id))
+                .ToHashSet();
+
+            if (removalTargets.Count > 0)
+            {
+                var removedRelationships = await RemoveRelationshipsForTargetsAsync(removalTargets);
+                hasChanges = hasChanges || removedRelationships;
+            }
+        }
+
         if (hasChanges)
         {
             await _context.SaveChangesAsync();
         }
 
-        return Ok(ToDto(map));
+        var relationships = await LoadRelationshipsAsync(map);
+        return Ok(ToDto(map, relationships));
     }
 
     [HttpPost("tree")]
@@ -656,7 +690,8 @@ public sealed class DemoMapController : ControllerBase
         map.Features.Add(CreateTreeFeature(request.Tree));
 
         await _context.SaveChangesAsync();
-        return Ok(ToDto(map));
+        var relationships = await LoadRelationshipsAsync(map);
+        return Ok(ToDto(map, relationships));
     }
 
     [HttpPost("house")]
@@ -691,7 +726,8 @@ public sealed class DemoMapController : ControllerBase
         map.Features.Add(CreateHouseFeature(request.House));
 
         await _context.SaveChangesAsync();
-        return Ok(ToDto(map));
+        var relationships = await LoadRelationshipsAsync(map);
+        return Ok(ToDto(map, relationships));
     }
 
     private static TreeFeatureEntity CreateTreeFeature(TreeFeatureDto tree)
@@ -851,8 +887,12 @@ public sealed class DemoMapController : ControllerBase
         return feature;
     }
 
-    private static MapDto ToDto(MapEntity map)
+    private static MapDto ToDto(MapEntity map, IReadOnlyList<FeatureRelationshipEntity>? relationships)
     {
+        var featureLookup = map.Features
+            .Where(feature => feature.Id > 0)
+            .ToDictionary(feature => feature.Id);
+
         var waterPolygons = map.Features
             .OfType<WaterFeatureEntity>()
             .Select(feature => new AreaPolygonDto
@@ -947,6 +987,12 @@ public sealed class DemoMapController : ControllerBase
             })
             .ToList();
 
+        var relationshipsBySource = relationships is null
+            ? new Dictionary<int, List<FeatureRelationshipEntity>>()
+            : relationships
+                .GroupBy(relationship => relationship.SourceCharacterId)
+                .ToDictionary(group => group.Key, group => group.OrderBy(r => r.Id).ToList());
+
         return new MapDto
         {
             Id = map.Id,
@@ -988,6 +1034,36 @@ public sealed class DemoMapController : ControllerBase
                 .Select(character =>
                 {
                     var point = character.Points.OrderBy(p => p.SortOrder).FirstOrDefault();
+                    relationshipsBySource.TryGetValue(character.Id, out var characterRelationships);
+                    var mappedRelationships = characterRelationships is null
+                        ? new List<CharacterRelationshipDto>()
+                        : characterRelationships
+                            .Select(relationship =>
+                            {
+                                if (!featureLookup.TryGetValue(relationship.TargetFeatureId, out var targetFeature))
+                                {
+                                    return null;
+                                }
+
+                                var targetType = GetFeatureTypeKey(targetFeature);
+                                if (targetType == "Title")
+                                {
+                                    return null;
+                                }
+
+                                return new CharacterRelationshipDto
+                                {
+                                    Id = relationship.Id,
+                                    TargetFeatureId = relationship.TargetFeatureId,
+                                    TargetFeatureType = targetType,
+                                    RelationshipTypes = DeserializeRelationshipTypes(relationship.RelationshipType),
+                                    Description = relationship.Description ?? string.Empty
+                                };
+                            })
+                            .Where(relationship => relationship is not null)
+                            .Select(relationship => relationship!)
+                            .ToList();
+
                     return new CharacterFeatureDto
                     {
                         Id = character.Id,
@@ -998,7 +1074,8 @@ public sealed class DemoMapController : ControllerBase
                         Background = character.Background,
                         Occupation = character.Occupation,
                         Personality = character.Personality,
-                        LayerIndex = character.ZIndex
+                        LayerIndex = character.ZIndex,
+                        Relationships = mappedRelationships
                     };
                 })
                 .ToList(),
@@ -1117,5 +1194,267 @@ public sealed class DemoMapController : ControllerBase
         }
 
         return await _context.Users.FirstOrDefaultAsync(user => user.Id == userId.Value);
+    }
+
+    private static void CollectDeletedIds(List<int>? values, HashSet<int> target)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var value in values)
+        {
+            if (value > 0)
+            {
+                target.Add(value);
+            }
+        }
+    }
+
+    private async Task<List<FeatureRelationshipEntity>> LoadRelationshipsAsync(MapEntity map)
+    {
+        var characterIds = map.Features
+            .OfType<CharacterFeatureEntity>()
+            .Select(character => character.Id)
+            .Where(id => id > 0)
+            .ToList();
+
+        if (characterIds.Count == 0)
+        {
+            return new List<FeatureRelationshipEntity>();
+        }
+
+        var featureIds = map.Features
+            .Select(feature => feature.Id)
+            .Where(id => id > 0)
+            .ToHashSet();
+
+        var relationships = await _context.FeatureRelationships
+            .Where(relationship => characterIds.Contains(relationship.SourceCharacterId)
+                && featureIds.Contains(relationship.TargetFeatureId))
+            .ToListAsync();
+
+        return relationships;
+    }
+
+    private async Task<bool> ApplyAddedRelationshipsAsync(
+        MapEntity map,
+        IReadOnlyList<AddCharacterRelationshipDto> relationships,
+        HashSet<int> deletedTargetIds)
+    {
+        if (relationships is null || relationships.Count == 0)
+        {
+            return false;
+        }
+
+        var characterLookup = map.Features
+            .OfType<CharacterFeatureEntity>()
+            .Where(character => character.Id > 0)
+            .ToDictionary(character => character.Id);
+
+        if (characterLookup.Count == 0)
+        {
+            return false;
+        }
+
+        var featureLookup = map.Features
+            .Where(feature => feature.Id > 0)
+            .ToDictionary(feature => feature.Id);
+
+        var existingRelationships = await _context.FeatureRelationships
+            .Where(relationship => characterLookup.Keys.Contains(relationship.SourceCharacterId))
+            .ToListAsync();
+
+        var relationshipLookup = existingRelationships
+            .GroupBy(relationship => (relationship.SourceCharacterId, relationship.TargetFeatureId))
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var changed = false;
+
+        foreach (var request in relationships)
+        {
+            if (request is null)
+            {
+                continue;
+            }
+
+            if (request.SourceCharacterId <= 0 || request.TargetFeatureId <= 0)
+            {
+                continue;
+            }
+
+            if (deletedTargetIds.Contains(request.SourceCharacterId) || deletedTargetIds.Contains(request.TargetFeatureId))
+            {
+                continue;
+            }
+
+            if (!characterLookup.ContainsKey(request.SourceCharacterId))
+            {
+                continue;
+            }
+
+            if (!featureLookup.TryGetValue(request.TargetFeatureId, out var targetFeature))
+            {
+                continue;
+            }
+
+            if (targetFeature is TitleFeatureEntity)
+            {
+                continue;
+            }
+
+            var types = NormalizeRelationshipTypes(request.RelationshipTypes);
+            if (types.Count == 0)
+            {
+                continue;
+            }
+
+            var description = NormalizeRelationshipDescription(request.Description);
+            changed = ApplyRelationshipUpsert(relationshipLookup, request.SourceCharacterId, request.TargetFeatureId, types, description) || changed;
+
+            if (request.CreateReciprocal && targetFeature is CharacterFeatureEntity)
+            {
+                var reciprocalTypes = NormalizeRelationshipTypes(request.ReciprocalRelationshipTypes ?? types);
+                if (reciprocalTypes.Count == 0)
+                {
+                    continue;
+                }
+
+                var reciprocalDescription = string.IsNullOrWhiteSpace(request.ReciprocalDescription)
+                    ? description
+                    : NormalizeRelationshipDescription(request.ReciprocalDescription);
+
+                changed = ApplyRelationshipUpsert(relationshipLookup, request.TargetFeatureId, request.SourceCharacterId, reciprocalTypes, reciprocalDescription) || changed;
+            }
+        }
+
+        return changed;
+    }
+
+    private bool ApplyRelationshipUpsert(
+        Dictionary<(int SourceId, int TargetId), FeatureRelationshipEntity> lookup,
+        int sourceId,
+        int targetId,
+        List<string> types,
+        string description)
+    {
+        if (lookup.TryGetValue((sourceId, targetId), out var existing))
+        {
+            var mergedTypes = NormalizeRelationshipTypes(DeserializeRelationshipTypes(existing.RelationshipType).Concat(types));
+            var updatedTypePayload = SerializeRelationshipTypes(mergedTypes);
+            var updatedDescription = string.IsNullOrWhiteSpace(description) ? existing.Description : description;
+
+            var changed = false;
+            if (!string.Equals(existing.RelationshipType, updatedTypePayload, StringComparison.Ordinal))
+            {
+                existing.RelationshipType = updatedTypePayload;
+                changed = true;
+            }
+
+            if (!string.Equals(existing.Description, updatedDescription, StringComparison.Ordinal))
+            {
+                existing.Description = updatedDescription;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        var relationship = new FeatureRelationshipEntity
+        {
+            SourceCharacterId = sourceId,
+            TargetFeatureId = targetId,
+            RelationshipType = SerializeRelationshipTypes(types),
+            Description = description
+        };
+
+        _context.FeatureRelationships.Add(relationship);
+        lookup[(sourceId, targetId)] = relationship;
+        return true;
+    }
+
+    private async Task<bool> RemoveRelationshipsForTargetsAsync(HashSet<int> targetIds)
+    {
+        if (targetIds is null || targetIds.Count == 0)
+        {
+            return false;
+        }
+
+        var relationshipsToRemove = await _context.FeatureRelationships
+            .Where(relationship => targetIds.Contains(relationship.TargetFeatureId))
+            .ToListAsync();
+
+        if (relationshipsToRemove.Count == 0)
+        {
+            return false;
+        }
+
+        _context.FeatureRelationships.RemoveRange(relationshipsToRemove);
+        return true;
+    }
+
+    private static List<string> NormalizeRelationshipTypes(IEnumerable<string>? values)
+    {
+        if (values is null)
+        {
+            return new List<string>();
+        }
+
+        return values
+            .Select(value => value?.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(value => value!)
+            .ToList();
+    }
+
+    private static string NormalizeRelationshipDescription(string? description)
+    {
+        return string.IsNullOrWhiteSpace(description) ? string.Empty : description.Trim();
+    }
+
+    private static string SerializeRelationshipTypes(IEnumerable<string> values)
+    {
+        return JsonSerializer.Serialize(NormalizeRelationshipTypes(values));
+    }
+
+    private static List<string> DeserializeRelationshipTypes(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new List<string>();
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("[", StringComparison.Ordinal))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<List<string>>(trimmed);
+                return NormalizeRelationshipTypes(parsed);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return NormalizeRelationshipTypes(new[] { trimmed });
+    }
+
+    private static string GetFeatureTypeKey(FeatureEntity feature)
+    {
+        return feature switch
+        {
+            TreeFeatureEntity => "Tree",
+            HouseFeatureEntity => "House",
+            LandFeatureEntity => "Land",
+            WaterFeatureEntity => "Water",
+            BridgeFeatureEntity => "Bridge",
+            TownFeatureEntity => "Town",
+            CharacterFeatureEntity => "Character",
+            TitleFeatureEntity => "Title",
+            _ => "Unknown"
+        };
     }
 }
