@@ -105,6 +105,7 @@ public sealed class MapEditsRequest
     public List<TitleFeatureDto> UpdatedTitles { get; set; } = new();
     public List<AddCharacterRelationshipDto> AddedRelationships { get; set; } = new();
     public List<UpdateCharacterRelationshipDto> UpdatedRelationships { get; set; } = new();
+    public List<int> DeletedRelationshipIds { get; set; } = new();
     public List<int> DeletedTreeIds { get; set; } = new();
     public List<int> DeletedHouseIds { get; set; } = new();
     public List<int> DeletedCharacterIds { get; set; } = new();

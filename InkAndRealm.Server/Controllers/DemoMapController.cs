@@ -237,6 +237,12 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = hasChanges || relationshipsChanged;
         }
 
+        if (request.DeletedRelationshipIds is not null && request.DeletedRelationshipIds.Count > 0)
+        {
+            var relationshipsChanged = await ApplyDeletedRelationshipsAsync(map, request.DeletedRelationshipIds);
+            hasChanges = hasChanges || relationshipsChanged;
+        }
+
         if (request.DeletedTreeIds is not null && request.DeletedTreeIds.Count > 0)
         {
             var deletedSet = request.DeletedTreeIds
@@ -1447,6 +1453,54 @@ public sealed class DemoMapController : ControllerBase
         }
 
         return changed;
+    }
+
+    private async Task<bool> ApplyDeletedRelationshipsAsync(
+        MapEntity map,
+        IReadOnlyList<int> relationshipIds)
+    {
+        if (relationshipIds is null || relationshipIds.Count == 0)
+        {
+            return false;
+        }
+
+        var idsToDelete = relationshipIds
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        if (idsToDelete.Count == 0)
+        {
+            return false;
+        }
+
+        var characterIds = map.Features
+            .OfType<CharacterFeatureEntity>()
+            .Where(character => character.Id > 0)
+            .Select(character => character.Id)
+            .ToHashSet();
+        if (characterIds.Count == 0)
+        {
+            return false;
+        }
+
+        var featureIds = map.Features
+            .Where(feature => feature.Id > 0)
+            .Select(feature => feature.Id)
+            .ToHashSet();
+
+        var relationshipsToDelete = await _context.FeatureRelationships
+            .Where(relationship =>
+                idsToDelete.Contains(relationship.Id)
+                && characterIds.Contains(relationship.SourceCharacterId)
+                && featureIds.Contains(relationship.TargetFeatureId))
+            .ToListAsync();
+        if (relationshipsToDelete.Count == 0)
+        {
+            return false;
+        }
+
+        _context.FeatureRelationships.RemoveRange(relationshipsToDelete);
+        return true;
     }
 
     private bool ApplyRelationshipUpsert(

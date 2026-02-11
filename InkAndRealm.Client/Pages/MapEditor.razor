@@ -350,11 +350,18 @@
                                     }
                                     @if (!IsCharacterEditorReadOnly)
                                     {
-                                        <button class="btn btn-outline-secondary btn-sm mt-1"
-                                                type="button"
-                                                @onclick="() => BeginRelationshipEdit(relationship)">
-                                            Edit
-                                        </button>
+                                        <div class="d-flex gap-2 mt-1">
+                                            <button class="btn btn-outline-secondary btn-sm"
+                                                    type="button"
+                                                    @onclick="() => BeginRelationshipEdit(relationship)">
+                                                Edit
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm"
+                                                    type="button"
+                                                    @onclick="() => DeleteExistingRelationship(relationship)">
+                                                Delete
+                                            </button>
+                                        </div>
                                     }
                                 </div>
                             }
@@ -377,6 +384,14 @@
                                     {
                                         <div class="text-muted small">@relationship.Description</div>
                                     }
+                                    @if (!IsCharacterEditorReadOnly)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm mt-1"
+                                                type="button"
+                                                @onclick="() => RemovePendingRelationship(relationship)">
+                                            Delete
+                                        </button>
+                                    }
                                 </div>
                             }
                         </div>
@@ -393,6 +408,14 @@
                                     @if (!string.IsNullOrWhiteSpace(relationship.Description))
                                     {
                                         <div class="text-muted small">@relationship.Description</div>
+                                    }
+                                    @if (!IsCharacterEditorReadOnly)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm mt-1"
+                                                type="button"
+                                                @onclick="() => DeletePendingRelationshipUpdate(relationship)">
+                                            Delete
+                                        </button>
                                     }
                                 </div>
                             }
@@ -486,6 +509,7 @@
     private readonly List<TitleFeatureDto> _stagedTitles = new();
     private readonly List<AddCharacterRelationshipDto> _stagedRelationships = new();
     private readonly Dictionary<int, UpdateCharacterRelationshipDto> _updatedRelationships = new();
+    private readonly Dictionary<int, (int SourceCharacterId, int TargetFeatureId)> _deletedRelationships = new();
     private const float MapWidth = 2000f;
     private const float MapHeight = 1200f;
     private const float MinZoom = 0.5f;
@@ -629,6 +653,7 @@
         + _editedTitles.Count
         + _stagedRelationships.Count
         + _updatedRelationships.Count
+        + _deletedRelationships.Count
         + _deletedTreeIds.Count
         + _deletedHouseIds.Count
         + _deletedCharacterIds.Count
@@ -1779,6 +1804,7 @@
             UpdatedTitles = _editedTitles.Values.ToList(),
             AddedRelationships = new List<AddCharacterRelationshipDto>(_stagedRelationships),
             UpdatedRelationships = _updatedRelationships.Values.ToList(),
+            DeletedRelationshipIds = _deletedRelationships.Keys.ToList(),
             DeletedTreeIds = _deletedTreeIds.ToList(),
             DeletedHouseIds = _deletedHouseIds.ToList(),
             DeletedCharacterIds = _deletedCharacterIds.ToList(),
@@ -1826,6 +1852,7 @@
             _stagedTitles.Clear();
             _stagedRelationships.Clear();
             _updatedRelationships.Clear();
+            _deletedRelationships.Clear();
             CancelRelationshipEdit();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             ClearEditSelection(true);
@@ -2322,6 +2349,7 @@
         _stagedTitles.Clear();
         _stagedRelationships.Clear();
         _updatedRelationships.Clear();
+        _deletedRelationships.Clear();
         _stagedWaterPolygons.Clear();
         _stagedLandPolygons.Clear();
         _editedWaterPolygons.Clear();
@@ -3165,6 +3193,82 @@
         }
     }
 
+    private void DeleteExistingRelationship(CharacterRelationshipDto relationship)
+    {
+        if (_editingCharacter is null || _isCharacterEditorReadOnly || relationship is null || relationship.Id <= 0)
+        {
+            return;
+        }
+
+        StageRelationshipDeletion(relationship.Id, _editingCharacter.Id, relationship.TargetFeatureId);
+        _editingCharacter.Relationships.RemoveAll(item => item.Id == relationship.Id);
+        if (_characters.FirstOrDefault(character => character.Id == _editingCharacter.Id) is { } sourceCharacter
+            && !ReferenceEquals(sourceCharacter, _editingCharacter))
+        {
+            sourceCharacter.Relationships.RemoveAll(item => item.Id == relationship.Id);
+        }
+        _relationshipStatusMessage = "Relationship deletion staged. Save All to persist.";
+        _statusMessage = "Relationship deletion staged (unsaved).";
+    }
+
+    private void RemovePendingRelationship(AddCharacterRelationshipDto relationship)
+    {
+        if (_isCharacterEditorReadOnly || relationship is null)
+        {
+            return;
+        }
+
+        var removedCount = _stagedRelationships.RemoveAll(item =>
+            item.SourceCharacterId == relationship.SourceCharacterId
+            && item.TargetFeatureId == relationship.TargetFeatureId);
+        if (removedCount == 0)
+        {
+            return;
+        }
+
+        _relationshipStatusMessage = "Pending relationship removed.";
+        _statusMessage = "Pending relationship removed.";
+    }
+
+    private void DeletePendingRelationshipUpdate(UpdateCharacterRelationshipDto relationship)
+    {
+        if (_editingCharacter is null || _isCharacterEditorReadOnly || relationship is null || relationship.Id <= 0)
+        {
+            return;
+        }
+
+        var existing = _editingCharacter.Relationships
+            .FirstOrDefault(item => item.Id == relationship.Id);
+        if (existing is not null)
+        {
+            DeleteExistingRelationship(existing);
+            return;
+        }
+
+        StageRelationshipDeletion(relationship.Id, relationship.SourceCharacterId, relationship.TargetFeatureId);
+        _relationshipStatusMessage = "Relationship deletion staged. Save All to persist.";
+        _statusMessage = "Relationship deletion staged (unsaved).";
+    }
+
+    private void StageRelationshipDeletion(int relationshipId, int sourceCharacterId, int targetFeatureId)
+    {
+        if (relationshipId <= 0 || sourceCharacterId <= 0 || targetFeatureId <= 0)
+        {
+            return;
+        }
+
+        _stagedRelationships.RemoveAll(item =>
+            item.SourceCharacterId == sourceCharacterId
+            && item.TargetFeatureId == targetFeatureId);
+        _updatedRelationships.Remove(relationshipId);
+        _deletedRelationships[relationshipId] = (sourceCharacterId, targetFeatureId);
+
+        if (_editingRelationshipId == relationshipId)
+        {
+            CancelRelationshipEdit();
+        }
+    }
+
     private void BeginRelationshipEdit(CharacterRelationshipDto relationship)
     {
         if (_editingCharacter is null || _isCharacterEditorReadOnly || relationship is null || relationship.Id <= 0)
@@ -3229,6 +3333,7 @@
             RelationshipTypes = new List<string>(types),
             Description = description
         };
+        _deletedRelationships.Remove(relationship.Id);
 
         CancelRelationshipEdit();
         _relationshipStatusMessage = "Relationship update staged. Save All to persist.";
@@ -3254,7 +3359,9 @@
     private IReadOnlyList<UpdateCharacterRelationshipDto> GetPendingRelationshipUpdatesForCharacter(int characterId)
     {
         return _updatedRelationships.Values
-            .Where(relationship => relationship.SourceCharacterId == characterId)
+            .Where(relationship =>
+                relationship.SourceCharacterId == characterId
+                && !_deletedRelationships.ContainsKey(relationship.Id))
             .OrderBy(relationship => relationship.Id)
             .ToList();
     }
@@ -3287,7 +3394,20 @@
             _updatedRelationships.Remove(relationshipId);
         }
 
-        if (_editingRelationshipId is not null && pendingUpdateIds.Contains(_editingRelationshipId.Value))
+        var pendingDeleteIds = _deletedRelationships
+            .Where(item =>
+                item.Value.SourceCharacterId == targetFeatureId
+                || item.Value.TargetFeatureId == targetFeatureId)
+            .Select(item => item.Key)
+            .ToList();
+
+        foreach (var relationshipId in pendingDeleteIds)
+        {
+            _deletedRelationships.Remove(relationshipId);
+        }
+
+        if (_editingRelationshipId is not null
+            && (pendingUpdateIds.Contains(_editingRelationshipId.Value) || pendingDeleteIds.Contains(_editingRelationshipId.Value)))
         {
             CancelRelationshipEdit();
         }
