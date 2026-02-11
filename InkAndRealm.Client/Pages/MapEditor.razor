@@ -328,6 +328,7 @@
                 @{
                     var editingCharacter = _editingCharacter!;
                     var pendingRelationships = GetPendingRelationshipsForCharacter(editingCharacter.Id);
+                    var pendingRelationshipUpdates = GetPendingRelationshipUpdatesForCharacter(editingCharacter.Id);
                 }
                 <div class="character-editor-row">
                     <label class="form-label">Relationships</label>
@@ -342,6 +343,18 @@
                                     @if (!string.IsNullOrWhiteSpace(relationship.Description))
                                     {
                                         <div class="text-muted small">@relationship.Description</div>
+                                    }
+                                    @if (IsRelationshipUpdateStaged(relationship.Id))
+                                    {
+                                        <div class="text-muted small">Pending update (unsaved)</div>
+                                    }
+                                    @if (!IsCharacterEditorReadOnly)
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm mt-1"
+                                                type="button"
+                                                @onclick="() => BeginRelationshipEdit(relationship)">
+                                            Edit
+                                        </button>
                                     }
                                 </div>
                             }
@@ -368,9 +381,52 @@
                             }
                         </div>
                     }
+                    @if (pendingRelationshipUpdates.Count > 0)
+                    {
+                        <div class="small text-muted mt-2">Pending updates (unsaved)</div>
+                        <div class="small">
+                            @foreach (var relationship in pendingRelationshipUpdates)
+                            {
+                                <div class="mb-2">
+                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending Update")</div>
+                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
+                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                    {
+                                        <div class="text-muted small">@relationship.Description</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
                 @if (!IsCharacterEditorReadOnly)
                 {
+                    @if (_editingRelationshipId is not null)
+                    {
+                        <div class="character-editor-row">
+                            <label class="form-label">Edit Relationship</label>
+                            <div class="small text-muted mb-2">
+                                @GetRelationshipTargetLabel(_editingRelationshipTargetFeatureId, _editingRelationshipTargetFeatureType)
+                            </div>
+                            <input class="form-control mb-2"
+                                   placeholder="Relationship types (comma separated)"
+                                   @bind="_relationshipEditTypesInput"
+                                   @bind:event="oninput" />
+                            <textarea class="form-control mb-2"
+                                      rows="2"
+                                      placeholder="Description (optional)"
+                                      @bind="_relationshipEditDescription"
+                                      @bind:event="oninput"></textarea>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-primary btn-sm" type="button" @onclick="ApplyRelationshipEdit">
+                                    Update Relationship
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="CancelRelationshipEdit">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    }
                     <div class="character-editor-row">
                         <label class="form-label">Add Relationship</label>
                         <input class="form-control mb-2"
@@ -429,6 +485,7 @@
     private readonly List<CharacterFeatureDto> _stagedCharacters = new();
     private readonly List<TitleFeatureDto> _stagedTitles = new();
     private readonly List<AddCharacterRelationshipDto> _stagedRelationships = new();
+    private readonly Dictionary<int, UpdateCharacterRelationshipDto> _updatedRelationships = new();
     private const float MapWidth = 2000f;
     private const float MapHeight = 1200f;
     private const float MinZoom = 0.5f;
@@ -541,6 +598,11 @@
     private string _relationshipReciprocalTypesInput = string.Empty;
     private string _relationshipReciprocalDescription = string.Empty;
     private string _relationshipStatusMessage = string.Empty;
+    private int? _editingRelationshipId;
+    private int _editingRelationshipTargetFeatureId;
+    private string _editingRelationshipTargetFeatureType = string.Empty;
+    private string _relationshipEditTypesInput = string.Empty;
+    private string _relationshipEditDescription = string.Empty;
     private bool _isSelectingRelationshipTarget;
     private CharacterFeatureDto? _relationshipSourceCharacter;
     private MapToolType _relationshipReturnTool;
@@ -566,6 +628,7 @@
         + _editedCharacters.Count
         + _editedTitles.Count
         + _stagedRelationships.Count
+        + _updatedRelationships.Count
         + _deletedTreeIds.Count
         + _deletedHouseIds.Count
         + _deletedCharacterIds.Count
@@ -1715,6 +1778,7 @@
             UpdatedCharacters = _editedCharacters.Values.ToList(),
             UpdatedTitles = _editedTitles.Values.ToList(),
             AddedRelationships = new List<AddCharacterRelationshipDto>(_stagedRelationships),
+            UpdatedRelationships = _updatedRelationships.Values.ToList(),
             DeletedTreeIds = _deletedTreeIds.ToList(),
             DeletedHouseIds = _deletedHouseIds.ToList(),
             DeletedCharacterIds = _deletedCharacterIds.ToList(),
@@ -1761,6 +1825,8 @@
             _stagedCharacters.Clear();
             _stagedTitles.Clear();
             _stagedRelationships.Clear();
+            _updatedRelationships.Clear();
+            CancelRelationshipEdit();
             _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
             ClearEditSelection(true);
             await DrawAsync();
@@ -2169,6 +2235,7 @@
                      .Select(polygon => polygon.Id))
         {
             _deletedWaterPolygonIds.Add(polygonId);
+            RemoveStagedRelationshipChangesForTarget(polygonId);
         }
 
         foreach (var polygonId in _landPolygons
@@ -2176,6 +2243,7 @@
                      .Select(polygon => polygon.Id))
         {
             _deletedLandPolygonIds.Add(polygonId);
+            RemoveStagedRelationshipChangesForTarget(polygonId);
         }
 
         _waterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
@@ -2253,6 +2321,7 @@
         _stagedCharacters.Clear();
         _stagedTitles.Clear();
         _stagedRelationships.Clear();
+        _updatedRelationships.Clear();
         _stagedWaterPolygons.Clear();
         _stagedLandPolygons.Clear();
         _editedWaterPolygons.Clear();
@@ -2278,6 +2347,7 @@
         _relationshipStatusMessage = string.Empty;
         _isSelectingRelationshipTarget = false;
         _relationshipSourceCharacter = null;
+        CancelRelationshipEdit();
     }
 
     private void ClearUndoHistory()
@@ -2636,6 +2706,7 @@
 
     private void OpenCharacterEditor(CharacterFeatureDto character, bool readOnly, bool resetRelationshipForm)
     {
+        CancelRelationshipEdit();
         _editingCharacter = character;
         _isCharacterEditorOpen = true;
         _isCharacterEditorReadOnly = readOnly;
@@ -2647,6 +2718,7 @@
 
     private void CloseCharacterEditor()
     {
+        CancelRelationshipEdit();
         _editingCharacter = null;
         _isCharacterEditorOpen = false;
         _isCharacterEditorReadOnly = false;
@@ -2829,6 +2901,8 @@
         {
             return;
         }
+
+        CancelRelationshipEdit();
 
         if (_editingCharacter.Id <= 0)
         {
@@ -3091,11 +3165,132 @@
         }
     }
 
+    private void BeginRelationshipEdit(CharacterRelationshipDto relationship)
+    {
+        if (_editingCharacter is null || _isCharacterEditorReadOnly || relationship is null || relationship.Id <= 0)
+        {
+            return;
+        }
+
+        _editingRelationshipId = relationship.Id;
+        _editingRelationshipTargetFeatureId = relationship.TargetFeatureId;
+        _editingRelationshipTargetFeatureType = relationship.TargetFeatureType;
+
+        if (_updatedRelationships.TryGetValue(relationship.Id, out var pendingUpdate))
+        {
+            _relationshipEditTypesInput = string.Join(", ", pendingUpdate.RelationshipTypes);
+            _relationshipEditDescription = pendingUpdate.Description ?? string.Empty;
+        }
+        else
+        {
+            _relationshipEditTypesInput = string.Join(", ", relationship.RelationshipTypes ?? new List<string>());
+            _relationshipEditDescription = relationship.Description ?? string.Empty;
+        }
+
+        _relationshipStatusMessage = "Editing relationship details.";
+    }
+
+    private void ApplyRelationshipEdit()
+    {
+        if (_editingCharacter is null || _isCharacterEditorReadOnly || _editingRelationshipId is null)
+        {
+            return;
+        }
+
+        var relationship = _editingCharacter.Relationships
+            .FirstOrDefault(item => item.Id == _editingRelationshipId.Value);
+        if (relationship is null)
+        {
+            CancelRelationshipEdit();
+            _relationshipStatusMessage = "Relationship not found.";
+            return;
+        }
+
+        var types = NormalizeRelationshipTypes(ParseRelationshipTypes(_relationshipEditTypesInput));
+        if (types.Count == 0)
+        {
+            _relationshipStatusMessage = "Enter at least one relationship type.";
+            return;
+        }
+
+        var description = NormalizeRelationshipDescription(_relationshipEditDescription);
+        relationship.RelationshipTypes = types;
+        relationship.Description = description;
+
+        _stagedRelationships.RemoveAll(item =>
+            item.SourceCharacterId == _editingCharacter.Id
+            && item.TargetFeatureId == relationship.TargetFeatureId);
+
+        _updatedRelationships[relationship.Id] = new UpdateCharacterRelationshipDto
+        {
+            Id = relationship.Id,
+            SourceCharacterId = _editingCharacter.Id,
+            TargetFeatureId = relationship.TargetFeatureId,
+            RelationshipTypes = new List<string>(types),
+            Description = description
+        };
+
+        CancelRelationshipEdit();
+        _relationshipStatusMessage = "Relationship update staged. Save All to persist.";
+        _statusMessage = "Relationship update staged (unsaved).";
+    }
+
+    private void CancelRelationshipEdit()
+    {
+        _editingRelationshipId = null;
+        _editingRelationshipTargetFeatureId = 0;
+        _editingRelationshipTargetFeatureType = string.Empty;
+        _relationshipEditTypesInput = string.Empty;
+        _relationshipEditDescription = string.Empty;
+    }
+
     private IReadOnlyList<AddCharacterRelationshipDto> GetPendingRelationshipsForCharacter(int characterId)
     {
         return _stagedRelationships
             .Where(relationship => relationship.SourceCharacterId == characterId)
             .ToList();
+    }
+
+    private IReadOnlyList<UpdateCharacterRelationshipDto> GetPendingRelationshipUpdatesForCharacter(int characterId)
+    {
+        return _updatedRelationships.Values
+            .Where(relationship => relationship.SourceCharacterId == characterId)
+            .OrderBy(relationship => relationship.Id)
+            .ToList();
+    }
+
+    private bool IsRelationshipUpdateStaged(int relationshipId)
+    {
+        return relationshipId > 0 && _updatedRelationships.ContainsKey(relationshipId);
+    }
+
+    private void RemoveStagedRelationshipChangesForTarget(int targetFeatureId)
+    {
+        if (targetFeatureId <= 0)
+        {
+            return;
+        }
+
+        _stagedRelationships.RemoveAll(relationship =>
+            relationship.SourceCharacterId == targetFeatureId
+            || relationship.TargetFeatureId == targetFeatureId);
+
+        var pendingUpdateIds = _updatedRelationships.Values
+            .Where(relationship =>
+                relationship.SourceCharacterId == targetFeatureId
+                || relationship.TargetFeatureId == targetFeatureId)
+            .Select(relationship => relationship.Id)
+            .ToList();
+
+        foreach (var relationshipId in pendingUpdateIds)
+        {
+            _updatedRelationships.Remove(relationshipId);
+        }
+
+        if (_editingRelationshipId is not null && pendingUpdateIds.Contains(_editingRelationshipId.Value))
+        {
+            CancelRelationshipEdit();
+        }
     }
 
     private string GetRelationshipTargetLabel(int targetId, string targetType)
@@ -3651,6 +3846,8 @@
             _stagedWaterPolygons.Remove(polygon);
         }
 
+        RemoveStagedRelationshipChangesForTarget(polygon.Id);
+
         return true;
     }
 
@@ -3689,6 +3886,8 @@
                 RemoveTitlesForTargetFeature(feature.Tree.Id);
             }
 
+            RemoveStagedRelationshipChangesForTarget(feature.Tree.Id);
+
             status = "Tree erased (unsaved).";
             return true;
         }
@@ -3710,6 +3909,8 @@
                 RemoveTitlesForTargetFeature(feature.House.Id);
             }
 
+            RemoveStagedRelationshipChangesForTarget(feature.House.Id);
+
             status = "House erased (unsaved).";
             return true;
         }
@@ -3729,6 +3930,8 @@
                 _editedCharacters.Remove(feature.Character.Id);
                 _characters.Remove(feature.Character);
             }
+
+            RemoveStagedRelationshipChangesForTarget(feature.Character.Id);
 
             if (_editingCharacter == feature.Character)
             {

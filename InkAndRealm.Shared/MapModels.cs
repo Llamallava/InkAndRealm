@@ -104,6 +104,7 @@ public sealed class MapEditsRequest
     public List<CharacterFeatureDto> UpdatedCharacters { get; set; } = new();
     public List<TitleFeatureDto> UpdatedTitles { get; set; } = new();
     public List<AddCharacterRelationshipDto> AddedRelationships { get; set; } = new();
+    public List<UpdateCharacterRelationshipDto> UpdatedRelationships { get; set; } = new();
     public List<int> DeletedTreeIds { get; set; } = new();
     public List<int> DeletedHouseIds { get; set; } = new();
     public List<int> DeletedCharacterIds { get; set; } = new();
@@ -125,6 +126,15 @@ public sealed class AddCharacterRelationshipDto
     public bool CreateReciprocal { get; set; }
     public List<string>? ReciprocalRelationshipTypes { get; set; }
     public string? ReciprocalDescription { get; set; }
+}
+
+public sealed class UpdateCharacterRelationshipDto
+{
+    public int Id { get; set; }
+    public int SourceCharacterId { get; set; }
+    public int TargetFeatureId { get; set; }
+    public List<string> RelationshipTypes { get; set; } = new();
+    public string Description { get; set; } = string.Empty;
 }
 
 public sealed class CreateMapRequest

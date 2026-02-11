@@ -231,6 +231,12 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = hasChanges || relationshipsChanged;
         }
 
+        if (request.UpdatedRelationships is not null && request.UpdatedRelationships.Count > 0)
+        {
+            var relationshipsChanged = await ApplyUpdatedRelationshipsAsync(map, request.UpdatedRelationships, deletedTargetIds);
+            hasChanges = hasChanges || relationshipsChanged;
+        }
+
         if (request.DeletedTreeIds is not null && request.DeletedTreeIds.Count > 0)
         {
             var deletedSet = request.DeletedTreeIds
@@ -1326,6 +1332,117 @@ public sealed class DemoMapController : ControllerBase
                     : NormalizeRelationshipDescription(request.ReciprocalDescription);
 
                 changed = ApplyRelationshipUpsert(relationshipLookup, request.TargetFeatureId, request.SourceCharacterId, reciprocalTypes, reciprocalDescription) || changed;
+            }
+        }
+
+        return changed;
+    }
+
+    private async Task<bool> ApplyUpdatedRelationshipsAsync(
+        MapEntity map,
+        IReadOnlyList<UpdateCharacterRelationshipDto> relationships,
+        HashSet<int> deletedTargetIds)
+    {
+        if (relationships is null || relationships.Count == 0)
+        {
+            return false;
+        }
+
+        var characterIds = map.Features
+            .OfType<CharacterFeatureEntity>()
+            .Where(character => character.Id > 0)
+            .Select(character => character.Id)
+            .ToHashSet();
+
+        if (characterIds.Count == 0)
+        {
+            return false;
+        }
+
+        var featureLookup = map.Features
+            .Where(feature => feature.Id > 0)
+            .ToDictionary(feature => feature.Id);
+
+        var relationshipIds = relationships
+            .Where(relationship => relationship is not null)
+            .Select(relationship => relationship.Id)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+        if (relationshipIds.Count == 0)
+        {
+            return false;
+        }
+
+        var existingRelationships = await _context.FeatureRelationships
+            .Where(relationship => relationshipIds.Contains(relationship.Id))
+            .ToDictionaryAsync(relationship => relationship.Id);
+
+        var changed = false;
+
+        foreach (var request in relationships)
+        {
+            if (request is null)
+            {
+                continue;
+            }
+
+            if (request.Id <= 0 || request.SourceCharacterId <= 0 || request.TargetFeatureId <= 0)
+            {
+                continue;
+            }
+
+            if (deletedTargetIds.Contains(request.SourceCharacterId) || deletedTargetIds.Contains(request.TargetFeatureId))
+            {
+                continue;
+            }
+
+            if (!characterIds.Contains(request.SourceCharacterId))
+            {
+                continue;
+            }
+
+            if (!featureLookup.TryGetValue(request.TargetFeatureId, out var targetFeature))
+            {
+                continue;
+            }
+
+            if (targetFeature is TitleFeatureEntity)
+            {
+                continue;
+            }
+
+            if (!existingRelationships.TryGetValue(request.Id, out var existing))
+            {
+                continue;
+            }
+
+            if (existing.SourceCharacterId != request.SourceCharacterId
+                || existing.TargetFeatureId != request.TargetFeatureId)
+            {
+                continue;
+            }
+
+            var types = NormalizeRelationshipTypes(request.RelationshipTypes);
+            if (types.Count == 0)
+            {
+                continue;
+            }
+
+            var updatedTypePayload = SerializeRelationshipTypes(types);
+            var updatedDescription = NormalizeRelationshipDescription(request.Description);
+
+            if (!string.Equals(existing.RelationshipType, updatedTypePayload, StringComparison.Ordinal))
+            {
+                existing.RelationshipType = updatedTypePayload;
+                changed = true;
+            }
+
+            if (!string.Equals(existing.Description, updatedDescription, StringComparison.Ordinal))
+            {
+                existing.Description = updatedDescription;
+                changed = true;
             }
         }
 
