@@ -144,6 +144,11 @@ public sealed class DemoMapController : ControllerBase
             return NotFound("Map not found.");
         }
 
+        var originalFeatureIds = map.Features
+            .Select(feature => feature.Id)
+            .Where(id => id > 0)
+            .ToHashSet();
+
         var deletedTargetIds = new HashSet<int>();
         CollectDeletedIds(request.DeletedTreeIds, deletedTargetIds);
         CollectDeletedIds(request.DeletedHouseIds, deletedTargetIds);
@@ -651,7 +656,7 @@ public sealed class DemoMapController : ControllerBase
                 .Where(id => id > 0)
                 .ToHashSet();
             var removalTargets = deletedTargetIds
-                .Where(id => mapFeatureIds.Contains(id))
+                .Where(id => originalFeatureIds.Contains(id) && !mapFeatureIds.Contains(id))
                 .ToHashSet();
 
             if (removalTargets.Count > 0)

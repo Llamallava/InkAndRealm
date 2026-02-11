@@ -343,3 +343,106 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
 }
+
+.relationship-tree-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.58);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1180;
+    padding: 1.5rem;
+}
+
+.relationship-tree-card {
+    width: min(1240px, 96vw);
+    max-height: 90vh;
+    background: #ffffff;
+    border-radius: 0.9rem;
+    border: 1px solid #d9dee5;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.relationship-tree-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.2rem;
+    border-bottom: 1px solid #e1e6ee;
+}
+
+.relationship-tree-body {
+    padding: 1rem 1.2rem 1.15rem;
+    overflow: auto;
+}
+
+.relationship-tree-canvas-shell {
+    border: 1px solid #dfe4ea;
+    border-radius: 0.65rem;
+    background: #f8fafc;
+    min-height: 62vh;
+}
+
+.relationship-tree-canvas {
+    display: block;
+    width: 100%;
+    height: 62vh;
+}
+
+.relationship-tree-edge {
+    stroke: #465467;
+    stroke-width: 2;
+    opacity: 0.85;
+}
+
+.relationship-tree-arrowhead {
+    fill: #465467;
+}
+
+.relationship-tree-edge-label {
+    font-size: 11px;
+    color: #334155;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    background: rgba(248, 250, 252, 0.85);
+    border-radius: 0.3rem;
+    padding: 0 0.2rem;
+    pointer-events: none;
+}
+
+.relationship-tree-node circle {
+    stroke-width: 2;
+    cursor: pointer;
+}
+
+.relationship-tree-node-character circle {
+    fill: #dbeafe;
+    stroke: #1d4ed8;
+}
+
+.relationship-tree-node-feature circle {
+    fill: #dcfce7;
+    stroke: #15803d;
+}
+
+.relationship-tree-node:hover circle {
+    filter: brightness(0.95);
+}
+
+.relationship-tree-node-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0f172a;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    pointer-events: none;
+}

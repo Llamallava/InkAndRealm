@@ -186,6 +186,11 @@
                     </div>
                 }
                 <div class="map-editor-topbar-actions">
+                    <button class="btn btn-outline-primary btn-sm"
+                            disabled="@(_isLoading || !IsLoggedIn || !_hasMap)"
+                            @onclick="OpenRelationshipTreeAsync">
+                        Character Tree
+                    </button>
                     <button class="btn btn-primary btn-sm"
                             disabled="@(PendingCount == 0 || _isSaving || !IsLoggedIn || !_hasMap)"
                             @onclick="SaveEditsAsync">
@@ -497,6 +502,130 @@
     </div>
 }
 
+@if (_isRelationshipTreeOpen)
+{
+    <div class="relationship-tree-overlay">
+        <div class="relationship-tree-card">
+            <div class="relationship-tree-header">
+                <div>
+                    <div class="fw-semibold">Character Tree</div>
+                    <div class="small text-muted">Saved relationship data for this map.</div>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="CloseRelationshipTree">
+                    Close
+                </button>
+            </div>
+            <div class="relationship-tree-body">
+                @if (!string.IsNullOrWhiteSpace(_relationshipTreeStatusMessage))
+                {
+                    <div class="alert alert-info py-2 mb-3">@_relationshipTreeStatusMessage</div>
+                }
+                @if (_isRelationshipTreeLoading)
+                {
+                    <div class="text-muted">Loading saved relationship graph...</div>
+                }
+                else if (_relationshipTreeNodes.Count == 0)
+                {
+                    <div class="text-muted">No saved characters found for this map.</div>
+                }
+                else
+                {
+                    <div class="relationship-tree-canvas-shell">
+                        <svg class="relationship-tree-canvas"
+                             viewBox="0 0 @RelationshipTreeCanvasWidth @RelationshipTreeCanvasHeight"
+                             preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <marker id="relationship-tree-arrowhead"
+                                        viewBox="0 0 10 10"
+                                        refX="8"
+                                        refY="5"
+                                        markerWidth="7"
+                                        markerHeight="7"
+                                        orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" class="relationship-tree-arrowhead" />
+                                </marker>
+                            </defs>
+                            @foreach (var edge in _relationshipTreeMergedEdges)
+                            {
+                                if (!_relationshipTreeNodeLookup.TryGetValue(edge.NodeAId, out var nodeA)
+                                    || !_relationshipTreeNodeLookup.TryGetValue(edge.NodeBId, out var nodeB))
+                                {
+                                    continue;
+                                }
+
+                                <line x1="@nodeA.X"
+                                      y1="@nodeA.Y"
+                                      x2="@nodeB.X"
+                                      y2="@nodeB.Y"
+                                      class="relationship-tree-edge"
+                                      marker-start="@GetRelationshipTreeMarkerStart(edge)"
+                                      marker-end="@GetRelationshipTreeMarkerEnd(edge)">
+                                    <title>@GetRelationshipTreeEdgeTooltip(edge)</title>
+                                </line>
+
+                                @if (edge.AToB is not null)
+                                {
+                                    var labelPosition = GetRelationshipTreeLabelPosition(nodeA, nodeB, 0.36f, -12f);
+                                    var labelText = GetRelationshipTreeEdgeLabel(edge.AToB);
+                                    if (!string.IsNullOrWhiteSpace(labelText))
+                                    {
+                                        <foreignObject x="@(labelPosition.X - 62f)"
+                                                       y="@(labelPosition.Y - 10f)"
+                                                       width="124"
+                                                       height="20">
+                                            <div xmlns="http://www.w3.org/1999/xhtml"
+                                                 class="relationship-tree-edge-label">@labelText</div>
+                                        </foreignObject>
+                                    }
+                                }
+
+                                @if (edge.BToA is not null)
+                                {
+                                    var labelPosition = GetRelationshipTreeLabelPosition(nodeB, nodeA, 0.36f, 12f);
+                                    var labelText = GetRelationshipTreeEdgeLabel(edge.BToA);
+                                    if (!string.IsNullOrWhiteSpace(labelText))
+                                    {
+                                        <foreignObject x="@(labelPosition.X - 62f)"
+                                                       y="@(labelPosition.Y - 10f)"
+                                                       width="124"
+                                                       height="20">
+                                            <div xmlns="http://www.w3.org/1999/xhtml"
+                                                 class="relationship-tree-edge-label">@labelText</div>
+                                        </foreignObject>
+                                    }
+                                }
+
+                            }
+
+                            @foreach (var node in _relationshipTreeNodes)
+                            {
+                                <g class="@GetRelationshipTreeNodeClass(node)"
+                                   @onclick="() => SelectRelationshipTreeNode(node)">
+                                    <circle cx="@node.X"
+                                            cy="@node.Y"
+                                            r="@GetRelationshipTreeNodeRadius(node)">
+                                        <title>@GetRelationshipTreeNodeTooltip(node)</title>
+                                    </circle>
+                                    <foreignObject x="@(node.X - 65f)"
+                                                   y="@(node.Y + GetRelationshipTreeNodeRadius(node) + 4f)"
+                                                   width="130"
+                                                   height="28">
+                                        <div xmlns="http://www.w3.org/1999/xhtml"
+                                             class="relationship-tree-node-label">@GetRelationshipTreeNodeShortLabel(node)</div>
+                                    </foreignObject>
+                                </g>
+                            }
+                        </svg>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        Click a character node to open Character Details in read-only mode.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private const string CanvasId = "map-demo-canvas";
     private List<TreeFeatureDto> _trees = new();
@@ -516,6 +645,8 @@
     private const float MaxZoom = 3f;
     private const float CanvasWidth = 1000f;
     private const float CanvasHeight = 600f;
+    private const float RelationshipTreeCanvasWidth = 1400f;
+    private const float RelationshipTreeCanvasHeight = 900f;
     private float _canvasClientWidth = CanvasWidth;
     private float _canvasClientHeight = CanvasHeight;
     private float _lastX;
@@ -536,6 +667,12 @@
     private bool _isSaving;
     private bool _hasMap;
     private string _statusMessage = string.Empty;
+    private bool _isRelationshipTreeOpen;
+    private bool _isRelationshipTreeLoading;
+    private string _relationshipTreeStatusMessage = string.Empty;
+    private readonly List<RelationshipTreeNode> _relationshipTreeNodes = new();
+    private readonly List<RelationshipTreeMergedEdge> _relationshipTreeMergedEdges = new();
+    private readonly Dictionary<int, RelationshipTreeNode> _relationshipTreeNodeLookup = new();
     private readonly List<UndoState> _undoStack = new();
     private readonly List<UndoState> _redoStack = new();
     private UndoBatchKind _undoBatchKind = UndoBatchKind.None;
@@ -1941,6 +2078,7 @@
 
     private async Task LoadMapAsync()
     {
+        CloseRelationshipTree();
         _isLoading = true;
         _statusMessage = "Loading map from the server...";
 
@@ -2313,6 +2451,606 @@
 
         var userId = UserState.CurrentUser?.UserId;
         return userId is null ? $"api/demo-map/{MapId}" : $"api/demo-map/{MapId}?userId={userId.Value}";
+    }
+
+    private async Task OpenRelationshipTreeAsync()
+    {
+        if (_isRelationshipTreeOpen)
+        {
+            return;
+        }
+
+        if (!IsLoggedIn)
+        {
+            _statusMessage = "Log in to view the Character Tree.";
+            return;
+        }
+
+        if (!_hasMap || MapId <= 0)
+        {
+            _statusMessage = "Load a map before opening the Character Tree.";
+            return;
+        }
+
+        _isRelationshipTreeOpen = true;
+        _isRelationshipTreeLoading = true;
+        _relationshipTreeStatusMessage = string.Empty;
+        _relationshipTreeNodes.Clear();
+        _relationshipTreeMergedEdges.Clear();
+        _relationshipTreeNodeLookup.Clear();
+
+        try
+        {
+            var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
+            if (map is null || map.Id <= 0)
+            {
+                _relationshipTreeStatusMessage = "Map data was not found.";
+                return;
+            }
+
+            BuildRelationshipTree(map);
+            if (PendingCount > 0)
+            {
+                _relationshipTreeStatusMessage = "Showing saved state only. Unsaved changes are not included.";
+            }
+        }
+        catch
+        {
+            _relationshipTreeStatusMessage = "Failed to load saved relationship data.";
+        }
+        finally
+        {
+            _isRelationshipTreeLoading = false;
+        }
+    }
+
+    private void CloseRelationshipTree()
+    {
+        _isRelationshipTreeOpen = false;
+        _isRelationshipTreeLoading = false;
+        _relationshipTreeStatusMessage = string.Empty;
+        _relationshipTreeNodes.Clear();
+        _relationshipTreeMergedEdges.Clear();
+        _relationshipTreeNodeLookup.Clear();
+    }
+
+    private void BuildRelationshipTree(MapDto map)
+    {
+        _relationshipTreeNodes.Clear();
+        _relationshipTreeMergedEdges.Clear();
+        _relationshipTreeNodeLookup.Clear();
+
+        var characters = (map.Characters ?? new List<CharacterFeatureDto>())
+            .Where(character => character is not null && character.Id > 0)
+            .GroupBy(character => character.Id)
+            .Select(group => group.First())
+            .OrderBy(character => character.Id)
+            .ToList();
+
+        var characterById = characters.ToDictionary(character => character.Id);
+        var treeIds = (map.Trees ?? new List<TreeFeatureDto>())
+            .Where(tree => tree is not null && tree.Id > 0)
+            .Select(tree => tree.Id)
+            .ToHashSet();
+        var houseIds = (map.Houses ?? new List<HouseFeatureDto>())
+            .Where(house => house is not null && house.Id > 0)
+            .Select(house => house.Id)
+            .ToHashSet();
+        var landIds = (map.AreaPolygons ?? new List<AreaPolygonDto>())
+            .Where(polygon => polygon is not null && polygon.Id > 0 && IsLandFeatureType(polygon.FeatureType))
+            .Select(polygon => polygon.Id)
+            .ToHashSet();
+        var waterIds = (map.AreaPolygons ?? new List<AreaPolygonDto>())
+            .Where(polygon => polygon is not null && polygon.Id > 0 && IsWaterFeatureType(polygon.FeatureType))
+            .Select(polygon => polygon.Id)
+            .ToHashSet();
+
+        var nodeById = new Dictionary<int, RelationshipTreeNode>();
+        foreach (var character in characters)
+        {
+            nodeById[character.Id] = new RelationshipTreeNode
+            {
+                FeatureId = character.Id,
+                FeatureType = "Character",
+                Label = BuildRelationshipTreeCharacterLabel(character),
+                IsCharacter = true,
+                Character = CloneDto(character)
+            };
+        }
+
+        var directedEdges = new List<RelationshipTreeDirectedEdge>();
+        foreach (var character in characters)
+        {
+            if (character.Relationships is null || character.Relationships.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var relationship in character.Relationships)
+            {
+                if (relationship is null || relationship.TargetFeatureId <= 0)
+                {
+                    continue;
+                }
+
+                if (!TryResolveRelationshipTreeTargetNode(
+                        relationship,
+                        characterById,
+                        treeIds,
+                        houseIds,
+                        landIds,
+                        waterIds,
+                        out var targetNode))
+                {
+                    continue;
+                }
+
+                if (character.Id == targetNode.FeatureId)
+                {
+                    continue;
+                }
+
+                if (!nodeById.ContainsKey(targetNode.FeatureId))
+                {
+                    nodeById[targetNode.FeatureId] = targetNode;
+                }
+
+                directedEdges.Add(new RelationshipTreeDirectedEdge
+                {
+                    SourceId = character.Id,
+                    TargetId = targetNode.FeatureId,
+                    RelationshipTypes = relationship.RelationshipTypes is null
+                        ? new List<string>()
+                        : relationship.RelationshipTypes
+                            .Where(value => !string.IsNullOrWhiteSpace(value))
+                            .ToList(),
+                    Description = relationship.Description ?? string.Empty
+                });
+            }
+        }
+
+        var mergedByPair = new Dictionary<(int NodeAId, int NodeBId), RelationshipTreeMergedEdge>();
+        foreach (var edge in directedEdges)
+        {
+            if (edge.SourceId <= 0 || edge.TargetId <= 0 || edge.SourceId == edge.TargetId)
+            {
+                continue;
+            }
+
+            var nodeAId = Math.Min(edge.SourceId, edge.TargetId);
+            var nodeBId = Math.Max(edge.SourceId, edge.TargetId);
+            var pairKey = (nodeAId, nodeBId);
+            if (!mergedByPair.TryGetValue(pairKey, out var mergedEdge))
+            {
+                mergedEdge = new RelationshipTreeMergedEdge
+                {
+                    NodeAId = nodeAId,
+                    NodeBId = nodeBId
+                };
+                mergedByPair[pairKey] = mergedEdge;
+            }
+
+            if (edge.SourceId == nodeAId && edge.TargetId == nodeBId)
+            {
+                mergedEdge.AToB = MergeRelationshipTreeDirectedEdge(mergedEdge.AToB, edge);
+            }
+            else
+            {
+                mergedEdge.BToA = MergeRelationshipTreeDirectedEdge(mergedEdge.BToA, edge);
+            }
+        }
+
+        _relationshipTreeNodes.AddRange(nodeById.Values
+            .OrderBy(node => node.IsCharacter ? 0 : 1)
+            .ThenBy(node => node.FeatureType, StringComparer.Ordinal)
+            .ThenBy(node => node.FeatureId));
+
+        _relationshipTreeMergedEdges.AddRange(mergedByPair.Values
+            .Where(edge => edge.AToB is not null || edge.BToA is not null)
+            .OrderBy(edge => edge.NodeAId)
+            .ThenBy(edge => edge.NodeBId));
+
+        LayoutRelationshipTreeNodes(_relationshipTreeNodes, directedEdges);
+
+        foreach (var node in _relationshipTreeNodes)
+        {
+            _relationshipTreeNodeLookup[node.FeatureId] = node;
+        }
+    }
+
+    private static RelationshipTreeDirectedEdge MergeRelationshipTreeDirectedEdge(
+        RelationshipTreeDirectedEdge? existing,
+        RelationshipTreeDirectedEdge incoming)
+    {
+        if (existing is null)
+        {
+            return new RelationshipTreeDirectedEdge
+            {
+                SourceId = incoming.SourceId,
+                TargetId = incoming.TargetId,
+                RelationshipTypes = new List<string>(incoming.RelationshipTypes),
+                Description = incoming.Description
+            };
+        }
+
+        var mergedTypes = new List<string>(existing.RelationshipTypes);
+        foreach (var type in incoming.RelationshipTypes)
+        {
+            if (mergedTypes.Any(existingType => string.Equals(existingType, type, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            mergedTypes.Add(type);
+        }
+
+        return new RelationshipTreeDirectedEdge
+        {
+            SourceId = existing.SourceId,
+            TargetId = existing.TargetId,
+            RelationshipTypes = mergedTypes,
+            Description = string.IsNullOrWhiteSpace(incoming.Description)
+                ? existing.Description
+                : incoming.Description
+        };
+    }
+
+    private static string BuildRelationshipTreeCharacterLabel(CharacterFeatureDto character)
+    {
+        if (character is null)
+        {
+            return "Character";
+        }
+
+        return string.IsNullOrWhiteSpace(character.Name)
+            ? $"Character #{character.Id}"
+            : character.Name;
+    }
+
+    private static bool TryResolveRelationshipTreeTargetNode(
+        CharacterRelationshipDto relationship,
+        IReadOnlyDictionary<int, CharacterFeatureDto> characterById,
+        IReadOnlySet<int> treeIds,
+        IReadOnlySet<int> houseIds,
+        IReadOnlySet<int> landIds,
+        IReadOnlySet<int> waterIds,
+        out RelationshipTreeNode node)
+    {
+        node = new RelationshipTreeNode();
+
+        if (relationship is null || relationship.TargetFeatureId <= 0)
+        {
+            return false;
+        }
+
+        var targetId = relationship.TargetFeatureId;
+        if (characterById.TryGetValue(targetId, out var character))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Character",
+                Label = BuildRelationshipTreeCharacterLabel(character),
+                IsCharacter = true,
+                Character = CloneDto(character)
+            };
+            return true;
+        }
+
+        if (treeIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Tree",
+                Label = $"Tree #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        if (houseIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "House",
+                Label = $"House #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        if (landIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Land",
+                Label = $"Land #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        if (waterIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Water",
+                Label = $"Water #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        var targetFeatureType = relationship.TargetFeatureType?.Trim() ?? string.Empty;
+        if (string.Equals(targetFeatureType, "Title", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var displayType = string.IsNullOrWhiteSpace(targetFeatureType)
+            ? "Feature"
+            : targetFeatureType;
+        node = new RelationshipTreeNode
+        {
+            FeatureId = targetId,
+            FeatureType = displayType,
+            Label = $"{displayType} #{targetId}",
+            IsCharacter = false
+        };
+        return true;
+    }
+
+    private static void LayoutRelationshipTreeNodes(
+        IReadOnlyList<RelationshipTreeNode> nodes,
+        IReadOnlyList<RelationshipTreeDirectedEdge> edges)
+    {
+        if (nodes is null || nodes.Count == 0)
+        {
+            return;
+        }
+
+        var centerX = RelationshipTreeCanvasWidth * 0.5f;
+        var centerY = RelationshipTreeCanvasHeight * 0.5f;
+        var characterNodes = nodes
+            .Where(node => node.IsCharacter)
+            .OrderBy(node => node.FeatureId)
+            .ToList();
+        var featureNodes = nodes
+            .Where(node => !node.IsCharacter)
+            .OrderBy(node => node.FeatureType, StringComparer.Ordinal)
+            .ThenBy(node => node.FeatureId)
+            .ToList();
+
+        var characterAngles = new Dictionary<int, float>();
+        if (characterNodes.Count == 1)
+        {
+            var singleCharacter = characterNodes[0];
+            singleCharacter.X = centerX;
+            singleCharacter.Y = centerY;
+            characterAngles[singleCharacter.FeatureId] = -MathF.PI / 2f;
+        }
+        else if (characterNodes.Count > 1)
+        {
+            var radius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.26f;
+            for (var index = 0; index < characterNodes.Count; index += 1)
+            {
+                var angle = (-MathF.PI / 2f) + ((2f * MathF.PI * index) / characterNodes.Count);
+                var characterNode = characterNodes[index];
+                characterNode.X = centerX + (radius * MathF.Cos(angle));
+                characterNode.Y = centerY + (radius * MathF.Sin(angle));
+                characterAngles[characterNode.FeatureId] = angle;
+            }
+        }
+
+        if (featureNodes.Count == 0)
+        {
+            return;
+        }
+
+        var orderedFeatures = featureNodes
+            .Select(node => new
+            {
+                Node = node,
+                PreferredAngle = GetRelationshipTreePreferredAngle(node.FeatureId, edges, characterAngles)
+            })
+            .OrderBy(item => item.PreferredAngle)
+            .ThenBy(item => item.Node.FeatureType, StringComparer.Ordinal)
+            .ThenBy(item => item.Node.FeatureId)
+            .Select(item => item.Node)
+            .ToList();
+
+        var outerRadius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.42f;
+        if (orderedFeatures.Count == 1)
+        {
+            var angle = GetRelationshipTreePreferredAngle(orderedFeatures[0].FeatureId, edges, characterAngles);
+            orderedFeatures[0].X = centerX + (outerRadius * MathF.Cos(angle));
+            orderedFeatures[0].Y = centerY + (outerRadius * MathF.Sin(angle));
+            return;
+        }
+
+        for (var index = 0; index < orderedFeatures.Count; index += 1)
+        {
+            var angle = (-MathF.PI / 2f) + ((2f * MathF.PI * index) / orderedFeatures.Count);
+            orderedFeatures[index].X = centerX + (outerRadius * MathF.Cos(angle));
+            orderedFeatures[index].Y = centerY + (outerRadius * MathF.Sin(angle));
+        }
+    }
+
+    private static float GetRelationshipTreePreferredAngle(
+        int featureId,
+        IReadOnlyList<RelationshipTreeDirectedEdge> edges,
+        IReadOnlyDictionary<int, float> characterAngles)
+    {
+        if (edges is null || edges.Count == 0 || characterAngles.Count == 0)
+        {
+            return NormalizeRelationshipTreeAngle((featureId * 37f) * (MathF.PI / 180f));
+        }
+
+        float vectorX = 0f;
+        float vectorY = 0f;
+        foreach (var edge in edges)
+        {
+            if (edge.SourceId == featureId && characterAngles.TryGetValue(edge.TargetId, out var targetAngle))
+            {
+                vectorX += MathF.Cos(targetAngle);
+                vectorY += MathF.Sin(targetAngle);
+                continue;
+            }
+
+            if (edge.TargetId == featureId && characterAngles.TryGetValue(edge.SourceId, out var sourceAngle))
+            {
+                vectorX += MathF.Cos(sourceAngle);
+                vectorY += MathF.Sin(sourceAngle);
+            }
+        }
+
+        if (MathF.Abs(vectorX) < 0.0001f && MathF.Abs(vectorY) < 0.0001f)
+        {
+            return NormalizeRelationshipTreeAngle((featureId * 37f) * (MathF.PI / 180f));
+        }
+
+        return NormalizeRelationshipTreeAngle(MathF.Atan2(vectorY, vectorX));
+    }
+
+    private static float NormalizeRelationshipTreeAngle(float angle)
+    {
+        var normalized = angle;
+        var fullTurn = 2f * MathF.PI;
+        while (normalized < 0f)
+        {
+            normalized += fullTurn;
+        }
+
+        while (normalized >= fullTurn)
+        {
+            normalized -= fullTurn;
+        }
+
+        return normalized;
+    }
+
+    private static MapPointDto GetRelationshipTreeLabelPosition(
+        RelationshipTreeNode from,
+        RelationshipTreeNode to,
+        float distanceFactor,
+        float perpendicularOffset)
+    {
+        var x = from.X + ((to.X - from.X) * distanceFactor);
+        var y = from.Y + ((to.Y - from.Y) * distanceFactor);
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var length = MathF.Sqrt((dx * dx) + (dy * dy));
+        if (length <= 0.001f)
+        {
+            return new MapPointDto { X = x, Y = y };
+        }
+
+        var normalX = -dy / length;
+        var normalY = dx / length;
+        return new MapPointDto
+        {
+            X = x + (normalX * perpendicularOffset),
+            Y = y + (normalY * perpendicularOffset)
+        };
+    }
+
+    private static string? GetRelationshipTreeMarkerStart(RelationshipTreeMergedEdge edge)
+    {
+        return edge.BToA is null ? null : "url(#relationship-tree-arrowhead)";
+    }
+
+    private static string? GetRelationshipTreeMarkerEnd(RelationshipTreeMergedEdge edge)
+    {
+        return edge.AToB is null ? null : "url(#relationship-tree-arrowhead)";
+    }
+
+    private static string GetRelationshipTreeEdgeLabel(RelationshipTreeDirectedEdge edge)
+    {
+        var types = edge.RelationshipTypes is null || edge.RelationshipTypes.Count == 0
+            ? string.Empty
+            : string.Join(", ", edge.RelationshipTypes.Where(value => !string.IsNullOrWhiteSpace(value)));
+        return string.IsNullOrWhiteSpace(types) ? "Relationship" : types;
+    }
+
+    private string GetRelationshipTreeEdgeTooltip(RelationshipTreeMergedEdge edge)
+    {
+        var lines = new List<string>();
+        if (!_relationshipTreeNodeLookup.TryGetValue(edge.NodeAId, out var nodeA)
+            || !_relationshipTreeNodeLookup.TryGetValue(edge.NodeBId, out var nodeB))
+        {
+            return "Relationship";
+        }
+
+        if (edge.AToB is not null)
+        {
+            var detail = GetRelationshipTreeEdgeLabel(edge.AToB);
+            var description = string.IsNullOrWhiteSpace(edge.AToB.Description)
+                ? string.Empty
+                : $" ({edge.AToB.Description.Trim()})";
+            lines.Add($"{nodeA.Label} -> {nodeB.Label}: {detail}{description}");
+        }
+
+        if (edge.BToA is not null)
+        {
+            var detail = GetRelationshipTreeEdgeLabel(edge.BToA);
+            var description = string.IsNullOrWhiteSpace(edge.BToA.Description)
+                ? string.Empty
+                : $" ({edge.BToA.Description.Trim()})";
+            lines.Add($"{nodeB.Label} -> {nodeA.Label}: {detail}{description}");
+        }
+
+        return lines.Count == 0 ? "Relationship" : string.Join(Environment.NewLine, lines);
+    }
+
+    private static string GetRelationshipTreeNodeClass(RelationshipTreeNode node)
+    {
+        return node.IsCharacter
+            ? "relationship-tree-node relationship-tree-node-character"
+            : "relationship-tree-node relationship-tree-node-feature";
+    }
+
+    private static float GetRelationshipTreeNodeRadius(RelationshipTreeNode node)
+    {
+        return node.IsCharacter ? 18f : 13f;
+    }
+
+    private static string GetRelationshipTreeNodeShortLabel(RelationshipTreeNode node)
+    {
+        if (node is null || string.IsNullOrWhiteSpace(node.Label))
+        {
+            return "Feature";
+        }
+
+        var label = node.Label.Trim();
+        const int maxLength = 24;
+        if (label.Length <= maxLength)
+        {
+            return label;
+        }
+
+        return $"{label[..(maxLength - 3)]}...";
+    }
+
+    private static string GetRelationshipTreeNodeTooltip(RelationshipTreeNode node)
+    {
+        return $"{node.Label} [{node.FeatureType}]";
+    }
+
+    private void SelectRelationshipTreeNode(RelationshipTreeNode node)
+    {
+        if (node is null || !node.IsCharacter || node.Character is null)
+        {
+            return;
+        }
+
+        var character = CloneDto(node.Character);
+        CloseRelationshipTree();
+        OpenCharacterEditor(character, readOnly: true, resetRelationshipForm: true);
+        _statusMessage = "Viewing character details from Character Tree.";
     }
 
     private void OnUserChanged()
@@ -5346,6 +6084,33 @@
     {
         public TitleFeatureDto Title { get; init; } = new();
         public bool IsStaged { get; init; }
+    }
+
+    private sealed class RelationshipTreeNode
+    {
+        public int FeatureId { get; init; }
+        public string FeatureType { get; init; } = string.Empty;
+        public string Label { get; init; } = string.Empty;
+        public bool IsCharacter { get; init; }
+        public CharacterFeatureDto? Character { get; init; }
+        public float X { get; set; }
+        public float Y { get; set; }
+    }
+
+    private sealed class RelationshipTreeDirectedEdge
+    {
+        public int SourceId { get; init; }
+        public int TargetId { get; init; }
+        public List<string> RelationshipTypes { get; init; } = new();
+        public string Description { get; init; } = string.Empty;
+    }
+
+    private sealed class RelationshipTreeMergedEdge
+    {
+        public int NodeAId { get; init; }
+        public int NodeBId { get; init; }
+        public RelationshipTreeDirectedEdge? AToB { get; set; }
+        public RelationshipTreeDirectedEdge? BToA { get; set; }
     }
 
     private sealed record ToolDefinition(MapToolType Tool, string Label, string Description, bool IsImplemented);
