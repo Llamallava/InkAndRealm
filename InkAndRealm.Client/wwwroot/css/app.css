@@ -376,6 +376,12 @@ code {
     border-bottom: 1px solid #e1e6ee;
 }
 
+.relationship-tree-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .relationship-tree-body {
     padding: 1rem 1.2rem 1.15rem;
     overflow: auto;
@@ -386,6 +392,12 @@ code {
     border-radius: 0.65rem;
     background: #f8fafc;
     min-height: 62vh;
+    cursor: grab;
+    user-select: none;
+}
+
+.relationship-tree-canvas-shell-panning {
+    cursor: grabbing;
 }
 
 .relationship-tree-canvas {

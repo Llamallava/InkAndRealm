@@ -1,5 +1,6 @@
 @page "/map-demo/{MapId:int}"
 @using System
+@using System.Net
 @using System.Net.Http.Json
 @using System.Linq
 @using System.Text.Json
@@ -457,40 +458,59 @@
                     }
                     <div class="character-editor-row">
                         <label class="form-label">Add Relationship</label>
-                        <input class="form-control mb-2"
-                               placeholder="Relationship types (comma separated)"
-                               @bind="_relationshipTypesInput"
-                               @bind:event="oninput" />
-                        <textarea class="form-control mb-2"
-                                  rows="2"
-                                  placeholder="Description (optional)"
-                                  @bind="_relationshipDescription"
-                                  @bind:event="oninput"></textarea>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input"
-                                   type="checkbox"
-                                   id="relationship-reciprocal-toggle"
-                                   @bind="_relationshipCreateReciprocal" />
-                            <label class="form-check-label" for="relationship-reciprocal-toggle">
-                                Make reciprocal (character targets only)
-                            </label>
-                        </div>
-                        @if (_relationshipCreateReciprocal)
+                        @if (_selectedRelationshipTarget is null)
                         {
+                            <button class="btn btn-outline-primary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
+                                Select Relationship Target
+                            </button>
+                            <div class="small text-muted mt-2">Pick a saved feature on the map before entering relationship details.</div>
+                        }
+                        else
+                        {
+                            <div class="small text-muted mb-2">Target</div>
+                            <div class="fw-semibold mb-2">@GetRelationshipTargetLabel(_selectedRelationshipTarget.TargetId, _selectedRelationshipTarget.IsCharacter ? "Character" : "Feature")</div>
+                            <div class="d-flex gap-2 mb-2">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
+                                    Change Target
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="ClearSelectedRelationshipTarget">
+                                    Clear Target
+                                </button>
+                            </div>
                             <input class="form-control mb-2"
-                                   placeholder="Reciprocal types (comma separated, optional)"
-                                   @bind="_relationshipReciprocalTypesInput"
+                                   placeholder="Relationship types (comma separated)"
+                                   @bind="_relationshipTypesInput"
                                    @bind:event="oninput" />
                             <textarea class="form-control mb-2"
                                       rows="2"
-                                      placeholder="Reciprocal description (optional)"
-                                      @bind="_relationshipReciprocalDescription"
+                                      placeholder="Description (optional)"
+                                      @bind="_relationshipDescription"
                                       @bind:event="oninput"></textarea>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="relationship-reciprocal-toggle"
+                                       @bind="_relationshipCreateReciprocal" />
+                                <label class="form-check-label" for="relationship-reciprocal-toggle">
+                                    Make reciprocal (character targets only)
+                                </label>
+                            </div>
+                            @if (_relationshipCreateReciprocal)
+                            {
+                                <input class="form-control mb-2"
+                                       placeholder="Reciprocal types (comma separated, optional)"
+                                       @bind="_relationshipReciprocalTypesInput"
+                                       @bind:event="oninput" />
+                                <textarea class="form-control mb-2"
+                                          rows="2"
+                                          placeholder="Reciprocal description (optional)"
+                                          @bind="_relationshipReciprocalDescription"
+                                          @bind:event="oninput"></textarea>
+                            }
+                            <button class="btn btn-outline-primary btn-sm" type="button" @onclick="AddSelectedRelationship">
+                                Add Relationship
+                            </button>
                         }
-                        <button class="btn btn-outline-primary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
-                            Add Relationship
-                        </button>
-                        <div class="small text-muted mt-2">After clicking, select a saved feature on the map.</div>
                         @if (!string.IsNullOrWhiteSpace(_relationshipStatusMessage))
                         {
                             <div class="small text-muted mt-2">@_relationshipStatusMessage</div>
@@ -511,9 +531,23 @@
                     <div class="fw-semibold">Character Tree</div>
                     <div class="small text-muted">Saved relationship data for this map.</div>
                 </div>
-                <button class="btn btn-outline-secondary btn-sm" @onclick="CloseRelationshipTree">
-                    Close
-                </button>
+                <div class="relationship-tree-header-actions">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Character Tree zoom">
+                        <button class="btn btn-outline-secondary"
+                                type="button"
+                                @onclick="ZoomOutRelationshipTree">-</button>
+                        <button class="btn btn-outline-secondary"
+                                type="button"
+                                @onclick="ResetRelationshipTreeZoom">Reset</button>
+                        <button class="btn btn-outline-secondary"
+                                type="button"
+                                @onclick="ZoomInRelationshipTree">+</button>
+                    </div>
+                    <div class="small text-muted">@($"{_relationshipTreeZoom * 100:0}%")</div>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="CloseRelationshipTree">
+                        Close
+                    </button>
+                </div>
             </div>
             <div class="relationship-tree-body">
                 @if (!string.IsNullOrWhiteSpace(_relationshipTreeStatusMessage))
@@ -530,9 +564,17 @@
                 }
                 else
                 {
-                    <div class="relationship-tree-canvas-shell">
+                    <div class="@RelationshipTreeCanvasShellClass"
+                         @onmousedown="BeginRelationshipTreePan"
+                         @onmousemove="UpdateRelationshipTreePan"
+                         @onmouseup="EndRelationshipTreePan"
+                         @onmouseleave="EndRelationshipTreePan"
+                         @onmousedown:preventDefault="true"
+                         @onwheel="HandleRelationshipTreeWheel"
+                         @onwheel:preventDefault="true"
+                         @onwheel:stopPropagation="true">
                         <svg class="relationship-tree-canvas"
-                             viewBox="0 0 @RelationshipTreeCanvasWidth @RelationshipTreeCanvasHeight"
+                             viewBox="@RelationshipTreeViewBox"
                              preserveAspectRatio="xMidYMid meet">
                             <defs>
                                 <marker id="relationship-tree-arrowhead"
@@ -618,7 +660,7 @@
                         </svg>
                     </div>
                     <div class="small text-muted mt-2">
-                        Click a character node to open Character Details in read-only mode.
+                        Use mouse wheel over this graph to zoom. Click a character node to open Character Details in read-only mode.
                     </div>
                 }
             </div>
@@ -647,6 +689,9 @@
     private const float CanvasHeight = 600f;
     private const float RelationshipTreeCanvasWidth = 1400f;
     private const float RelationshipTreeCanvasHeight = 900f;
+    private const float RelationshipTreeMinZoom = 1f;
+    private const float RelationshipTreeMaxZoom = 4f;
+    private const float RelationshipTreeZoomStep = 1.12f;
     private float _canvasClientWidth = CanvasWidth;
     private float _canvasClientHeight = CanvasHeight;
     private float _lastX;
@@ -670,6 +715,15 @@
     private bool _isRelationshipTreeOpen;
     private bool _isRelationshipTreeLoading;
     private string _relationshipTreeStatusMessage = string.Empty;
+    private float _relationshipTreeZoom = 1f;
+    private float _relationshipTreeViewX;
+    private float _relationshipTreeViewY;
+    private bool _isRelationshipTreePanning;
+    private bool _relationshipTreeSuppressNodeClick;
+    private float _relationshipTreePanStartClientX;
+    private float _relationshipTreePanStartClientY;
+    private float _relationshipTreePanOriginX;
+    private float _relationshipTreePanOriginY;
     private readonly List<RelationshipTreeNode> _relationshipTreeNodes = new();
     private readonly List<RelationshipTreeMergedEdge> _relationshipTreeMergedEdges = new();
     private readonly Dictionary<int, RelationshipTreeNode> _relationshipTreeNodeLookup = new();
@@ -766,6 +820,7 @@
     private string _relationshipEditDescription = string.Empty;
     private bool _isSelectingRelationshipTarget;
     private CharacterFeatureDto? _relationshipSourceCharacter;
+    private RelationshipTargetSelection? _selectedRelationshipTarget;
     private MapToolType _relationshipReturnTool;
     private PlacementType _relationshipReturnPlacement;
     private bool _relationshipReturnReadOnly;
@@ -1958,7 +2013,7 @@
                 .ToList()
         };
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
+        using var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
 
         if (response.IsSuccessStatusCode)
         {
@@ -1995,9 +2050,17 @@
             ClearEditSelection(true);
             await DrawAsync();
         }
+        else if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            _statusMessage = "Your session is no longer valid. Please log in again.";
+        }
         else
         {
-            _statusMessage = "Failed to save changes.";
+            var message = await response.Content.ReadAsStringAsync();
+            _statusMessage = string.IsNullOrWhiteSpace(message)
+                ? "Failed to save changes."
+                : message;
         }
 
         _isSaving = false;
@@ -2116,7 +2179,26 @@
             return;
         }
 
-        var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
+        using var response = await Http.GetAsync(GetMapUrl());
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            _statusMessage = "Your session is no longer valid. Please log in again.";
+            _isLoading = false;
+            return;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await response.Content.ReadAsStringAsync();
+            _statusMessage = string.IsNullOrWhiteSpace(message)
+                ? "Failed to load map."
+                : message;
+            _isLoading = false;
+            return;
+        }
+
+        var map = await response.Content.ReadFromJsonAsync<MapDto>();
         _trees = map?.Trees ?? new List<TreeFeatureDto>();
         _houses = map?.Houses ?? new List<HouseFeatureDto>();
         _characters = map?.Characters ?? new List<CharacterFeatureDto>();
@@ -2453,6 +2535,140 @@
         return userId is null ? $"api/demo-map/{MapId}" : $"api/demo-map/{MapId}?userId={userId.Value}";
     }
 
+    private string RelationshipTreeViewBox => FormattableString.Invariant(
+        $"{_relationshipTreeViewX} {_relationshipTreeViewY} {RelationshipTreeCanvasWidth / _relationshipTreeZoom} {RelationshipTreeCanvasHeight / _relationshipTreeZoom}");
+    private string RelationshipTreeCanvasShellClass => _isRelationshipTreePanning
+        ? "relationship-tree-canvas-shell relationship-tree-canvas-shell-panning"
+        : "relationship-tree-canvas-shell";
+
+    private void BeginRelationshipTreePan(MouseEventArgs args)
+    {
+        if (_isRelationshipTreeLoading || _relationshipTreeNodes.Count == 0 || args.Button != 0)
+        {
+            return;
+        }
+
+        _isRelationshipTreePanning = true;
+        _relationshipTreeSuppressNodeClick = false;
+        _relationshipTreePanStartClientX = (float)args.ClientX;
+        _relationshipTreePanStartClientY = (float)args.ClientY;
+        _relationshipTreePanOriginX = _relationshipTreeViewX;
+        _relationshipTreePanOriginY = _relationshipTreeViewY;
+    }
+
+    private void UpdateRelationshipTreePan(MouseEventArgs args)
+    {
+        if (!_isRelationshipTreePanning)
+        {
+            return;
+        }
+
+        if (args.Buttons == 0)
+        {
+            EndRelationshipTreePan(args);
+            return;
+        }
+
+        var dx = (float)args.ClientX - _relationshipTreePanStartClientX;
+        var dy = (float)args.ClientY - _relationshipTreePanStartClientY;
+        if (MathF.Abs(dx) > 2f || MathF.Abs(dy) > 2f)
+        {
+            _relationshipTreeSuppressNodeClick = true;
+        }
+
+        _relationshipTreeViewX = _relationshipTreePanOriginX - (dx / _relationshipTreeZoom);
+        _relationshipTreeViewY = _relationshipTreePanOriginY - (dy / _relationshipTreeZoom);
+        ClampRelationshipTreeViewport();
+    }
+
+    private void EndRelationshipTreePan(MouseEventArgs _)
+    {
+        _isRelationshipTreePanning = false;
+    }
+
+    private void HandleRelationshipTreeWheel(WheelEventArgs args)
+    {
+        if (_isRelationshipTreeLoading || _relationshipTreeNodes.Count == 0)
+        {
+            return;
+        }
+
+        if (args.DeltaY < 0)
+        {
+            ZoomRelationshipTree(RelationshipTreeZoomStep);
+            return;
+        }
+
+        if (args.DeltaY > 0)
+        {
+            ZoomRelationshipTree(1f / RelationshipTreeZoomStep);
+        }
+    }
+
+    private void ZoomInRelationshipTree()
+    {
+        ZoomRelationshipTree(RelationshipTreeZoomStep);
+    }
+
+    private void ZoomOutRelationshipTree()
+    {
+        ZoomRelationshipTree(1f / RelationshipTreeZoomStep);
+    }
+
+    private void ResetRelationshipTreeZoom()
+    {
+        ResetRelationshipTreeViewport();
+    }
+
+    private void ZoomRelationshipTree(float factor)
+    {
+        if (factor <= 0f)
+        {
+            return;
+        }
+
+        var oldZoom = _relationshipTreeZoom;
+        var nextZoom = Math.Clamp(oldZoom * factor, RelationshipTreeMinZoom, RelationshipTreeMaxZoom);
+        if (MathF.Abs(nextZoom - oldZoom) < 0.001f)
+        {
+            return;
+        }
+
+        var oldViewWidth = RelationshipTreeCanvasWidth / oldZoom;
+        var oldViewHeight = RelationshipTreeCanvasHeight / oldZoom;
+        var centerX = _relationshipTreeViewX + (oldViewWidth * 0.5f);
+        var centerY = _relationshipTreeViewY + (oldViewHeight * 0.5f);
+
+        _relationshipTreeZoom = nextZoom;
+
+        var nextViewWidth = RelationshipTreeCanvasWidth / _relationshipTreeZoom;
+        var nextViewHeight = RelationshipTreeCanvasHeight / _relationshipTreeZoom;
+        _relationshipTreeViewX = centerX - (nextViewWidth * 0.5f);
+        _relationshipTreeViewY = centerY - (nextViewHeight * 0.5f);
+
+        ClampRelationshipTreeViewport();
+    }
+
+    private void ResetRelationshipTreeViewport()
+    {
+        _relationshipTreeZoom = 1f;
+        _relationshipTreeViewX = 0f;
+        _relationshipTreeViewY = 0f;
+        _isRelationshipTreePanning = false;
+        _relationshipTreeSuppressNodeClick = false;
+    }
+
+    private void ClampRelationshipTreeViewport()
+    {
+        var viewWidth = RelationshipTreeCanvasWidth / _relationshipTreeZoom;
+        var viewHeight = RelationshipTreeCanvasHeight / _relationshipTreeZoom;
+        var maxViewX = MathF.Max(0f, RelationshipTreeCanvasWidth - viewWidth);
+        var maxViewY = MathF.Max(0f, RelationshipTreeCanvasHeight - viewHeight);
+
+        _relationshipTreeViewX = Math.Clamp(_relationshipTreeViewX, 0f, maxViewX);
+        _relationshipTreeViewY = Math.Clamp(_relationshipTreeViewY, 0f, maxViewY);
+    }
+
     private async Task OpenRelationshipTreeAsync()
     {
         if (_isRelationshipTreeOpen)
@@ -2478,10 +2694,25 @@
         _relationshipTreeNodes.Clear();
         _relationshipTreeMergedEdges.Clear();
         _relationshipTreeNodeLookup.Clear();
+        ResetRelationshipTreeViewport();
 
         try
         {
-            var map = await Http.GetFromJsonAsync<MapDto>(GetMapUrl());
+            using var response = await Http.GetAsync(GetMapUrl());
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                await UserState.SetUserAsync(null);
+                _relationshipTreeStatusMessage = "Your session is no longer valid. Please log in again.";
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _relationshipTreeStatusMessage = "Failed to load saved relationship data.";
+                return;
+            }
+
+            var map = await response.Content.ReadFromJsonAsync<MapDto>();
             if (map is null || map.Id <= 0)
             {
                 _relationshipTreeStatusMessage = "Map data was not found.";
@@ -2512,6 +2743,7 @@
         _relationshipTreeNodes.Clear();
         _relationshipTreeMergedEdges.Clear();
         _relationshipTreeNodeLookup.Clear();
+        ResetRelationshipTreeViewport();
     }
 
     private void BuildRelationshipTree(MapDto map)
@@ -2824,113 +3056,440 @@
             .OrderBy(node => node.FeatureType, StringComparer.Ordinal)
             .ThenBy(node => node.FeatureId)
             .ToList();
+        if (characterNodes.Count <= 10)
+        {
+            LayoutRelationshipTreeCharactersCircular(characterNodes, centerX, centerY);
+        }
+        else
+        {
+            LayoutRelationshipTreeCharactersChaotic(characterNodes, edges, centerX, centerY);
+        }
 
-        var characterAngles = new Dictionary<int, float>();
+        var characterPositions = new Dictionary<int, MapPointDto>();
+        foreach (var characterNode in characterNodes)
+        {
+            characterPositions[characterNode.FeatureId] = new MapPointDto
+            {
+                X = characterNode.X,
+                Y = characterNode.Y
+            };
+        }
+
+        LayoutRelationshipTreeFeatureNodes(featureNodes, edges, characterPositions, centerX, centerY);
+    }
+
+    private static void LayoutRelationshipTreeCharactersCircular(
+        IReadOnlyList<RelationshipTreeNode> characterNodes,
+        float centerX,
+        float centerY)
+    {
+        if (characterNodes.Count == 0)
+        {
+            return;
+        }
+
         if (characterNodes.Count == 1)
         {
-            var singleCharacter = characterNodes[0];
-            singleCharacter.X = centerX;
-            singleCharacter.Y = centerY;
-            characterAngles[singleCharacter.FeatureId] = -MathF.PI / 2f;
+            characterNodes[0].X = centerX;
+            characterNodes[0].Y = centerY;
+            return;
         }
-        else if (characterNodes.Count > 1)
+
+        var radius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.26f;
+        for (var index = 0; index < characterNodes.Count; index += 1)
         {
-            var radius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.26f;
-            for (var index = 0; index < characterNodes.Count; index += 1)
+            var angle = (-MathF.PI / 2f) + ((2f * MathF.PI * index) / characterNodes.Count);
+            var node = characterNodes[index];
+            node.X = centerX + (radius * MathF.Cos(angle));
+            node.Y = centerY + (radius * MathF.Sin(angle));
+        }
+    }
+
+    private static void LayoutRelationshipTreeCharactersChaotic(
+        IReadOnlyList<RelationshipTreeNode> characterNodes,
+        IReadOnlyList<RelationshipTreeDirectedEdge> edges,
+        float centerX,
+        float centerY)
+    {
+        if (characterNodes.Count == 0)
+        {
+            return;
+        }
+
+        if (characterNodes.Count == 1)
+        {
+            characterNodes[0].X = centerX;
+            characterNodes[0].Y = centerY;
+            return;
+        }
+
+        var indexById = characterNodes
+            .Select((node, index) => new { node.FeatureId, Index = index })
+            .ToDictionary(entry => entry.FeatureId, entry => entry.Index);
+        var characterIds = indexById.Keys.ToHashSet();
+        var neighborsById = new Dictionary<int, HashSet<int>>();
+        foreach (var node in characterNodes)
+        {
+            neighborsById[node.FeatureId] = new HashSet<int>();
+        }
+
+        var pairWeights = new Dictionary<(int NodeA, int NodeB), float>();
+        if (edges is not null)
+        {
+            foreach (var edge in edges)
             {
-                var angle = (-MathF.PI / 2f) + ((2f * MathF.PI * index) / characterNodes.Count);
-                var characterNode = characterNodes[index];
-                characterNode.X = centerX + (radius * MathF.Cos(angle));
-                characterNode.Y = centerY + (radius * MathF.Sin(angle));
-                characterAngles[characterNode.FeatureId] = angle;
+                if (!characterIds.Contains(edge.SourceId)
+                    || !characterIds.Contains(edge.TargetId)
+                    || edge.SourceId == edge.TargetId)
+                {
+                    continue;
+                }
+
+                var nodeA = Math.Min(edge.SourceId, edge.TargetId);
+                var nodeB = Math.Max(edge.SourceId, edge.TargetId);
+                var key = (nodeA, nodeB);
+                pairWeights[key] = pairWeights.TryGetValue(key, out var existing)
+                    ? existing + 1f
+                    : 1f;
+
+                neighborsById[edge.SourceId].Add(edge.TargetId);
+                neighborsById[edge.TargetId].Add(edge.SourceId);
             }
         }
 
+        var x = new float[characterNodes.Count];
+        var y = new float[characterNodes.Count];
+        var velocityX = new float[characterNodes.Count];
+        var velocityY = new float[characterNodes.Count];
+        var forceX = new float[characterNodes.Count];
+        var forceY = new float[characterNodes.Count];
+        var maxRadius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.34f;
+        var minRadius = maxRadius * 0.18f;
+        for (var index = 0; index < characterNodes.Count; index += 1)
+        {
+            var node = characterNodes[index];
+            var degree = neighborsById.TryGetValue(node.FeatureId, out var neighbors)
+                ? neighbors.Count
+                : 0;
+            var degreeRatio = characterNodes.Count <= 1
+                ? 0f
+                : (degree / (float)(characterNodes.Count - 1));
+            var angle = RelationshipTreeNoise01((node.FeatureId * 0.61f) + (characterNodes.Count * 1.37f)) * (2f * MathF.PI);
+            var radialNoise = RelationshipTreeNoise01((node.FeatureId * 1.17f) + (degree * 13.11f));
+            var radiusWeight = (1f - degreeRatio) * (0.55f + (0.45f * radialNoise));
+            var radius = minRadius + (radiusWeight * (maxRadius - minRadius));
+            x[index] = ClampRelationshipTreeX(centerX + (radius * MathF.Cos(angle)));
+            y[index] = ClampRelationshipTreeY(centerY + (radius * MathF.Sin(angle)));
+        }
+
+        var springs = new List<(int IndexA, int IndexB, float Weight, float SharedRatio)>();
+        foreach (var pair in pairWeights)
+        {
+            if (!indexById.TryGetValue(pair.Key.NodeA, out var indexA)
+                || !indexById.TryGetValue(pair.Key.NodeB, out var indexB))
+            {
+                continue;
+            }
+
+            var neighborsA = neighborsById[pair.Key.NodeA];
+            var neighborsB = neighborsById[pair.Key.NodeB];
+            var sharedCount = neighborsA.Count < neighborsB.Count
+                ? neighborsA.Count(candidate => neighborsB.Contains(candidate))
+                : neighborsB.Count(candidate => neighborsA.Contains(candidate));
+            var possibleShared = Math.Max(1, Math.Min(neighborsA.Count, neighborsB.Count));
+            var sharedRatio = sharedCount / (float)possibleShared;
+            springs.Add((indexA, indexB, pair.Value, sharedRatio));
+        }
+
+        var iterations = Math.Clamp(140 + (characterNodes.Count * 5), 180, 360);
+        var repulsionStrength = 19000f + (characterNodes.Count * 160f);
+        var baseEdgeLength = Math.Clamp(220f - (characterNodes.Count * 2.4f), 88f, 180f);
+        const float springStrength = 0.055f;
+        const float centeringStrength = 0.010f;
+        const float damping = 0.84f;
+        const float maxStep = 17f;
+
+        for (var iteration = 0; iteration < iterations; iteration += 1)
+        {
+            Array.Fill(forceX, 0f);
+            Array.Fill(forceY, 0f);
+
+            for (var i = 0; i < characterNodes.Count; i += 1)
+            {
+                for (var j = i + 1; j < characterNodes.Count; j += 1)
+                {
+                    var dx = x[j] - x[i];
+                    var dy = y[j] - y[i];
+                    var distanceSquared = (dx * dx) + (dy * dy);
+                    if (distanceSquared < 0.1f)
+                    {
+                        dx = (RelationshipTreeNoise01((iteration * 193f) + i + (j * 17f)) - 0.5f) * 0.3f;
+                        dy = (RelationshipTreeNoise01((iteration * 311f) + j + (i * 13f)) - 0.5f) * 0.3f;
+                        distanceSquared = (dx * dx) + (dy * dy);
+                    }
+
+                    distanceSquared = MathF.Max(distanceSquared, 0.1f);
+                    var distance = MathF.Sqrt(distanceSquared);
+                    var unitX = dx / distance;
+                    var unitY = dy / distance;
+                    var force = repulsionStrength / distanceSquared;
+                    forceX[i] -= unitX * force;
+                    forceY[i] -= unitY * force;
+                    forceX[j] += unitX * force;
+                    forceY[j] += unitY * force;
+                }
+            }
+
+            foreach (var spring in springs)
+            {
+                var dx = x[spring.IndexB] - x[spring.IndexA];
+                var dy = y[spring.IndexB] - y[spring.IndexA];
+                var distanceSquared = (dx * dx) + (dy * dy);
+                if (distanceSquared < 0.1f)
+                {
+                    continue;
+                }
+
+                var distance = MathF.Sqrt(distanceSquared);
+                var desiredLength = baseEdgeLength * (1f - (spring.SharedRatio * 0.28f));
+                var connectionStrength = springStrength
+                    * (1f + ((spring.Weight - 1f) * 0.35f) + (spring.SharedRatio * 1.35f));
+                var delta = distance - desiredLength;
+                var force = connectionStrength * delta;
+                var unitX = dx / distance;
+                var unitY = dy / distance;
+                forceX[spring.IndexA] += unitX * force;
+                forceY[spring.IndexA] += unitY * force;
+                forceX[spring.IndexB] -= unitX * force;
+                forceY[spring.IndexB] -= unitY * force;
+            }
+
+            for (var index = 0; index < characterNodes.Count; index += 1)
+            {
+                forceX[index] += (centerX - x[index]) * centeringStrength;
+                forceY[index] += (centerY - y[index]) * centeringStrength;
+
+                velocityX[index] = (velocityX[index] + forceX[index]) * damping;
+                velocityY[index] = (velocityY[index] + forceY[index]) * damping;
+                var stepX = Math.Clamp(velocityX[index], -maxStep, maxStep);
+                var stepY = Math.Clamp(velocityY[index], -maxStep, maxStep);
+                x[index] = ClampRelationshipTreeX(x[index] + stepX);
+                y[index] = ClampRelationshipTreeY(y[index] + stepY);
+            }
+        }
+
+        for (var pass = 0; pass < 4; pass += 1)
+        {
+            for (var i = 0; i < characterNodes.Count; i += 1)
+            {
+                for (var j = i + 1; j < characterNodes.Count; j += 1)
+                {
+                    var dx = x[j] - x[i];
+                    var dy = y[j] - y[i];
+                    var distanceSquared = (dx * dx) + (dy * dy);
+                    if (distanceSquared < 0.1f)
+                    {
+                        continue;
+                    }
+
+                    var distance = MathF.Sqrt(distanceSquared);
+                    const float minDistance = 44f;
+                    if (distance >= minDistance)
+                    {
+                        continue;
+                    }
+
+                    var push = (minDistance - distance) * 0.5f;
+                    var unitX = dx / distance;
+                    var unitY = dy / distance;
+                    x[i] = ClampRelationshipTreeX(x[i] - (unitX * push));
+                    y[i] = ClampRelationshipTreeY(y[i] - (unitY * push));
+                    x[j] = ClampRelationshipTreeX(x[j] + (unitX * push));
+                    y[j] = ClampRelationshipTreeY(y[j] + (unitY * push));
+                }
+            }
+        }
+
+        for (var index = 0; index < characterNodes.Count; index += 1)
+        {
+            var node = characterNodes[index];
+            var jitterX = (RelationshipTreeNoise01((node.FeatureId * 31.7f) + 7f) - 0.5f) * 4f;
+            var jitterY = (RelationshipTreeNoise01((node.FeatureId * 63.1f) + 11f) - 0.5f) * 4f;
+            node.X = ClampRelationshipTreeX(x[index] + jitterX);
+            node.Y = ClampRelationshipTreeY(y[index] + jitterY);
+        }
+    }
+
+    private static void LayoutRelationshipTreeFeatureNodes(
+        IReadOnlyList<RelationshipTreeNode> featureNodes,
+        IReadOnlyList<RelationshipTreeDirectedEdge> edges,
+        IReadOnlyDictionary<int, MapPointDto> characterPositions,
+        float centerX,
+        float centerY)
+    {
         if (featureNodes.Count == 0)
         {
             return;
         }
 
-        var orderedFeatures = featureNodes
-            .Select(node => new
+        var featureIds = featureNodes
+            .Select(node => node.FeatureId)
+            .ToHashSet();
+        var charactersByFeature = new Dictionary<int, HashSet<int>>();
+        if (edges is not null && edges.Count > 0)
+        {
+            foreach (var edge in edges)
             {
-                Node = node,
-                PreferredAngle = GetRelationshipTreePreferredAngle(node.FeatureId, edges, characterAngles)
-            })
-            .OrderBy(item => item.PreferredAngle)
-            .ThenBy(item => item.Node.FeatureType, StringComparer.Ordinal)
-            .ThenBy(item => item.Node.FeatureId)
-            .Select(item => item.Node)
-            .ToList();
+                if (featureIds.Contains(edge.SourceId)
+                    && characterPositions.ContainsKey(edge.TargetId))
+                {
+                    if (!charactersByFeature.TryGetValue(edge.SourceId, out var related))
+                    {
+                        related = new HashSet<int>();
+                        charactersByFeature[edge.SourceId] = related;
+                    }
+
+                    related.Add(edge.TargetId);
+                }
+
+                if (featureIds.Contains(edge.TargetId)
+                    && characterPositions.ContainsKey(edge.SourceId))
+                {
+                    if (!charactersByFeature.TryGetValue(edge.TargetId, out var related))
+                    {
+                        related = new HashSet<int>();
+                        charactersByFeature[edge.TargetId] = related;
+                    }
+
+                    related.Add(edge.SourceId);
+                }
+            }
+        }
+
+        var occupiedNodes = new List<(float X, float Y, float Radius)>();
+        foreach (var position in characterPositions.Values)
+        {
+            occupiedNodes.Add((position.X, position.Y, 18f));
+        }
 
         var outerRadius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.42f;
-        if (orderedFeatures.Count == 1)
+        foreach (var node in featureNodes)
         {
-            var angle = GetRelationshipTreePreferredAngle(orderedFeatures[0].FeatureId, edges, characterAngles);
-            orderedFeatures[0].X = centerX + (outerRadius * MathF.Cos(angle));
-            orderedFeatures[0].Y = centerY + (outerRadius * MathF.Sin(angle));
-            return;
-        }
+            float anchorX;
+            float anchorY;
+            float placementRadius;
+            if (charactersByFeature.TryGetValue(node.FeatureId, out var relatedCharacters)
+                && relatedCharacters.Count > 0)
+            {
+                var relatedPositions = relatedCharacters
+                    .Where(characterId => characterPositions.ContainsKey(characterId))
+                    .Select(characterId => characterPositions[characterId])
+                    .ToList();
+                if (relatedPositions.Count == 0)
+                {
+                    anchorX = centerX;
+                    anchorY = centerY;
+                    placementRadius = 70f;
+                }
+                else
+                {
+                    anchorX = relatedPositions.Average(position => position.X);
+                    anchorY = relatedPositions.Average(position => position.Y);
+                    var density = MathF.Min(1f, relatedPositions.Count / 6f);
+                    placementRadius = 40f + ((1f - density) * 60f);
+                }
+            }
+            else
+            {
+                var angle = RelationshipTreeNoise01((node.FeatureId * 0.93f) + 17f) * (2f * MathF.PI);
+                var radiusFactor = 0.82f + (0.15f * RelationshipTreeNoise01((node.FeatureId * 1.31f) + 3f));
+                anchorX = centerX + ((outerRadius * radiusFactor) * MathF.Cos(angle));
+                anchorY = centerY + ((outerRadius * radiusFactor) * MathF.Sin(angle));
+                placementRadius = 30f + (35f * RelationshipTreeNoise01((node.FeatureId * 2.71f) + 5f));
+            }
 
-        for (var index = 0; index < orderedFeatures.Count; index += 1)
-        {
-            var angle = (-MathF.PI / 2f) + ((2f * MathF.PI * index) / orderedFeatures.Count);
-            orderedFeatures[index].X = centerX + (outerRadius * MathF.Cos(angle));
-            orderedFeatures[index].Y = centerY + (outerRadius * MathF.Sin(angle));
+            var placement = FindRelationshipTreeOpenSpot(
+                anchorX,
+                anchorY,
+                placementRadius,
+                node.FeatureId,
+                13f,
+                occupiedNodes);
+            node.X = placement.X;
+            node.Y = placement.Y;
+            occupiedNodes.Add((node.X, node.Y, 13f));
         }
     }
 
-    private static float GetRelationshipTreePreferredAngle(
-        int featureId,
-        IReadOnlyList<RelationshipTreeDirectedEdge> edges,
-        IReadOnlyDictionary<int, float> characterAngles)
+    private static MapPointDto FindRelationshipTreeOpenSpot(
+        float anchorX,
+        float anchorY,
+        float baseRadius,
+        int seed,
+        float radius,
+        IReadOnlyList<(float X, float Y, float Radius)> occupiedNodes)
     {
-        if (edges is null || edges.Count == 0 || characterAngles.Count == 0)
+        var startAngle = RelationshipTreeNoise01((seed * 0.87f) + 19.1f) * (2f * MathF.PI);
+        for (var ring = 0; ring <= 8; ring += 1)
         {
-            return NormalizeRelationshipTreeAngle((featureId * 37f) * (MathF.PI / 180f));
-        }
-
-        float vectorX = 0f;
-        float vectorY = 0f;
-        foreach (var edge in edges)
-        {
-            if (edge.SourceId == featureId && characterAngles.TryGetValue(edge.TargetId, out var targetAngle))
+            var ringRadius = ring == 0 ? 0f : baseRadius + ((ring - 1) * 22f);
+            var samples = ring == 0 ? 1 : 12;
+            for (var sample = 0; sample < samples; sample += 1)
             {
-                vectorX += MathF.Cos(targetAngle);
-                vectorY += MathF.Sin(targetAngle);
-                continue;
-            }
+                var angle = startAngle + ((2f * MathF.PI * sample) / samples) + (ring * 0.41f);
+                var x = ClampRelationshipTreeX(anchorX + (ringRadius * MathF.Cos(angle)));
+                var y = ClampRelationshipTreeY(anchorY + (ringRadius * MathF.Sin(angle)));
+                if (!IsRelationshipTreePositionOpen(x, y, radius, occupiedNodes))
+                {
+                    continue;
+                }
 
-            if (edge.TargetId == featureId && characterAngles.TryGetValue(edge.SourceId, out var sourceAngle))
-            {
-                vectorX += MathF.Cos(sourceAngle);
-                vectorY += MathF.Sin(sourceAngle);
+                return new MapPointDto { X = x, Y = y };
             }
         }
 
-        if (MathF.Abs(vectorX) < 0.0001f && MathF.Abs(vectorY) < 0.0001f)
+        return new MapPointDto
         {
-            return NormalizeRelationshipTreeAngle((featureId * 37f) * (MathF.PI / 180f));
-        }
-
-        return NormalizeRelationshipTreeAngle(MathF.Atan2(vectorY, vectorX));
+            X = ClampRelationshipTreeX(anchorX),
+            Y = ClampRelationshipTreeY(anchorY)
+        };
     }
 
-    private static float NormalizeRelationshipTreeAngle(float angle)
+    private static bool IsRelationshipTreePositionOpen(
+        float x,
+        float y,
+        float radius,
+        IReadOnlyList<(float X, float Y, float Radius)> occupiedNodes)
     {
-        var normalized = angle;
-        var fullTurn = 2f * MathF.PI;
-        while (normalized < 0f)
+        const float minGap = 12f;
+        foreach (var occupied in occupiedNodes)
         {
-            normalized += fullTurn;
+            var dx = x - occupied.X;
+            var dy = y - occupied.Y;
+            var requiredDistance = radius + occupied.Radius + minGap;
+            if ((dx * dx) + (dy * dy) < (requiredDistance * requiredDistance))
+            {
+                return false;
+            }
         }
 
-        while (normalized >= fullTurn)
-        {
-            normalized -= fullTurn;
-        }
+        return true;
+    }
 
-        return normalized;
+    private static float ClampRelationshipTreeX(float x)
+    {
+        return Math.Clamp(x, 84f, RelationshipTreeCanvasWidth - 84f);
+    }
+
+    private static float ClampRelationshipTreeY(float y)
+    {
+        return Math.Clamp(y, 72f, RelationshipTreeCanvasHeight - 72f);
+    }
+
+    private static float RelationshipTreeNoise01(float value)
+    {
+        var raw = MathF.Sin(value * 12.9898f) * 43758.5453f;
+        return raw - MathF.Floor(raw);
     }
 
     private static MapPointDto GetRelationshipTreeLabelPosition(
@@ -3042,6 +3601,12 @@
 
     private void SelectRelationshipTreeNode(RelationshipTreeNode node)
     {
+        if (_relationshipTreeSuppressNodeClick)
+        {
+            _relationshipTreeSuppressNodeClick = false;
+            return;
+        }
+
         if (node is null || !node.IsCharacter || node.Character is null)
         {
             return;
@@ -3113,6 +3678,7 @@
         _relationshipStatusMessage = string.Empty;
         _isSelectingRelationshipTarget = false;
         _relationshipSourceCharacter = null;
+        _selectedRelationshipTarget = null;
         CancelRelationshipEdit();
     }
 
@@ -3502,6 +4068,8 @@
         _relationshipReciprocalTypesInput = string.Empty;
         _relationshipReciprocalDescription = string.Empty;
         _relationshipStatusMessage = string.Empty;
+        _relationshipSourceCharacter = null;
+        _selectedRelationshipTarget = null;
     }
 
     private void TrackEditedCharacter(CharacterFeatureDto character, bool redraw)
@@ -3676,13 +4244,6 @@
             return;
         }
 
-        var types = NormalizeRelationshipTypes(ParseRelationshipTypes(_relationshipTypesInput));
-        if (types.Count == 0)
-        {
-            _relationshipStatusMessage = "Enter at least one relationship type.";
-            return;
-        }
-
         _relationshipSourceCharacter = _editingCharacter;
         _relationshipReturnTool = _activeTool;
         _relationshipReturnPlacement = _placementType;
@@ -3701,16 +4262,14 @@
         }
 
         _isSelectingRelationshipTarget = false;
-        _statusMessage = "Relationship selection canceled.";
-        _relationshipStatusMessage = "Relationship selection canceled.";
+        _statusMessage = "Relationship target selection canceled.";
+        _relationshipStatusMessage = "Relationship target selection canceled.";
         RestoreRelationshipReturnState();
 
         if (_relationshipSourceCharacter is not null)
         {
             OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
         }
-
-        _relationshipSourceCharacter = null;
     }
 
     private void HandleRelationshipTargetSelection(float mapX, float mapY)
@@ -3732,7 +4291,46 @@
             return;
         }
 
-        var request = BuildRelationshipRequest(selection.TargetId, selection.IsCharacter);
+        _isSelectingRelationshipTarget = false;
+        _selectedRelationshipTarget = selection;
+        RestoreRelationshipReturnState();
+        OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
+        _relationshipStatusMessage = "Target selected. Enter relationship details.";
+        _statusMessage = "Relationship target selected. Enter relationship details and add the relationship.";
+    }
+
+    private void ClearSelectedRelationshipTarget()
+    {
+        _selectedRelationshipTarget = null;
+        _relationshipTypesInput = string.Empty;
+        _relationshipDescription = string.Empty;
+        _relationshipReciprocalTypesInput = string.Empty;
+        _relationshipReciprocalDescription = string.Empty;
+        _relationshipCreateReciprocal = false;
+        _relationshipStatusMessage = "Relationship target cleared.";
+    }
+
+    private void AddSelectedRelationship()
+    {
+        if (_editingCharacter is null || _isCharacterEditorReadOnly)
+        {
+            return;
+        }
+
+        if (_editingCharacter.Id <= 0)
+        {
+            _relationshipStatusMessage = "Save this character before adding relationships.";
+            return;
+        }
+
+        if (_selectedRelationshipTarget is null)
+        {
+            _relationshipStatusMessage = "Select a relationship target first.";
+            return;
+        }
+
+        _relationshipSourceCharacter = _editingCharacter;
+        var request = BuildRelationshipRequest(_selectedRelationshipTarget.TargetId, _selectedRelationshipTarget.IsCharacter);
         if (request is null)
         {
             _relationshipStatusMessage = "Enter at least one relationship type.";
@@ -3740,9 +4338,7 @@
         }
 
         StageRelationship(request);
-        _isSelectingRelationshipTarget = false;
-        RestoreRelationshipReturnState();
-        OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
+        _selectedRelationshipTarget = null;
         _relationshipTypesInput = string.Empty;
         _relationshipDescription = string.Empty;
         _relationshipReciprocalTypesInput = string.Empty;
@@ -3750,7 +4346,6 @@
         _relationshipCreateReciprocal = false;
         _relationshipStatusMessage = "Relationship staged. Save All to persist.";
         _statusMessage = "Relationship staged (unsaved).";
-        _relationshipSourceCharacter = null;
     }
 
     private void RestoreRelationshipReturnState()

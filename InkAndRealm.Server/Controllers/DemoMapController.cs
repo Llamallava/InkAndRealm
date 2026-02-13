@@ -1198,11 +1198,30 @@ public sealed class DemoMapController : ControllerBase
         if (!string.IsNullOrWhiteSpace(sessionToken))
         {
             var now = DateTime.UtcNow;
-            return await _context.Sessions
-                .Where(session => session.Token == sessionToken
-                    && (session.ExpiresUtc == null || session.ExpiresUtc > now))
-                .Select(session => session.User)
-                .FirstOrDefaultAsync();
+            var session = await _context.Sessions
+                .FirstOrDefaultAsync(existing => existing.Token == sessionToken);
+            if (session is null)
+            {
+                return null;
+            }
+
+            if (session.ExpiresUtc.HasValue && session.ExpiresUtc.Value <= now)
+            {
+                _context.Sessions.Remove(session);
+                await _context.SaveChangesAsync();
+                return null;
+            }
+
+            var sessionUser = await _context.Users
+                .FirstOrDefaultAsync(user => user.Id == session.UserId);
+            if (sessionUser is null)
+            {
+                _context.Sessions.Remove(session);
+                await _context.SaveChangesAsync();
+                return null;
+            }
+
+            return sessionUser;
         }
 
         if (userId is null)

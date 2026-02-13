@@ -90,6 +90,47 @@ public sealed class AuthController : ControllerBase
         });
     }
 
+    [HttpGet("session")]
+    public async Task<ActionResult<AuthResponse>> ValidateSession([FromQuery] string? token)
+    {
+        var trimmedToken = (token ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmedToken))
+        {
+            return Unauthorized("Invalid session.");
+        }
+
+        var session = await _context.Sessions
+            .FirstOrDefaultAsync(existing => existing.Token == trimmedToken);
+        if (session is null)
+        {
+            return Unauthorized("Invalid session.");
+        }
+
+        var now = DateTime.UtcNow;
+        if (session.ExpiresUtc.HasValue && session.ExpiresUtc.Value <= now)
+        {
+            _context.Sessions.Remove(session);
+            await _context.SaveChangesAsync();
+            return Unauthorized("Session expired.");
+        }
+
+        var userEntity = await _context.Users
+            .FirstOrDefaultAsync(user => user.Id == session.UserId);
+        if (userEntity is null)
+        {
+            _context.Sessions.Remove(session);
+            await _context.SaveChangesAsync();
+            return Unauthorized("Session is no longer valid.");
+        }
+
+        return Ok(new AuthResponse
+        {
+            UserId = userEntity.Id,
+            Username = userEntity.Username,
+            SessionToken = session.Token
+        });
+    }
+
     private async Task<SessionEntity> CreateSessionAsync(int userId)
     {
         var session = new SessionEntity

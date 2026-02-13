@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using System
+@using System.Net
 @using System.Net.Http.Json
 @using InkAndRealm.Shared
 @using InkAndRealm.Client.State
@@ -109,6 +110,14 @@
             return;
         }
 
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            _statusMessage = "Your session is no longer valid. Please log in again.";
+            _isCreating = false;
+            return;
+        }
+
         var message = await response.Content.ReadAsStringAsync();
         _statusMessage = string.IsNullOrWhiteSpace(message)
             ? "Failed to create a new map."
@@ -129,8 +138,29 @@
         _isLoading = true;
         _statusMessage = string.Empty;
 
-        var maps = await Http.GetFromJsonAsync<List<MapSummaryDto>>(GetMapsUrl());
-        _maps = maps ?? new List<MapSummaryDto>();
+        using var response = await Http.GetAsync(GetMapsUrl());
+        if (response.IsSuccessStatusCode)
+        {
+            var maps = await response.Content.ReadFromJsonAsync<List<MapSummaryDto>>();
+            _maps = maps ?? new List<MapSummaryDto>();
+            _isLoading = false;
+            return;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            _maps = new List<MapSummaryDto>();
+            _statusMessage = "Your session is no longer valid. Please log in again.";
+            _isLoading = false;
+            return;
+        }
+
+        var message = await response.Content.ReadAsStringAsync();
+        _maps = new List<MapSummaryDto>();
+        _statusMessage = string.IsNullOrWhiteSpace(message)
+            ? "Failed to load maps."
+            : message;
         _isLoading = false;
     }
 
