@@ -187,6 +187,14 @@
                     </div>
                 }
                 <div class="map-editor-topbar-actions">
+                    @if (_placementType == PlacementType.Land)
+                    {
+                        <button class="btn btn-outline-success btn-sm"
+                                disabled="@(!CanGenerateStarterLandMass)"
+                                @onclick="GenerateStarterLandMassAsync">
+                            Starter Land
+                        </button>
+                    }
                     <button class="btn btn-outline-primary btn-sm"
                             disabled="@(_isLoading || !IsLoggedIn || !_hasMap)"
                             @onclick="OpenRelationshipTreeAsync">
@@ -945,6 +953,7 @@
     private bool ShowPointSize => IsPointPlacement(_placementType) && _placementType != PlacementType.Character;
     private bool ShowTitleSize => _placementType == PlacementType.Title;
     private bool ShowChaoticEdgesToggle => _placementType == PlacementType.Land;
+    private bool CanGenerateStarterLandMass => _placementType == PlacementType.Land && !_isLoading && !_isSaving && _hasMap;
     private string SelectedPlacementStyle
     {
         get => GetStyleForPlacement(_placementType);
@@ -1809,6 +1818,16 @@
         return (_viewX + ((screenX * scaleX) / _zoom), _viewY + ((screenY * scaleY) / _zoom));
     }
 
+    private MapPointDto GetViewportCenterMapPoint()
+    {
+        var center = ScreenToMap(CanvasWidth * 0.5f, CanvasHeight * 0.5f);
+        return new MapPointDto
+        {
+            X = Math.Clamp(center.X, 0f, MapWidth),
+            Y = Math.Clamp(center.Y, 0f, MapHeight)
+        };
+    }
+
     private bool TryGetMapPoint(MouseEventArgs args, out float mapX, out float mapY)
     {
         var (rawX, rawY) = ScreenToMap((float)args.OffsetX, (float)args.OffsetY);
@@ -1878,6 +1897,42 @@
             _statusMessage = $"Placed tree at {_lastX:0}, {_lastY:0} (unsaved).";
         }
 
+        await DrawAsync();
+    }
+
+    private async Task GenerateStarterLandMassAsync()
+    {
+        if (_placementType != PlacementType.Land)
+        {
+            _statusMessage = "Select Land before generating a starter land mass.";
+            return;
+        }
+
+        EnsureAreaLayers();
+        var layer = _activeAreaLayer;
+        if (layer is null)
+        {
+            _statusMessage = "Select a layer before generating a starter land mass.";
+            return;
+        }
+
+        var points = BuildStarterLandMassPoints();
+        if (points.Count < 3)
+        {
+            _statusMessage = "Unable to generate a starter land mass.";
+            return;
+        }
+
+        PushUndoState();
+        _activePolygonPoints.Clear();
+        _stagedLandPolygons.Add(new AreaPolygonDto
+        {
+            FeatureType = "Land",
+            LayerIndex = layer.LayerIndex,
+            Points = points
+        });
+
+        _statusMessage = $"Starter land mass placed on {GetLayerLabel(layer)} (unsaved).";
         await DrawAsync();
     }
 
@@ -6206,6 +6261,84 @@
         }
 
         return placed;
+    }
+
+    private List<MapPointDto> BuildStarterLandMassPoints()
+    {
+        const float mapEdgePadding = 24f;
+        var maxAllowedRadius = MathF.Min((MapWidth * 0.5f) - mapEdgePadding, (MapHeight * 0.5f) - mapEdgePadding);
+        if (maxAllowedRadius < 50f)
+        {
+            return new List<MapPointDto>();
+        }
+
+        var targetRadius = 220f + (float)(Random.Shared.NextDouble() * 110f);
+        targetRadius = MathF.Min(targetRadius, maxAllowedRadius);
+
+        var viewCenter = GetViewportCenterMapPoint();
+        var minCenterX = targetRadius + mapEdgePadding;
+        var maxCenterX = MapWidth - targetRadius - mapEdgePadding;
+        var minCenterY = targetRadius + mapEdgePadding;
+        var maxCenterY = MapHeight - targetRadius - mapEdgePadding;
+
+        var centerX = minCenterX <= maxCenterX ? Math.Clamp(viewCenter.X, minCenterX, maxCenterX) : (MapWidth * 0.5f);
+        var centerY = minCenterY <= maxCenterY ? Math.Clamp(viewCenter.Y, minCenterY, maxCenterY) : (MapHeight * 0.5f);
+
+        var vertexCount = Random.Shared.Next(22, 36);
+        var angleStep = (2f * MathF.PI) / vertexCount;
+        var phaseA = (float)(Random.Shared.NextDouble() * Math.PI * 2d);
+        var phaseB = (float)(Random.Shared.NextDouble() * Math.PI * 2d);
+        var waveA = 0.16f + (float)(Random.Shared.NextDouble() * 0.1d);
+        var waveB = 0.06f + (float)(Random.Shared.NextDouble() * 0.07d);
+
+        var points = new List<MapPointDto>(vertexCount);
+        for (var i = 0; i < vertexCount; i += 1)
+        {
+            var baseAngle = i * angleStep;
+            var angleJitter = ((float)Random.Shared.NextDouble() - 0.5f) * angleStep * 0.45f;
+            var radialNoise = ((float)Random.Shared.NextDouble() - 0.5f) * 0.26f;
+            var scale = 1f
+                + (waveA * MathF.Sin((baseAngle * 2f) + phaseA))
+                + (waveB * MathF.Sin((baseAngle * 5f) + phaseB))
+                + radialNoise;
+            scale = Math.Clamp(scale, 0.58f, 1.32f);
+
+            var radius = targetRadius * scale;
+            var angle = baseAngle + angleJitter;
+            var x = Math.Clamp(centerX + (MathF.Cos(angle) * radius), mapEdgePadding, MapWidth - mapEdgePadding);
+            var y = Math.Clamp(centerY + (MathF.Sin(angle) * radius), mapEdgePadding, MapHeight - mapEdgePadding);
+
+            points.Add(new MapPointDto { X = x, Y = y });
+        }
+
+        return SmoothClosedPolygon(points);
+    }
+
+    private static List<MapPointDto> SmoothClosedPolygon(IReadOnlyList<MapPointDto> points)
+    {
+        if (points is null || points.Count < 3)
+        {
+            return points?.Select(point => new MapPointDto { X = point.X, Y = point.Y }).ToList() ?? new List<MapPointDto>();
+        }
+
+        var smoothed = new List<MapPointDto>(points.Count * 2);
+        for (var i = 0; i < points.Count; i += 1)
+        {
+            var current = points[i];
+            var next = points[(i + 1) % points.Count];
+            smoothed.Add(new MapPointDto
+            {
+                X = (current.X * 0.75f) + (next.X * 0.25f),
+                Y = (current.Y * 0.75f) + (next.Y * 0.25f)
+            });
+            smoothed.Add(new MapPointDto
+            {
+                X = (current.X * 0.25f) + (next.X * 0.75f),
+                Y = (current.Y * 0.25f) + (next.Y * 0.75f)
+            });
+        }
+
+        return smoothed;
     }
 
     private int PlaceBrushStamp(float centerX, float centerY)
