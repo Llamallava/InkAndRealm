@@ -283,6 +283,63 @@ window.inkAndRealmDemo = {
             });
         };
 
+        const getPolygonCentroid = (points) => {
+            if (!Array.isArray(points) || points.length === 0) {
+                return null;
+            }
+
+            if (points.length === 1) {
+                return { x: points[0].x, y: points[0].y };
+            }
+
+            let area = 0;
+            let cx = 0;
+            let cy = 0;
+
+            for (let i = 0; i < points.length; i += 1) {
+                const j = (i + 1) % points.length;
+                const p1 = points[i];
+                const p2 = points[j];
+                const cross = (p1.x * p2.y) - (p2.x * p1.y);
+                area += cross;
+                cx += (p1.x + p2.x) * cross;
+                cy += (p1.y + p2.y) * cross;
+            }
+
+            area *= 0.5;
+            if (Math.abs(area) < 0.001) {
+                const sum = points.reduce((acc, point) => ({
+                    x: acc.x + point.x,
+                    y: acc.y + point.y
+                }), { x: 0, y: 0 });
+                return {
+                    x: sum.x / points.length,
+                    y: sum.y / points.length
+                };
+            }
+
+            const factor = 1 / (6 * area);
+            return { x: cx * factor, y: cy * factor };
+        };
+
+        const drawPolygonCenterHandle = (targetCtx, points, isActive = false) => {
+            const center = getPolygonCentroid(points);
+            if (!center) {
+                return;
+            }
+
+            const handleRadius = 7 / zoom;
+            targetCtx.save();
+            targetCtx.fillStyle = isActive ? "#f6c343" : "#9fc2de";
+            targetCtx.strokeStyle = "#2f5d89";
+            targetCtx.lineWidth = 1.5 / zoom;
+            targetCtx.beginPath();
+            targetCtx.arc(center.x, center.y, handleRadius, 0, Math.PI * 2);
+            targetCtx.fill();
+            targetCtx.stroke();
+            targetCtx.restore();
+        };
+
         const drawPointEditHandle = (targetCtx, feature) => {
             if (!feature || !Number.isFinite(feature.x) || !Number.isFinite(feature.y)) {
                 return;
@@ -881,6 +938,7 @@ window.inkAndRealmDemo = {
             const activeEdgeIndex = Number.isFinite(renderState.editPolygonEdgeIndex)
                 ? renderState.editPolygonEdgeIndex
                 : null;
+            const centerHandleActive = renderState.editPolygonCenterActive === true;
 
             if (editPolygon.points.length >= 3) {
                 if (editPolygon.featureType === "Water") {
@@ -910,6 +968,7 @@ window.inkAndRealmDemo = {
 
             drawPolygonHandles(ctx, editPolygon.points, selectedIndex);
             drawPolygonEdgeHandles(ctx, editPolygon.points, activeEdgeIndex);
+            drawPolygonCenterHandle(ctx, editPolygon.points, centerHandleActive);
         }
 
         if (renderState && Array.isArray(renderState.pointFeatures)) {

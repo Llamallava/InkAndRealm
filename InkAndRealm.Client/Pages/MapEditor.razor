@@ -809,6 +809,9 @@
     private int _editingPointIndex = -1;
     private int _editingEdgeIndex = -1;
     private bool _isDraggingEditPoint;
+    private bool _isDraggingEditPolygon;
+    private MapPointDto? _editingPolygonDragOrigin;
+    private List<MapPointDto>? _editingPolygonDragOriginPoints;
     private EditingPointFeature? _editingPointFeature;
     private MapPointDto? _editingPointOriginalPosition;
     private bool _isDraggingEditPointFeature;
@@ -1149,6 +1152,16 @@
                         : "Adjusting polygon point...";
                     return;
                 }
+
+                if (IsPointNearPolygonCenter(polygon, mapX, mapY, hitRadius))
+                {
+                    BeginPolygonDrag(mapX, mapY);
+                    _statusMessage = IsEditingTitlePolygon()
+                        ? "Moving title area..."
+                        : "Moving polygon...";
+                    await DrawAsync();
+                    return;
+                }
             }
 
             var titlePolygon = FindTitlePolygonAtPoint(mapX, mapY, hitRadius, out var titlePointIndex, out var titleEdgeIndex);
@@ -1191,7 +1204,7 @@
                     return;
                 }
 
-                _statusMessage = "Title area selected. Drag a point to edit; right-click to edit name.";
+                _statusMessage = "Title area selected. Drag a point or center to edit; right-click to edit name.";
                 await DrawAsync();
                 return;
             }
@@ -1218,7 +1231,16 @@
                             .ToList();
                         _editingPointIndex = -1;
                         _editingEdgeIndex = -1;
-                        _statusMessage = "Title area selected. Drag a point to edit; right-click to edit name.";
+                        var titleAreaPolygon = _editingPolygon;
+                        if (titleAreaPolygon is not null && IsPointNearPolygonCenter(titleAreaPolygon, mapX, mapY, hitRadius))
+                        {
+                            BeginPolygonDrag(mapX, mapY);
+                            _statusMessage = "Moving title area...";
+                        }
+                        else
+                        {
+                            _statusMessage = "Title area selected. Drag a point or center to edit; right-click to edit name.";
+                        }
                     }
                     else
                     {
@@ -1274,7 +1296,16 @@
                             .ToList();
                         _editingPointIndex = -1;
                         _editingEdgeIndex = -1;
-                        _statusMessage = "Title area selected. Drag a point to edit; right-click to edit name.";
+                        var titleAreaPolygon = _editingPolygon;
+                        if (titleAreaPolygon is not null && IsPointNearPolygonCenter(titleAreaPolygon, mapX, mapY, hitRadius))
+                        {
+                            BeginPolygonDrag(mapX, mapY);
+                            _statusMessage = "Moving title area...";
+                        }
+                        else
+                        {
+                            _statusMessage = "Title area selected. Drag a point or center to edit; right-click to edit name.";
+                        }
                     }
                     else
                     {
@@ -1305,6 +1336,14 @@
                     .ToList();
                 BeginUndoBatch(UndoBatchKind.Edit);
 
+                if (IsPointNearPolygonCenter(polygon, mapX, mapY, hitRadius))
+                {
+                    BeginPolygonDrag(mapX, mapY);
+                    _statusMessage = "Moving polygon...";
+                    await DrawAsync();
+                    return;
+                }
+
                 var edgeIndex = FindEdgeIndex(polygon, mapX, mapY, hitRadius);
                 if (edgeIndex >= 0)
                 {
@@ -1323,7 +1362,7 @@
                 _editingPointIndex = -1;
                 _editingEdgeIndex = -1;
                 _isDraggingEditPoint = false;
-                _statusMessage = "Polygon selected. Drag a point to edit.";
+                _statusMessage = "Polygon selected. Drag a point or center to edit.";
                 await DrawAsync();
                 return;
             }
@@ -1458,7 +1497,43 @@
             return;
         }
 
-        if (_activeTool == MapToolType.Edit && !_isDraggingEditPoint)
+        if (_activeTool == MapToolType.Edit
+            && _isDraggingEditPolygon
+            && _editingPolygon is not null
+            && _editingPolygonDragOrigin is not null
+            && _editingPolygonDragOriginPoints is not null)
+        {
+            if (!TryGetMapPoint(args, out var mapX, out var mapY))
+            {
+                return;
+            }
+
+            var dx = mapX - _editingPolygonDragOrigin.X;
+            var dy = mapY - _editingPolygonDragOrigin.Y;
+
+            if (_undoBatchKind == UndoBatchKind.Edit
+                && !_undoBatchPushed
+                && (MathF.Abs(dx) > 0.01f || MathF.Abs(dy) > 0.01f))
+            {
+                PushUndoState();
+            }
+
+            var pointCount = Math.Min(_editingPolygon.Points.Count, _editingPolygonDragOriginPoints.Count);
+            for (var i = 0; i < pointCount; i += 1)
+            {
+                var original = _editingPolygonDragOriginPoints[i];
+                _editingPolygon.Points[i] = new MapPointDto
+                {
+                    X = original.X + dx,
+                    Y = original.Y + dy
+                };
+            }
+
+            await DrawAsync();
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && !_isDraggingEditPoint && !_isDraggingEditPolygon)
         {
             var previousEdge = _editingEdgeIndex;
             if (_editingPolygon is not null && TryGetMapPoint(args, out var mapX, out var mapY))
@@ -1516,6 +1591,18 @@
         {
             _isPanCandidate = false;
             await HandlePointerToolClickAsync(args);
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPolygon)
+        {
+            _isDraggingEditPolygon = false;
+            _editingPolygonDragOrigin = null;
+            _editingPolygonDragOriginPoints = null;
+            _statusMessage = IsEditingTitlePolygon()
+                ? "Title area updated. Right-click to confirm."
+                : "Polygon updated. Right-click to confirm.";
+            await DrawAsync();
             return;
         }
 
@@ -1733,6 +1820,15 @@
         if (_activeTool == MapToolType.Edit && _isDraggingEditPoint)
         {
             _isDraggingEditPoint = false;
+            return;
+        }
+
+        if (_activeTool == MapToolType.Edit && _isDraggingEditPolygon)
+        {
+            _isDraggingEditPolygon = false;
+            _editingPolygonDragOrigin = null;
+            _editingPolygonDragOriginPoints = null;
+            await DrawAsync();
             return;
         }
 
@@ -4082,6 +4178,9 @@
         _editingPointIndex = -1;
         _editingEdgeIndex = -1;
         _isDraggingEditPoint = false;
+        _isDraggingEditPolygon = false;
+        _editingPolygonDragOrigin = null;
+        _editingPolygonDragOriginPoints = null;
         _editingPointFeature = null;
         _editingPointOriginalPosition = null;
         _isDraggingEditPointFeature = false;
@@ -5902,6 +6001,44 @@
         return null;
     }
 
+    private static bool IsPointNearPolygonCenter(AreaPolygonDto polygon, float mapX, float mapY, float threshold)
+    {
+        if (polygon.Points.Count == 0)
+        {
+            return false;
+        }
+
+        var center = GetPolygonCentroid(polygon.Points);
+        var dx = center.X - mapX;
+        var dy = center.Y - mapY;
+        return (dx * dx) + (dy * dy) <= (threshold * threshold);
+    }
+
+    private void BeginPolygonDrag(float mapX, float mapY)
+    {
+        if (_editingPolygon is null)
+        {
+            return;
+        }
+
+        if (_undoBatchKind == UndoBatchKind.None)
+        {
+            BeginUndoBatch(UndoBatchKind.Edit);
+        }
+
+        _editingPointIndex = -1;
+        _editingEdgeIndex = -1;
+        _isDraggingEditPoint = false;
+        _isDraggingEditPolygon = true;
+        _editingPolygonDragOrigin = new MapPointDto { X = mapX, Y = mapY };
+        _editingPolygonDragOriginPoints = _editingPolygon.Points
+            .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+            .ToList();
+        _editingOriginalPoints ??= _editingPolygonDragOriginPoints
+            .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+            .ToList();
+    }
+
     private MapPointDto GetTitlePosition(TitleFeatureDto title)
     {
         if (title.TargetFeatureId.HasValue)
@@ -6708,6 +6845,7 @@
                         : null,
             EditPolygonPointIndex = _editingPointIndex >= 0 ? _editingPointIndex : null,
             EditPolygonEdgeIndex = _editingEdgeIndex >= 0 ? _editingEdgeIndex : null,
+            EditPolygonCenterActive = _isDraggingEditPolygon,
             BrushPreview = _activeTool == MapToolType.Brush && _hasBrushCursor
                 ? new BrushPreviewDto
                 {
