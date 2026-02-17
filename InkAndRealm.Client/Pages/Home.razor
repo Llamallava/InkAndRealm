@@ -11,7 +11,7 @@
 
 <PageTitle>Ink & Realm</PageTitle>
 
-<div class="container py-4">
+<div class="container py-4 home-page">
     <h1 class="mb-3">Ink & Realm</h1>
     <p class="text-muted">Create a new map, manage sharing, or open the read-only viewer with a share code.</p>
     <div class="mb-3">
@@ -33,90 +33,70 @@
         </button>
     </div>
 
-    @if (!IsLoggedIn)
+    @if (IsLoggedIn && !_isLoading && _maps.Count > 0)
     {
-        <div class="alert alert-warning">Log in to create or edit maps.</div>
-    }
-    else
-    {
-        @if (_isLoading)
-        {
-            <div class="alert alert-info">Loading your maps...</div>
-        }
-        else if (_maps.Count == 0)
-        {
-            <div class="alert alert-info">No maps yet. Click New Map to get started.</div>
-        }
-        else
-        {
-            <div class="list-group">
-                @foreach (var map in _maps)
-                {
-                    var share = GetShare(map.Id);
-                    var isShareBusy = _pendingShareUpdates.Contains(map.Id);
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-start gap-3">
-                            <div>
-                                <div class="fw-semibold">@map.Name</div>
-                                <div class="text-muted small">Map #@map.Id</div>
-                            </div>
-                            <div class="d-flex gap-2">
-                                <button type="button"
-                                        class="btn btn-outline-primary btn-sm"
-                                        @onclick="() => OpenMap(map.Id)">
-                                    Open Editor
-                                </button>
-                                @if (share?.IsOpen == true)
-                                {
-                                    <button type="button"
-                                            class="btn btn-outline-danger btn-sm"
-                                            disabled="@isShareBusy"
-                                            @onclick="() => SetShareStateAsync(map.Id, false)">
-                                        Close Share
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button type="button"
-                                            class="btn btn-outline-success btn-sm"
-                                            disabled="@isShareBusy"
-                                            @onclick="() => SetShareStateAsync(map.Id, true)">
-                                        Open Share
-                                    </button>
-                                }
-                            </div>
+        <div class="list-group">
+            @foreach (var map in _maps)
+            {
+                var share = GetShare(map.Id);
+                var isShareBusy = _pendingShareUpdates.Contains(map.Id);
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <div class="fw-semibold">@map.Name</div>
+                            <div class="text-muted small">Map #@map.Id</div>
                         </div>
-
-                        @if (!string.IsNullOrWhiteSpace(share?.ShareCode))
-                        {
-                            <div class="small mt-2">
-                                <span class="text-muted">Share code:</span>
-                                <code>@share!.ShareCode</code>
-                            </div>
-                            <div class="small text-muted">
-                                @if (share!.IsOpen)
-                                {
-                                    <span>Open until @FormatUtc(share.ExpiresUtc)</span>
-                                }
-                                else
-                                {
-                                    <span>Sharing is closed. Reopen to reactivate for 7 days.</span>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="small text-muted mt-2">No share code yet. Open sharing to generate one.</div>
-                        }
+                        <div class="d-flex gap-2">
+                            <button type="button"
+                                    class="btn btn-outline-primary btn-sm"
+                                    @onclick="() => OpenMap(map.Id)">
+                                Open Editor
+                            </button>
+                            @if (share?.IsOpen == true)
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-danger btn-sm"
+                                        disabled="@isShareBusy"
+                                        @onclick="() => SetShareStateAsync(map.Id, false)">
+                                    Close Share
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-success btn-sm"
+                                        disabled="@isShareBusy"
+                                        @onclick="() => SetShareStateAsync(map.Id, true)">
+                                    Open Share
+                                </button>
+                            }
+                        </div>
                     </div>
-                }
-            </div>
-        }
 
-        @if (!string.IsNullOrWhiteSpace(_statusMessage))
-        {
-            <div class="alert alert-info mt-3">@_statusMessage</div>
-        }
+                    @if (!string.IsNullOrWhiteSpace(share?.ShareCode))
+                    {
+                        <div class="small mt-2">
+                            <span class="text-muted">Share code:</span>
+                            <code>@share!.ShareCode</code>
+                        </div>
+                        <div class="small text-muted">
+                            @if (share!.IsOpen)
+                            {
+                                <span>Open until @FormatUtc(share.ExpiresUtc)</span>
+                            }
+                            else
+                            {
+                                <span>Sharing is closed. Reopen to reactivate for 7 days.</span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="small text-muted mt-2">No share code yet. Open sharing to generate one.</div>
+                    }
+                </div>
+            }
+        </div>
     }
 </div>
 

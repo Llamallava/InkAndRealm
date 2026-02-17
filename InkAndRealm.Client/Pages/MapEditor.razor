@@ -75,17 +75,11 @@
             </div>
             @if (_isSelectingRelationshipTarget)
             {
-                <div class="alert alert-warning mt-3 mb-0">
-                    <div class="fw-semibold">Select relationship target</div>
-                    <div class="small">Click a saved feature on the map.</div>
-                    <button class="btn btn-outline-secondary btn-sm mt-2" @onclick="CancelRelationshipTargetSelection">
-                        Cancel
+                <div class="mt-3 mb-0">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="CancelRelationshipTargetSelection">
+                        Cancel Target Selection
                     </button>
                 </div>
-            }
-            @if (!string.IsNullOrWhiteSpace(_statusMessage))
-            {
-                <div class="alert alert-info mt-3 mb-0">@_statusMessage</div>
             }
         </aside>
 
@@ -519,10 +513,6 @@
                                 Add Relationship
                             </button>
                         }
-                        @if (!string.IsNullOrWhiteSpace(_relationshipStatusMessage))
-                        {
-                            <div class="small text-muted mt-2">@_relationshipStatusMessage</div>
-                        }
                     </div>
                 }
             </div>
@@ -558,13 +548,8 @@
                 </div>
             </div>
             <div class="relationship-tree-body">
-                @if (!string.IsNullOrWhiteSpace(_relationshipTreeStatusMessage))
-                {
-                    <div class="alert alert-info py-2 mb-3">@_relationshipTreeStatusMessage</div>
-                }
                 @if (_isRelationshipTreeLoading)
                 {
-                    <div class="text-muted">Loading saved relationship graph...</div>
                 }
                 else if (_relationshipTreeNodes.Count == 0)
                 {

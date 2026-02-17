@@ -15,18 +15,28 @@
 .account-panel-title {
     font-size: 1.1rem;
     margin: 0 0 0.25rem 0;
+    color: var(--inkr-gold-400);
 }
 
 .account-panel-status {
     font-size: 0.9rem;
-    color: #3f3f3f;
+    color: var(--inkr-paper-300);
+}
+
+.account-panel :deep .form-label {
+    color: var(--inkr-paper-200);
 }
 
 .account-panel-switch {
     padding-left: 0;
     text-align: left;
+    color: var(--inkr-gold-500);
+}
+
+.account-panel-switch:hover {
+    color: var(--inkr-gold-400);
 }
 
 .account-panel-message {
-    color: #444444;
+    color: var(--inkr-paper-200);
 }

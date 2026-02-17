@@ -2,15 +2,19 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    min-height: 100vh;
 }
 
 main {
     flex: 1;
+    min-height: 100vh;
 }
 
 .top-row {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
+    background:
+        linear-gradient(170deg, rgba(223, 187, 104, 0.16), rgba(42, 26, 15, 0.02)),
+        linear-gradient(180deg, #4f331e 0%, #3a2414 100%);
+    border-bottom: 1px solid #a7792f;
     justify-content: flex-end;
     height: 3.5rem;
     display: flex;
@@ -18,16 +22,19 @@ main {
     position: sticky;
     top: 0;
     z-index: 2;
+    box-shadow: 0 8px 18px rgba(11, 7, 4, 0.35);
 }
 
     .top-row ::deep a, .top-row ::deep .btn-link {
         white-space: nowrap;
         margin-left: 1.5rem;
         text-decoration: none;
+        color: #f6ebd5;
     }
 
     .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
         text-decoration: underline;
+        color: #edce8b;
     }
 
     .top-row ::deep a:first-child {
@@ -47,10 +54,9 @@ main {
     top: calc(100% + 0.5rem);
     right: 0;
     width: min(360px, 90vw);
-    background: #ffffff;
-    border: 1px solid #d6d5d5;
-    border-radius: 0.5rem;
-    box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.15);
+    border: 1px solid #7b5634;
+    border-radius: 0.75rem;
+    box-shadow: 0 0.9rem 2rem rgba(11, 7, 4, 0.4);
     padding: 1rem;
 }
 

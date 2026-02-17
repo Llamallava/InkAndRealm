@@ -26,10 +26,6 @@
             <button class="btn btn-primary w-100" type="submit">Create new</button>
         </EditForm>
         <button class="btn btn-link account-panel-switch" type="button" @onclick="ShowLogin">Back to login</button>
-        @if (!string.IsNullOrWhiteSpace(registerMessage))
-        {
-            <p class="mt-2 account-panel-message">@registerMessage</p>
-        }
     }
     else
     {
@@ -46,10 +42,6 @@
             <button class="btn btn-primary w-100" type="submit">Log in</button>
         </EditForm>
         <button class="btn btn-link account-panel-switch" type="button" @onclick="ShowRegister">Create new</button>
-        @if (!string.IsNullOrWhiteSpace(loginMessage))
-        {
-            <p class="mt-2 account-panel-message">@loginMessage</p>
-        }
     }
 </div>
 

@@ -48,11 +48,6 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(_statusMessage))
-    {
-        <div class="alert alert-info">@_statusMessage</div>
-    }
-
     @if (_map is not null)
     {
         <div class="row g-3">

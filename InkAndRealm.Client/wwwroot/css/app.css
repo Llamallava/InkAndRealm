@@ -458,3 +458,299 @@ code {
     overflow: hidden;
     pointer-events: none;
 }
+
+/* Shared Wood Theme */
+:root {
+    --inkr-wood-950: #1f130b;
+    --inkr-wood-900: #2a1a0f;
+    --inkr-wood-850: #362111;
+    --inkr-wood-800: #442a16;
+    --inkr-wood-700: #5a3920;
+    --inkr-wood-650: #6a4528;
+    --inkr-wood-600: #795334;
+    --inkr-gold-800: #9c6d1f;
+    --inkr-gold-700: #bb8a34;
+    --inkr-gold-600: #cfa24b;
+    --inkr-gold-500: #dfbb68;
+    --inkr-gold-400: #edce8b;
+    --inkr-paper-100: #f6ebd5;
+    --inkr-paper-200: #e7d7b8;
+    --inkr-paper-300: #d3be97;
+    --inkr-input-100: #f3e5cc;
+}
+
+html,
+body {
+    font-family: "Palatino Linotype", "Book Antiqua", "Times New Roman", serif;
+    color: var(--inkr-paper-100);
+    background-color: var(--inkr-wood-950);
+    background-image:
+        radial-gradient(circle at 12% -10%, rgba(223, 187, 104, 0.18), transparent 34%),
+        radial-gradient(circle at 88% 12%, rgba(223, 187, 104, 0.12), transparent 28%),
+        repeating-linear-gradient(
+            10deg,
+            rgba(121, 83, 52, 0.16) 0,
+            rgba(121, 83, 52, 0.16) 8px,
+            rgba(68, 42, 22, 0.16) 8px,
+            rgba(68, 42, 22, 0.16) 16px
+        ),
+        linear-gradient(180deg, #2b1a0f 0%, #1f130b 100%);
+    background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.fw-semibold {
+    color: var(--inkr-paper-100);
+}
+
+.text-muted,
+.small.text-muted {
+    color: var(--inkr-paper-300) !important;
+}
+
+a,
+.btn-link {
+    color: var(--inkr-gold-500);
+}
+
+a:hover,
+.btn-link:hover {
+    color: var(--inkr-gold-400);
+}
+
+.btn {
+    border-radius: 0.55rem;
+    font-weight: 600;
+}
+
+.btn-primary {
+    color: #2b1a0f;
+    background-color: var(--inkr-gold-500);
+    border-color: var(--inkr-gold-700);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    color: #2b1a0f;
+    background-color: var(--inkr-gold-400);
+    border-color: var(--inkr-gold-600);
+}
+
+.btn-outline-primary {
+    color: var(--inkr-gold-500);
+    border-color: var(--inkr-gold-600);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+    color: #2b1a0f;
+    background-color: var(--inkr-gold-500);
+    border-color: var(--inkr-gold-600);
+}
+
+.btn-outline-secondary {
+    color: var(--inkr-paper-200);
+    border-color: var(--inkr-wood-600);
+    background-color: rgba(31, 19, 11, 0.3);
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus {
+    color: var(--inkr-paper-100);
+    border-color: var(--inkr-gold-700);
+    background-color: rgba(223, 187, 104, 0.18);
+}
+
+.btn-outline-success {
+    color: #d8c688;
+    border-color: #a89a67;
+    background-color: rgba(31, 19, 11, 0.25);
+}
+
+.btn-outline-success:hover,
+.btn-outline-success:focus {
+    color: #2b1a0f;
+    background-color: #d8c688;
+    border-color: #d8c688;
+}
+
+.btn-outline-danger {
+    color: #e7b4ac;
+    border-color: #b86a5e;
+    background-color: rgba(31, 19, 11, 0.25);
+}
+
+.btn-outline-danger:hover,
+.btn-outline-danger:focus {
+    color: #fff2ef;
+    background-color: #8a4035;
+    border-color: #8a4035;
+}
+
+.btn:focus,
+.btn:active:focus,
+.btn-link.nav-link:focus,
+.form-control:focus,
+.form-check-input:focus,
+.form-select:focus {
+    box-shadow: 0 0 0 0.12rem rgba(31, 19, 11, 0.95), 0 0 0 0.25rem rgba(223, 187, 104, 0.45);
+}
+
+.form-control,
+.form-select,
+.form-control-plaintext,
+textarea.form-control {
+    background-color: var(--inkr-input-100);
+    border-color: var(--inkr-wood-600);
+    color: #2a1a0f;
+}
+
+.form-control::placeholder,
+.form-select::placeholder {
+    color: #7d6045;
+}
+
+.form-check-input {
+    border-color: var(--inkr-wood-600);
+    background-color: var(--inkr-input-100);
+}
+
+.form-check-input:checked {
+    background-color: var(--inkr-gold-600);
+    border-color: var(--inkr-gold-700);
+}
+
+.form-range::-webkit-slider-thumb {
+    background: var(--inkr-gold-600);
+}
+
+.form-range::-moz-range-thumb {
+    background: var(--inkr-gold-600);
+}
+
+.card,
+.list-group-item,
+.login-panel,
+.map-editor-sidebar,
+.map-editor-topbar,
+.map-editor-bottombar,
+.map-editor-canvas-card,
+.character-editor-card,
+.relationship-tree-card,
+.account-panel-page {
+    background:
+        linear-gradient(155deg, rgba(121, 83, 52, 0.2), rgba(31, 19, 11, 0.08)),
+        linear-gradient(180deg, var(--inkr-wood-700) 0%, var(--inkr-wood-800) 100%);
+    border-color: var(--inkr-wood-600);
+    color: var(--inkr-paper-100);
+    box-shadow: 0 10px 24px rgba(11, 7, 4, 0.35);
+}
+
+.account-panel-page {
+    border-width: 1px;
+    border-style: solid;
+    border-radius: 0.85rem;
+    padding: 1rem 1.1rem;
+}
+
+.card-header,
+.character-editor-header,
+.relationship-tree-header {
+    background: linear-gradient(180deg, rgba(31, 19, 11, 0.42), rgba(31, 19, 11, 0.06));
+    border-bottom-color: var(--inkr-gold-800);
+}
+
+.list-group-item + .list-group-item {
+    border-top-color: var(--inkr-wood-600);
+}
+
+.alert {
+    color: var(--inkr-paper-100);
+    border-color: var(--inkr-wood-600);
+}
+
+.alert-info {
+    background-color: rgba(87, 57, 32, 0.92);
+}
+
+.alert-warning {
+    background-color: rgba(117, 70, 26, 0.9);
+}
+
+.map-editor-sidebar-section {
+    border-top: 1px solid rgba(211, 190, 151, 0.28);
+    padding-top: 0.55rem;
+}
+
+.map-editor-sidebar-section:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.map-editor-canvas-shell,
+.map-viewer-canvas-shell,
+.relationship-tree-canvas-shell {
+    border-color: var(--inkr-wood-600);
+    background:
+        linear-gradient(135deg, rgba(255, 244, 220, 0.8), rgba(237, 216, 178, 0.7)),
+        #f0dfbf;
+}
+
+.map-layer-delete {
+    color: var(--inkr-paper-300);
+}
+
+.map-layer-delete:hover {
+    color: #2b1a0f;
+    background: rgba(223, 187, 104, 0.78);
+}
+
+.relationship-tree-edge {
+    stroke: #d4b06d;
+}
+
+.relationship-tree-arrowhead {
+    fill: #d4b06d;
+}
+
+.relationship-tree-edge-label {
+    color: var(--inkr-paper-100);
+    background: rgba(45, 28, 16, 0.86);
+}
+
+.relationship-tree-node-character circle {
+    fill: #f0ce8b;
+    stroke: #a67523;
+}
+
+.relationship-tree-node-feature circle {
+    fill: #ddc18f;
+    stroke: #785224;
+}
+
+.relationship-tree-node-label {
+    color: #2d1b0f;
+}
+
+.relationship-character-link {
+    color: var(--inkr-gold-500);
+}
+
+.relationship-character-link:hover {
+    color: var(--inkr-gold-400);
+}
+
+.home-page .list-group-item .text-muted,
+.map-viewer-page .text-muted,
+.login-page .text-muted {
+    color: var(--inkr-paper-300) !important;
+}
+
+code {
+    color: var(--inkr-gold-400);
+}
