@@ -12,6 +12,7 @@ public sealed class DemoMapContext : DbContext
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<SessionEntity> Sessions => Set<SessionEntity>();
     public DbSet<MapEntity> Maps => Set<MapEntity>();
+    public DbSet<MapShareEntity> MapShares => Set<MapShareEntity>();
     public DbSet<MapLayerEntity> MapLayers => Set<MapLayerEntity>();
     public DbSet<FeatureEntity> Features => Set<FeatureEntity>();
     public DbSet<FeaturePointEntity> FeaturePoints => Set<FeaturePointEntity>();
@@ -41,6 +42,12 @@ public sealed class DemoMapContext : DbContext
             .HasMany(map => map.Layers)
             .WithOne(layer => layer.Map)
             .HasForeignKey(layer => layer.MapId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<MapEntity>()
+            .HasOne(map => map.Share)
+            .WithOne(share => share.Map)
+            .HasForeignKey<MapShareEntity>(share => share.MapId)
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<MapLayerEntity>()

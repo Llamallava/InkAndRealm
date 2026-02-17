@@ -18,6 +18,22 @@ public sealed class MapSummaryDto
     public string Name { get; set; } = string.Empty;
 }
 
+public sealed class MapShareStatusDto
+{
+    public int MapId { get; set; }
+    public string MapName { get; set; } = string.Empty;
+    public string? ShareCode { get; set; }
+    public bool IsOpen { get; set; }
+    public DateTime? ExpiresUtc { get; set; }
+}
+
+public sealed class MapShareAccessRequest
+{
+    public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
+    public int MapId { get; set; }
+}
+
 public sealed class TreeFeatureDto
 {
     public int Id { get; set; }

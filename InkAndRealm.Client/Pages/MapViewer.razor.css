@@ -1,0 +1,25 @@
+.map-viewer-canvas-shell {
+    border: 1px solid #d7dce4;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f5f1e8;
+}
+
+.map-viewer-canvas {
+    width: 100%;
+    display: block;
+    cursor: grab;
+}
+
+.map-viewer-canvas:active {
+    cursor: grabbing;
+}
+
+.relationship-character-link {
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.relationship-list {
+    padding-left: 1rem;
+}

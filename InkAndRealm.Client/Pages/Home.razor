@@ -13,7 +13,12 @@
 
 <div class="container py-4">
     <h1 class="mb-3">Ink & Realm</h1>
-    <p class="text-muted">Create a new map or pick one of your existing maps.</p>
+    <p class="text-muted">Create a new map, manage sharing, or open the read-only viewer with a share code.</p>
+    <div class="mb-3">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="OpenViewer">
+            Open Shared Map Viewer
+        </button>
+    </div>
 
     <div class="d-flex gap-2 mb-3 align-items-center">
         <input class="form-control"
@@ -47,12 +52,63 @@
             <div class="list-group">
                 @foreach (var map in _maps)
                 {
-                    <button type="button"
-                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                            @onclick="() => OpenMap(map.Id)">
-                        <span>@map.Name</span>
-                        <span class="badge bg-secondary">Map #@map.Id</span>
-                    </button>
+                    var share = GetShare(map.Id);
+                    var isShareBusy = _pendingShareUpdates.Contains(map.Id);
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div>
+                                <div class="fw-semibold">@map.Name</div>
+                                <div class="text-muted small">Map #@map.Id</div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button"
+                                        class="btn btn-outline-primary btn-sm"
+                                        @onclick="() => OpenMap(map.Id)">
+                                    Open Editor
+                                </button>
+                                @if (share?.IsOpen == true)
+                                {
+                                    <button type="button"
+                                            class="btn btn-outline-danger btn-sm"
+                                            disabled="@isShareBusy"
+                                            @onclick="() => SetShareStateAsync(map.Id, false)">
+                                        Close Share
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            class="btn btn-outline-success btn-sm"
+                                            disabled="@isShareBusy"
+                                            @onclick="() => SetShareStateAsync(map.Id, true)">
+                                        Open Share
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(share?.ShareCode))
+                        {
+                            <div class="small mt-2">
+                                <span class="text-muted">Share code:</span>
+                                <code>@share!.ShareCode</code>
+                            </div>
+                            <div class="small text-muted">
+                                @if (share!.IsOpen)
+                                {
+                                    <span>Open until @FormatUtc(share.ExpiresUtc)</span>
+                                }
+                                else
+                                {
+                                    <span>Sharing is closed. Reopen to reactivate for 7 days.</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="small text-muted mt-2">No share code yet. Open sharing to generate one.</div>
+                        }
+                    </div>
                 }
             </div>
         }
@@ -71,6 +127,8 @@
     private string _newMapName = string.Empty;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private List<MapSummaryDto> _maps = new();
+    private readonly Dictionary<int, MapShareStatusDto> _sharesByMapId = new();
+    private readonly HashSet<int> _pendingShareUpdates = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -131,6 +189,7 @@
         if (!IsLoggedIn)
         {
             _maps = new List<MapSummaryDto>();
+            _sharesByMapId.Clear();
             _statusMessage = string.Empty;
             return;
         }
@@ -143,6 +202,7 @@
         {
             var maps = await response.Content.ReadFromJsonAsync<List<MapSummaryDto>>();
             _maps = maps ?? new List<MapSummaryDto>();
+            await LoadShareStatusesAsync();
             _isLoading = false;
             return;
         }
@@ -151,6 +211,7 @@
         {
             await UserState.SetUserAsync(null);
             _maps = new List<MapSummaryDto>();
+            _sharesByMapId.Clear();
             _statusMessage = "Your session is no longer valid. Please log in again.";
             _isLoading = false;
             return;
@@ -158,15 +219,122 @@
 
         var message = await response.Content.ReadAsStringAsync();
         _maps = new List<MapSummaryDto>();
+        _sharesByMapId.Clear();
         _statusMessage = string.IsNullOrWhiteSpace(message)
             ? "Failed to load maps."
             : message;
         _isLoading = false;
     }
 
+    private async Task LoadShareStatusesAsync()
+    {
+        _sharesByMapId.Clear();
+        if (!IsLoggedIn || _maps.Count == 0)
+        {
+            return;
+        }
+
+        using var response = await Http.GetAsync(GetSharesUrl());
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            _statusMessage = "Your session is no longer valid. Please log in again.";
+            return;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        var shares = await response.Content.ReadFromJsonAsync<List<MapShareStatusDto>>();
+        if (shares is null)
+        {
+            return;
+        }
+
+        foreach (var share in shares)
+        {
+            _sharesByMapId[share.MapId] = share;
+        }
+    }
+
     private void OpenMap(int mapId)
     {
         Navigation.NavigateTo($"/map-demo/{mapId}");
+    }
+
+    private void OpenViewer()
+    {
+        Navigation.NavigateTo("/map-viewer");
+    }
+
+    private async Task SetShareStateAsync(int mapId, bool open)
+    {
+        if (!IsLoggedIn || mapId <= 0 || _pendingShareUpdates.Contains(mapId))
+        {
+            return;
+        }
+
+        _pendingShareUpdates.Add(mapId);
+        _statusMessage = open ? "Opening map share..." : "Closing map share...";
+
+        try
+        {
+            var payload = new MapShareAccessRequest
+            {
+                UserId = UserState.CurrentUser?.UserId,
+                SessionToken = UserState.CurrentUser?.SessionToken,
+                MapId = mapId
+            };
+
+            var endpoint = open ? "api/demo-map/share/open" : "api/demo-map/share/close";
+            using var response = await Http.PostAsJsonAsync(endpoint, payload);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                await UserState.SetUserAsync(null);
+                _statusMessage = "Your session is no longer valid. Please log in again.";
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var failure = await response.Content.ReadAsStringAsync();
+                _statusMessage = string.IsNullOrWhiteSpace(failure)
+                    ? "Failed to update map sharing."
+                    : failure;
+                return;
+            }
+
+            var updated = await response.Content.ReadFromJsonAsync<MapShareStatusDto>();
+            if (updated is not null)
+            {
+                _sharesByMapId[mapId] = updated;
+                _statusMessage = open
+                    ? $"Share open. Code {updated.ShareCode} expires {FormatUtc(updated.ExpiresUtc)}."
+                    : "Share closed.";
+            }
+            else
+            {
+                _statusMessage = open ? "Share opened." : "Share closed.";
+            }
+        }
+        finally
+        {
+            _pendingShareUpdates.Remove(mapId);
+        }
+    }
+
+    private MapShareStatusDto? GetShare(int mapId)
+    {
+        return _sharesByMapId.TryGetValue(mapId, out var share) ? share : null;
+    }
+
+    private string FormatUtc(DateTime? utc)
+    {
+        return utc.HasValue
+            ? utc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+            : "N/A";
     }
 
     private string GetMapsUrl()
@@ -179,6 +347,18 @@
 
         var userId = UserState.CurrentUser?.UserId;
         return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+    }
+
+    private string GetSharesUrl()
+    {
+        var sessionToken = UserState.CurrentUser?.SessionToken;
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+        {
+            return $"api/demo-map/share?sessionToken={Uri.EscapeDataString(sessionToken)}";
+        }
+
+        var userId = UserState.CurrentUser?.UserId;
+        return userId is null ? "api/demo-map/share" : $"api/demo-map/share?userId={userId.Value}";
     }
 
     private void OnUserChanged()

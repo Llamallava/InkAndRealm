@@ -1,0 +1,629 @@
+@page "/map-viewer"
+@using System
+@using System.Linq
+@using System.Net
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Web
+@using InkAndRealm.Shared
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Ink & Realm Shared Viewer</PageTitle>
+
+<div class="container-fluid py-4 map-viewer-page">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="mb-1">Shared Map Viewer</h1>
+            <p class="text-muted mb-0">Enter a share code to load a map in strict read-only mode.</p>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="GoHome">Back</button>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-6 col-lg-4">
+                    <label class="form-label">Share Code</label>
+                    <input class="form-control"
+                           placeholder="Enter share code"
+                           @bind="_shareCodeInput"
+                           @bind:event="oninput" />
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary"
+                            disabled="@_isLoading"
+                            @onclick="LoadSharedMapAsync">
+                        Load Map
+                    </button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-secondary"
+                            disabled="@_isLoading"
+                            @onclick="ClearViewer">
+                        Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert alert-info">@_statusMessage</div>
+    }
+
+    @if (_map is not null)
+    {
+        <div class="row g-3">
+            <div class="col-12 col-xl-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <div class="fw-semibold">@_map.Name</div>
+                            <div class="small text-muted">
+                                Trees @_map.Trees.Count | Houses @_map.Houses.Count | Characters @_map.Characters.Count | Titles @_map.Titles.Count
+                            </div>
+                        </div>
+                        <div class="small text-muted">Drag to pan. Wheel to zoom.</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="map-viewer-canvas-shell">
+                            <canvas id="@CanvasId"
+                                    width="1000"
+                                    height="600"
+                                    class="map-viewer-canvas"
+                                    style="touch-action:none;"
+                                    @onmousedown="BeginPan"
+                                    @onmousemove="MovePan"
+                                    @onmouseup="EndPan"
+                                    @onmouseleave="EndPan"
+                                    @onwheel="HandleWheel"
+                                    @onwheel:preventDefault="true">
+                            </canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-xl-4">
+                <div class="card mb-3">
+                    <div class="card-header fw-semibold">Character Details</div>
+                    <div class="card-body">
+                        @if (_selectedCharacter is null)
+                        {
+                            <div class="text-muted small">Select a character below.</div>
+                        }
+                        else
+                        {
+                            <div class="mb-2">
+                                <div class="small text-muted">Name</div>
+                                <div>@GetCharacterLabel(_selectedCharacter)</div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="small text-muted">Type</div>
+                                <div>@_selectedCharacter.CharacterType</div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="small text-muted">Background</div>
+                                <div>@GetFallback(_selectedCharacter.Background)</div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="small text-muted">Occupation</div>
+                                <div>@GetFallback(_selectedCharacter.Occupation)</div>
+                            </div>
+                            <div class="mb-0">
+                                <div class="small text-muted">Personality</div>
+                                <div>@GetFallback(_selectedCharacter.Personality)</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header fw-semibold">Relationship Tree</div>
+                    <div class="card-body">
+                        @if (_map.Characters.Count == 0)
+                        {
+                            <div class="text-muted small">No characters to display.</div>
+                        }
+                        else
+                        {
+                            @foreach (var character in _map.Characters.OrderBy(character => character.Id))
+                            {
+                                <div class="mb-3">
+                                    <button class="btn btn-link p-0 text-start relationship-character-link"
+                                            @onclick="() => SelectCharacter(character)">
+                                        @GetCharacterLabel(character)
+                                    </button>
+                                    @if (character.Relationships is null || character.Relationships.Count == 0)
+                                    {
+                                        <div class="small text-muted">No relationships.</div>
+                                    }
+                                    else
+                                    {
+                                        <ul class="small mb-0 relationship-list">
+                                            @foreach (var relationship in character.Relationships.OrderBy(relationship => relationship.TargetFeatureId))
+                                            {
+                                                <li>
+                                                    <span class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType)</span>
+                                                    <span>: @FormatRelationshipTypes(relationship.RelationshipTypes)</span>
+                                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                                    {
+                                                        <span class="text-muted"> - @relationship.Description</span>
+                                                    }
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private const string CanvasId = "map-viewer-canvas";
+    private const float CanvasWidth = 1000f;
+    private const float CanvasHeight = 600f;
+    private const float MapWidth = 2000f;
+    private const float MapHeight = 1200f;
+    private const float MinZoom = 0.5f;
+    private const float MaxZoom = 3f;
+    private string _shareCodeInput = string.Empty;
+    private string _statusMessage = string.Empty;
+    private bool _isLoading;
+    private MapDto? _map;
+    private CharacterFeatureDto? _selectedCharacter;
+    private float _zoom = 1f;
+    private float _viewX;
+    private float _viewY;
+    private float _canvasClientWidth = CanvasWidth;
+    private float _canvasClientHeight = CanvasHeight;
+    private bool _isPanning;
+    private float _panStartX;
+    private float _panStartY;
+    private float _panOriginX;
+    private float _panOriginY;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await UpdateCanvasClientSizeAsync();
+            await DrawAsync();
+        }
+    }
+
+    private async Task LoadSharedMapAsync()
+    {
+        var code = NormalizeShareCode(_shareCodeInput);
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            _statusMessage = "Enter a share code.";
+            return;
+        }
+
+        _shareCodeInput = code;
+        _isLoading = true;
+        _statusMessage = "Loading shared map...";
+        _selectedCharacter = null;
+
+        try
+        {
+            using var response = await Http.GetAsync($"api/demo-map/shared?code={Uri.EscapeDataString(code)}");
+            if (response.IsSuccessStatusCode)
+            {
+                var map = await response.Content.ReadFromJsonAsync<MapDto>();
+                if (map is null || map.Id <= 0)
+                {
+                    _map = null;
+                    _statusMessage = "Map not found.";
+                    return;
+                }
+
+                _map = map;
+                _selectedCharacter = map.Characters.FirstOrDefault();
+                ResetView();
+                _statusMessage = $"Loaded {map.Name}.";
+                await UpdateCanvasClientSizeAsync();
+                await DrawAsync();
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                _map = null;
+                _statusMessage = "Share code is invalid, closed, or expired.";
+                return;
+            }
+
+            var message = await response.Content.ReadAsStringAsync();
+            _map = null;
+            _statusMessage = string.IsNullOrWhiteSpace(message)
+                ? "Failed to load shared map."
+                : message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ClearViewer()
+    {
+        _shareCodeInput = string.Empty;
+        _statusMessage = string.Empty;
+        _map = null;
+        _selectedCharacter = null;
+        ResetView();
+    }
+
+    private void SelectCharacter(CharacterFeatureDto character)
+    {
+        _selectedCharacter = character;
+    }
+
+    private async Task DrawAsync()
+    {
+        var renderState = BuildRenderState();
+        await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", CanvasId, renderState);
+    }
+
+    private MapRenderStateDto BuildRenderState()
+    {
+        var map = _map;
+        var pointFeatures = new List<MapPointFeatureDto>();
+        var titleFeatures = new List<MapTitleFeatureDto>();
+
+        if (map is not null)
+        {
+            foreach (var tree in map.Trees)
+            {
+                pointFeatures.Add(new MapPointFeatureDto
+                {
+                    FeatureType = "Tree",
+                    X = tree.X,
+                    Y = tree.Y,
+                    StyleKey = tree.TreeType,
+                    Size = NormalizePointSize(tree.Size)
+                });
+            }
+
+            foreach (var house in map.Houses)
+            {
+                pointFeatures.Add(new MapPointFeatureDto
+                {
+                    FeatureType = "House",
+                    X = house.X,
+                    Y = house.Y,
+                    StyleKey = house.HouseType,
+                    Size = NormalizePointSize(house.Size)
+                });
+            }
+
+            foreach (var character in map.Characters)
+            {
+                pointFeatures.Add(new MapPointFeatureDto
+                {
+                    FeatureType = "Character",
+                    X = character.X,
+                    Y = character.Y,
+                    StyleKey = character.CharacterType,
+                    Size = 1f
+                });
+            }
+
+            foreach (var title in map.Titles)
+            {
+                var position = GetTitlePosition(title);
+                titleFeatures.Add(new MapTitleFeatureDto
+                {
+                    Id = title.Id,
+                    Name = title.Name,
+                    X = position.X,
+                    Y = position.Y,
+                    Size = NormalizeTitleSize(title.Size),
+                    Points = title.Points
+                        .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                        .ToList()
+                });
+            }
+        }
+
+        return new MapRenderStateDto
+        {
+            PointFeatures = pointFeatures,
+            TitleFeatures = titleFeatures,
+            AreaLayers = map?.AreaLayers
+                .OrderBy(layer => layer.LayerIndex)
+                .ToList()
+                ?? new List<AreaLayerDto>(),
+            AreaPolygons = map?.AreaPolygons
+                .OrderBy(polygon => polygon.LayerIndex)
+                .ToList()
+                ?? new List<AreaPolygonDto>(),
+            UseChaoticLandEdges = true,
+            ViewState = new MapViewStateDto
+            {
+                ViewX = _viewX,
+                ViewY = _viewY,
+                Zoom = _zoom,
+                MapWidth = MapWidth,
+                MapHeight = MapHeight
+            }
+        };
+    }
+
+    private async Task BeginPan(MouseEventArgs args)
+    {
+        if (_map is null || args.Button != 0)
+        {
+            return;
+        }
+
+        await UpdateCanvasClientSizeAsync();
+        _isPanning = true;
+        _panStartX = (float)args.ClientX;
+        _panStartY = (float)args.ClientY;
+        _panOriginX = _viewX;
+        _panOriginY = _viewY;
+    }
+
+    private async Task MovePan(MouseEventArgs args)
+    {
+        if (_map is null || !_isPanning)
+        {
+            return;
+        }
+
+        var dx = ((float)args.ClientX - _panStartX) * GetCanvasScaleX();
+        var dy = ((float)args.ClientY - _panStartY) * GetCanvasScaleY();
+        _viewX = _panOriginX - (dx / _zoom);
+        _viewY = _panOriginY - (dy / _zoom);
+        ClampView();
+        await DrawAsync();
+    }
+
+    private void EndPan(MouseEventArgs args)
+    {
+        _isPanning = false;
+    }
+
+    private async Task HandleWheel(WheelEventArgs args)
+    {
+        if (_map is null)
+        {
+            return;
+        }
+
+        await UpdateCanvasClientSizeAsync();
+        var delta = args.DeltaY < 0 ? 1f : -1f;
+        var oldZoom = _zoom;
+        _zoom = Math.Clamp(_zoom + (delta * 0.1f), MinZoom, MaxZoom);
+        if (Math.Abs(_zoom - oldZoom) < 0.0001f)
+        {
+            return;
+        }
+
+        var pointerX = (float)args.OffsetX * GetCanvasScaleX();
+        var pointerY = (float)args.OffsetY * GetCanvasScaleY();
+        var mapX = (_viewX + (pointerX / oldZoom));
+        var mapY = (_viewY + (pointerY / oldZoom));
+        _viewX = mapX - (pointerX / _zoom);
+        _viewY = mapY - (pointerY / _zoom);
+        ClampView();
+        await DrawAsync();
+    }
+
+    private void ClampView()
+    {
+        var maxX = Math.Max(0f, MapWidth - (CanvasWidth / _zoom));
+        var maxY = Math.Max(0f, MapHeight - (CanvasHeight / _zoom));
+        _viewX = Math.Clamp(_viewX, 0f, maxX);
+        _viewY = Math.Clamp(_viewY, 0f, maxY);
+    }
+
+    private void ResetView()
+    {
+        _zoom = 1f;
+        _viewX = 0f;
+        _viewY = 0f;
+        _isPanning = false;
+    }
+
+    private static float NormalizeTitleSize(float size)
+    {
+        if (!float.IsFinite(size))
+        {
+            return 1f;
+        }
+
+        return Math.Clamp(size, 0.5f, 3f);
+    }
+
+    private static float NormalizePointSize(float size)
+    {
+        if (!float.IsFinite(size) || size <= 0f)
+        {
+            return 1f;
+        }
+
+        return size;
+    }
+
+    private MapPointDto GetTitlePosition(TitleFeatureDto title)
+    {
+        if (_map is null)
+        {
+            return new MapPointDto { X = title.X, Y = title.Y };
+        }
+
+        if (title.TargetFeatureId.HasValue)
+        {
+            var targetId = title.TargetFeatureId.Value;
+            var tree = _map.Trees.FirstOrDefault(candidate => candidate.Id == targetId);
+            if (tree is not null)
+            {
+                return new MapPointDto { X = tree.X, Y = tree.Y };
+            }
+
+            var house = _map.Houses.FirstOrDefault(candidate => candidate.Id == targetId);
+            if (house is not null)
+            {
+                return new MapPointDto { X = house.X, Y = house.Y };
+            }
+        }
+
+        if (title.Points is not null && title.Points.Count >= 3)
+        {
+            return GetPolygonCentroid(title.Points);
+        }
+
+        return new MapPointDto { X = title.X, Y = title.Y };
+    }
+
+    private static MapPointDto GetPolygonCentroid(IReadOnlyList<MapPointDto> points)
+    {
+        if (points is null || points.Count == 0)
+        {
+            return new MapPointDto();
+        }
+
+        if (points.Count == 1)
+        {
+            return new MapPointDto { X = points[0].X, Y = points[0].Y };
+        }
+
+        float area = 0f;
+        float cx = 0f;
+        float cy = 0f;
+        for (var i = 0; i < points.Count; i += 1)
+        {
+            var j = (i + 1) % points.Count;
+            var p1 = points[i];
+            var p2 = points[j];
+            var cross = (p1.X * p2.Y) - (p2.X * p1.Y);
+            area += cross;
+            cx += (p1.X + p2.X) * cross;
+            cy += (p1.Y + p2.Y) * cross;
+        }
+
+        area *= 0.5f;
+        if (MathF.Abs(area) < 0.001f)
+        {
+            return new MapPointDto
+            {
+                X = points.Average(point => point.X),
+                Y = points.Average(point => point.Y)
+            };
+        }
+
+        var factor = 1f / (6f * area);
+        return new MapPointDto { X = cx * factor, Y = cy * factor };
+    }
+
+    private string GetRelationshipTargetLabel(int targetId, string targetType)
+    {
+        if (_map is null || targetId <= 0)
+        {
+            return "Unknown target";
+        }
+
+        var character = _map.Characters.FirstOrDefault(item => item.Id == targetId);
+        if (character is not null)
+        {
+            return GetCharacterLabel(character);
+        }
+
+        if (_map.Trees.Any(item => item.Id == targetId))
+        {
+            return $"Tree #{targetId}";
+        }
+
+        if (_map.Houses.Any(item => item.Id == targetId))
+        {
+            return $"House #{targetId}";
+        }
+
+        if (_map.AreaPolygons.Any(item => item.Id == targetId && string.Equals(item.FeatureType, "Land", StringComparison.OrdinalIgnoreCase)))
+        {
+            return $"Land #{targetId}";
+        }
+
+        if (_map.AreaPolygons.Any(item => item.Id == targetId && string.Equals(item.FeatureType, "Water", StringComparison.OrdinalIgnoreCase)))
+        {
+            return $"Water #{targetId}";
+        }
+
+        return string.IsNullOrWhiteSpace(targetType)
+            ? $"Feature #{targetId}"
+            : $"{targetType} #{targetId}";
+    }
+
+    private static string FormatRelationshipTypes(IEnumerable<string>? values)
+    {
+        if (values is null)
+        {
+            return "Relationship";
+        }
+
+        var normalized = values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToList();
+
+        return normalized.Count == 0 ? "Relationship" : string.Join(", ", normalized);
+    }
+
+    private static string GetCharacterLabel(CharacterFeatureDto character)
+    {
+        return string.IsNullOrWhiteSpace(character.Name)
+            ? $"Character #{character.Id}"
+            : character.Name;
+    }
+
+    private static string GetFallback(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "(none)" : value;
+    }
+
+    private static string NormalizeShareCode(string code)
+    {
+        return string.IsNullOrWhiteSpace(code)
+            ? string.Empty
+            : code.Trim().ToUpperInvariant();
+    }
+
+    private async Task UpdateCanvasClientSizeAsync()
+    {
+        var size = await JS.InvokeAsync<CanvasClientSize?>("inkAndRealmDemo.getCanvasClientSize", CanvasId);
+        if (size is null || size.Width <= 0 || size.Height <= 0)
+        {
+            _canvasClientWidth = CanvasWidth;
+            _canvasClientHeight = CanvasHeight;
+            return;
+        }
+
+        _canvasClientWidth = size.Width;
+        _canvasClientHeight = size.Height;
+    }
+
+    private float GetCanvasScaleX()
+    {
+        return _canvasClientWidth > 0 ? (CanvasWidth / _canvasClientWidth) : 1f;
+    }
+
+    private float GetCanvasScaleY()
+    {
+        return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private sealed record CanvasClientSize(float Width, float Height);
+}

@@ -33,8 +33,23 @@ public sealed class MapEntity
     public string Name { get; set; } = string.Empty;
     public float Width { get; set; }
     public float Height { get; set; }
+    public MapShareEntity? Share { get; set; }
     public List<FeatureEntity> Features { get; set; } = new();
     public List<MapLayerEntity> Layers { get; set; } = new();
+}
+
+[Index(nameof(ShareCode), IsUnique = true)]
+[Index(nameof(MapId), IsUnique = true)]
+public sealed class MapShareEntity
+{
+    public int Id { get; set; }
+    public int MapId { get; set; }
+    public MapEntity? Map { get; set; }
+    public string ShareCode { get; set; } = string.Empty;
+    public bool IsOpen { get; set; }
+    public DateTime CreatedUtc { get; set; }
+    public DateTime UpdatedUtc { get; set; }
+    public DateTime ExpiresUtc { get; set; }
 }
 
 public sealed class MapLayerEntity

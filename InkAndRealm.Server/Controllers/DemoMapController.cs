@@ -3,6 +3,7 @@ using InkAndRealm.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace InkAndRealm.Server.Controllers;
@@ -16,6 +17,9 @@ public sealed class DemoMapController : ControllerBase
     private const int CharacterFieldMaxLength = 512;
     private const float TitleSizeMin = 0.5f;
     private const float TitleSizeMax = 3f;
+    private const int ShareLifetimeDays = 7;
+    private const int ShareCodeLength = 12;
+    private static readonly char[] ShareCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
     private readonly DemoMapContext _context;
 
     public DemoMapController(DemoMapContext context)
@@ -77,6 +81,184 @@ public sealed class DemoMapController : ControllerBase
 
         var relationships = await LoadRelationshipsAsync(map);
         return Ok(ToDto(map, relationships));
+    }
+
+    [HttpGet("shared")]
+    public async Task<ActionResult<MapDto>> GetSharedMap([FromQuery] string? code)
+    {
+        var normalizedCode = NormalizeShareCode(code);
+        if (string.IsNullOrWhiteSpace(normalizedCode))
+        {
+            return BadRequest("Share code is required.");
+        }
+
+        var now = DateTime.UtcNow;
+        var share = await _context.MapShares
+            .Include(entry => entry.Map)
+            .ThenInclude(map => map!.Features)
+            .ThenInclude(feature => feature.Points)
+            .Include(entry => entry.Map)
+            .ThenInclude(map => map!.Layers)
+            .FirstOrDefaultAsync(entry => entry.ShareCode == normalizedCode);
+
+        if (share?.Map is null)
+        {
+            return NotFound("Share code not found.");
+        }
+
+        if (!share.IsOpen)
+        {
+            return NotFound("This share code is closed or expired.");
+        }
+
+        if (share.ExpiresUtc <= now)
+        {
+            share.IsOpen = false;
+            share.UpdatedUtc = now;
+            await _context.SaveChangesAsync();
+            return NotFound("This share code is closed or expired.");
+        }
+
+        var relationships = await LoadRelationshipsAsync(share.Map);
+        return Ok(ToDto(share.Map, relationships));
+    }
+
+    [HttpGet("share")]
+    public async Task<ActionResult<IReadOnlyList<MapShareStatusDto>>> GetShareStatuses([FromQuery] int? userId, [FromQuery] string? sessionToken)
+    {
+        if (userId is null && string.IsNullOrWhiteSpace(sessionToken))
+        {
+            return Unauthorized("Log in to manage map sharing.");
+        }
+
+        var user = await ResolveUserAsync(sessionToken, userId);
+        if (user is null)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        var now = DateTime.UtcNow;
+        var shares = await _context.Maps
+            .Where(map => map.UserId == user.Id)
+            .OrderBy(map => map.Id)
+            .Select(map => new MapShareStatusDto
+            {
+                MapId = map.Id,
+                MapName = map.Name,
+                ShareCode = map.Share != null ? map.Share.ShareCode : null,
+                IsOpen = map.Share != null && map.Share.IsOpen && map.Share.ExpiresUtc > now,
+                ExpiresUtc = map.Share != null ? map.Share.ExpiresUtc : null
+            })
+            .ToListAsync();
+
+        return Ok(shares);
+    }
+
+    [HttpPost("share/open")]
+    public async Task<ActionResult<MapShareStatusDto>> OpenShare([FromBody] MapShareAccessRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest("Share request is required.");
+        }
+
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
+        {
+            return Unauthorized("Log in to manage map sharing.");
+        }
+
+        if (request.MapId <= 0)
+        {
+            return BadRequest("Map id is required.");
+        }
+
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        var map = await _context.Maps
+            .Include(entry => entry.Share)
+            .FirstOrDefaultAsync(entry => entry.Id == request.MapId && entry.UserId == user.Id);
+        if (map is null)
+        {
+            return NotFound("Map not found.");
+        }
+
+        var now = DateTime.UtcNow;
+        var share = map.Share;
+        if (share is null)
+        {
+            share = new MapShareEntity
+            {
+                MapId = map.Id,
+                ShareCode = await GenerateUniqueShareCodeAsync(),
+                IsOpen = true,
+                CreatedUtc = now,
+                UpdatedUtc = now,
+                ExpiresUtc = now.AddDays(ShareLifetimeDays)
+            };
+
+            _context.MapShares.Add(share);
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(share.ShareCode))
+            {
+                share.ShareCode = await GenerateUniqueShareCodeAsync();
+            }
+
+            share.IsOpen = true;
+            share.UpdatedUtc = now;
+            share.ExpiresUtc = now.AddDays(ShareLifetimeDays);
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(ToShareStatus(map, share));
+    }
+
+    [HttpPost("share/close")]
+    public async Task<ActionResult<MapShareStatusDto>> CloseShare([FromBody] MapShareAccessRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest("Share request is required.");
+        }
+
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
+        {
+            return Unauthorized("Log in to manage map sharing.");
+        }
+
+        if (request.MapId <= 0)
+        {
+            return BadRequest("Map id is required.");
+        }
+
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        var map = await _context.Maps
+            .Include(entry => entry.Share)
+            .FirstOrDefaultAsync(entry => entry.Id == request.MapId && entry.UserId == user.Id);
+        if (map is null)
+        {
+            return NotFound("Map not found.");
+        }
+
+        var share = map.Share;
+        if (share is not null && share.IsOpen)
+        {
+            share.IsOpen = false;
+            share.UpdatedUtc = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+
+        return Ok(ToShareStatus(map, share));
     }
 
     [HttpPost("new")]
@@ -1587,6 +1769,53 @@ public sealed class DemoMapController : ControllerBase
 
         _context.FeatureRelationships.RemoveRange(relationshipsToRemove);
         return true;
+    }
+
+    private static MapShareStatusDto ToShareStatus(MapEntity map, MapShareEntity? share)
+    {
+        return new MapShareStatusDto
+        {
+            MapId = map.Id,
+            MapName = map.Name,
+            ShareCode = share?.ShareCode,
+            IsOpen = share?.IsOpen ?? false,
+            ExpiresUtc = share?.ExpiresUtc
+        };
+    }
+
+    private static string NormalizeShareCode(string? code)
+    {
+        return string.IsNullOrWhiteSpace(code)
+            ? string.Empty
+            : code.Trim().ToUpperInvariant();
+    }
+
+    private async Task<string> GenerateUniqueShareCodeAsync()
+    {
+        const int maxAttempts = 32;
+        for (var attempt = 0; attempt < maxAttempts; attempt += 1)
+        {
+            var candidate = CreateShareCode();
+            var exists = await _context.MapShares.AnyAsync(entry => entry.ShareCode == candidate);
+            if (!exists)
+            {
+                return candidate;
+            }
+        }
+
+        throw new InvalidOperationException("Failed to generate a unique share code.");
+    }
+
+    private static string CreateShareCode()
+    {
+        var chars = new char[ShareCodeLength];
+        for (var i = 0; i < chars.Length; i += 1)
+        {
+            var index = RandomNumberGenerator.GetInt32(0, ShareCodeAlphabet.Length);
+            chars[i] = ShareCodeAlphabet[index];
+        }
+
+        return new string(chars);
     }
 
     private static List<string> NormalizeRelationshipTypes(IEnumerable<string>? values)
