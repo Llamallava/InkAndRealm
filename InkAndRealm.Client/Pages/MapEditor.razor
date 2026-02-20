@@ -770,6 +770,8 @@
     private const float PolygonMinSpacing = 18f;
     private const float PolygonMaxSpacing = 120f;
     private const int PolygonMaxPoints = 1600;
+    private const float LandChaosSegmentLength = 28f;
+    private const float LandChaosAmplitude = 7f;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
     private readonly List<MapPointDto> _activePolygonPoints = new();
@@ -1746,13 +1748,20 @@
             }
 
             PushUndoState();
+            var featureType = GetAreaPlacementFeatureType();
+            var polygonPoints = _activePolygonPoints
+                .Select(point => new MapPointDto { X = point.X, Y = point.Y })
+                .ToList();
+            if (_useChaoticLandEdges && IsLandFeatureType(featureType))
+            {
+                polygonPoints = BuildChaoticLandEdgePoints(polygonPoints);
+            }
+
             var polygon = new AreaPolygonDto
             {
-                FeatureType = GetAreaPlacementFeatureType(),
+                FeatureType = featureType,
                 LayerIndex = layer.LayerIndex,
-                Points = _activePolygonPoints
-                    .Select(point => new MapPointDto { X = point.X, Y = point.Y })
-                    .ToList()
+                Points = polygonPoints
             };
 
             if (IsLandFeatureType(polygon.FeatureType))
@@ -2002,6 +2011,11 @@
         {
             _statusMessage = "Unable to generate a starter land mass.";
             return;
+        }
+
+        if (_useChaoticLandEdges)
+        {
+            points = BuildChaoticLandEdgePoints(points);
         }
 
         PushUndoState();
@@ -6463,6 +6477,58 @@
         return smoothed;
     }
 
+    private static List<MapPointDto> BuildChaoticLandEdgePoints(IReadOnlyList<MapPointDto> points)
+    {
+        if (points is null || points.Count < 3)
+        {
+            return points?.Select(point => new MapPointDto { X = point.X, Y = point.Y }).ToList() ?? new List<MapPointDto>();
+        }
+
+        var seed = points.Sum(point => (point.X * 0.13f) + (point.Y * 0.71f));
+        var chaoticPoints = new List<MapPointDto>(points.Count * 2);
+
+        for (var i = 0; i < points.Count; i += 1)
+        {
+            var current = points[i];
+            var next = points[(i + 1) % points.Count];
+            var dx = next.X - current.X;
+            var dy = next.Y - current.Y;
+            var length = MathF.Sqrt((dx * dx) + (dy * dy));
+            if (!float.IsFinite(length) || length <= 0.001f)
+            {
+                chaoticPoints.Add(new MapPointDto { X = current.X, Y = current.Y });
+                continue;
+            }
+
+            var steps = Math.Max(1, (int)MathF.Floor(length / LandChaosSegmentLength));
+            var nx = -dy / length;
+            var ny = dx / length;
+            chaoticPoints.Add(new MapPointDto { X = current.X, Y = current.Y });
+
+            for (var step = 1; step < steps; step += 1)
+            {
+                var t = step / (float)steps;
+                var baseX = current.X + (dx * t);
+                var baseY = current.Y + (dy * t);
+                var noise = HashNoise01(seed + (i * 127.1f) + (step * 311.7f));
+                var offset = ((noise * 2f) - 1f) * LandChaosAmplitude;
+                chaoticPoints.Add(new MapPointDto
+                {
+                    X = baseX + (nx * offset),
+                    Y = baseY + (ny * offset)
+                });
+            }
+        }
+
+        return chaoticPoints;
+    }
+
+    private static float HashNoise01(float value)
+    {
+        var raw = MathF.Sin(value) * 10000f;
+        return raw - MathF.Floor(raw);
+    }
+
     private int PlaceBrushStamp(float centerX, float centerY)
     {
         var radius = GetBrushRadius();
@@ -6840,7 +6906,6 @@
                     IsActive = _isBrushing
                 }
                 : null,
-            UseChaoticLandEdges = _useChaoticLandEdges,
             ViewState = new MapViewStateDto
             {
                 ViewX = _viewX,

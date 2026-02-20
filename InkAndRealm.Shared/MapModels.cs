@@ -196,7 +196,6 @@ public sealed class MapRenderStateDto
     public int? EditPolygonEdgeIndex { get; set; }
     public bool EditPolygonCenterActive { get; set; }
     public BrushPreviewDto? BrushPreview { get; set; }
-    public bool UseChaoticLandEdges { get; set; }
     public MapViewStateDto ViewState { get; set; } = new();
 }
 

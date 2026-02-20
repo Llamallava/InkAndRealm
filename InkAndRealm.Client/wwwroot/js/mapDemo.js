@@ -185,65 +185,8 @@ window.inkAndRealmDemo = {
             targetCtx.restore();
         };
 
-        const hashValue = (value) => {
-            const raw = Math.sin(value) * 10000;
-            return raw - Math.floor(raw);
-        };
-
-        const buildChaoticPoints = (points, segmentLength, amplitude, seed) => {
-            if (!Array.isArray(points) || points.length < 2) {
-                return points || [];
-            }
-
-            const jittered = [];
-            for (let i = 0; i < points.length; i += 1) {
-                const current = points[i];
-                const next = points[(i + 1) % points.length];
-                const dx = next.x - current.x;
-                const dy = next.y - current.y;
-                const length = Math.hypot(dx, dy);
-                if (!Number.isFinite(length) || length <= 0.001) {
-                    jittered.push({ x: current.x, y: current.y });
-                    continue;
-                }
-
-                const steps = Math.max(1, Math.floor(length / segmentLength));
-                const nx = -dy / length;
-                const ny = dx / length;
-                jittered.push({ x: current.x, y: current.y });
-
-                for (let step = 1; step < steps; step += 1) {
-                    const t = step / steps;
-                    const baseX = current.x + dx * t;
-                    const baseY = current.y + dy * t;
-                    const rand = hashValue(seed + (i * 127.1) + (step * 311.7));
-                    const offset = (rand * 2 - 1) * amplitude;
-                    jittered.push({
-                        x: baseX + (nx * offset),
-                        y: baseY + (ny * offset)
-                    });
-                }
-            }
-
-            return jittered;
-        };
-
-        const drawChaoticPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null) => {
-            if (!Array.isArray(points) || points.length < 3) {
-                return;
-            }
-
-            const seed = points.reduce((total, point) => total + (point.x * 0.13) + (point.y * 0.71), 0);
-            const chaoticPoints = buildChaoticPoints(points, 28, 7, seed);
-            drawPolygon(targetCtx, chaoticPoints, color, alpha, strokeColor);
-        };
-
         const drawLandPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null) => {
-            if (chaoticLandEdges) {
-                drawChaoticPolygon(targetCtx, points, color, alpha, strokeColor);
-            } else {
-                drawPolygon(targetCtx, points, color, alpha, strokeColor);
-            }
+            drawPolygon(targetCtx, points, color, alpha, strokeColor);
         };
 
         const drawPolygonHandles = (targetCtx, points, selectedIndex = null) => {
@@ -709,7 +652,6 @@ window.inkAndRealmDemo = {
         }
         */
 
-        const chaoticLandEdges = !!(renderState && renderState.useChaoticLandEdges);
         const layerCanvases = new Map();
         if (renderState && Array.isArray(renderState.areaPolygons)) {
             const polygonsByLayer = new Map();

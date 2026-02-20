@@ -340,7 +340,6 @@
                 .OrderBy(polygon => polygon.LayerIndex)
                 .ToList()
                 ?? new List<AreaPolygonDto>(),
-            UseChaoticLandEdges = true,
             ViewState = new MapViewStateDto
             {
                 ViewX = _viewX,
