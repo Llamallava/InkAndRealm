@@ -703,6 +703,7 @@
     private float _panCandidateStartX;
     private float _panCandidateStartY;
     private bool _isLoading;
+    private bool _mapJustLoaded;
     private bool _isSaving;
     private bool _hasMap;
     private string _statusMessage = string.Empty;
@@ -1036,6 +1037,12 @@
             await UpdateCanvasClientSizeAsync();
             _undoShortcutRef ??= DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("inkAndRealmDemo.registerUndoShortcut", CanvasId, _undoShortcutRef);
+            await DrawAsync();
+        }
+        else if (_mapJustLoaded)
+        {
+            _mapJustLoaded = false;
+            await UpdateCanvasClientSizeAsync();
             await DrawAsync();
         }
     }
@@ -2407,6 +2414,7 @@
             ? "Map loaded from the database."
             : "No map found. Return to Start and click New Map.";
         _isLoading = false;
+        _mapJustLoaded = true;
     }
 
     [JSInvokable]

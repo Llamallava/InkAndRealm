@@ -9,155 +9,243 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<PageTitle>Ink & Realm Shared Viewer</PageTitle>
+<PageTitle>Ink & Realm Map Viewer</PageTitle>
 
-<div class="container-fluid py-4 map-viewer-page">
-    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-        <div>
-            <h1 class="mb-1">Shared Map Viewer</h1>
-            <p class="text-muted mb-0">Enter a share code to load a map in strict read-only mode.</p>
-        </div>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="GoHome">Back</button>
-    </div>
-
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-6 col-lg-4">
-                    <label class="form-label">Share Code</label>
-                    <input class="form-control"
-                           placeholder="Enter share code"
-                           @bind="_shareCodeInput"
-                           @bind:event="oninput" />
-                </div>
-                <div class="col-auto">
-                    <button class="btn btn-primary"
-                            disabled="@_isLoading"
-                            @onclick="LoadSharedMapAsync">
-                        Load Map
-                    </button>
-                </div>
-                <div class="col-auto">
-                    <button class="btn btn-outline-secondary"
-                            disabled="@_isLoading"
-                            @onclick="ClearViewer">
-                        Clear
-                    </button>
-                </div>
+<div class="container-fluid map-editor-page">
+    <div class="map-editor-layout">
+        <aside class="map-editor-sidebar">
+            <div class="map-editor-sidebar-header">
+                <div class="map-editor-sidebar-title">Viewer</div>
+                <button class="btn btn-outline-secondary btn-sm map-editor-sidebar-back"
+                        @onclick="GoHome"
+                        aria-label="Back"
+                        title="Back">
+                    <span aria-hidden="true">&#8592;</span>
+                </button>
             </div>
-        </div>
-    </div>
 
-    @if (_map is not null)
-    {
-        <div class="row g-3">
-            <div class="col-12 col-xl-8">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <div>
-                            <div class="fw-semibold">@_map.Name</div>
-                            <div class="small text-muted">
-                                Trees @_map.Trees.Count | Houses @_map.Houses.Count | Characters @_map.Characters.Count | Titles @_map.Titles.Count
-                            </div>
-                        </div>
-                        <div class="small text-muted">Drag to pan. Wheel to zoom.</div>
-                    </div>
-                    <div class="card-body">
-                        <div class="map-viewer-canvas-shell">
-                            <canvas id="@CanvasId"
-                                    width="1000"
-                                    height="600"
-                                    class="map-viewer-canvas"
-                                    style="touch-action:none;"
-                                    @onmousedown="BeginPan"
-                                    @onmousemove="MovePan"
-                                    @onmouseup="EndPan"
-                                    @onmouseleave="EndPan"
-                                    @onwheel="HandleWheel"
-                                    @onwheel:preventDefault="true">
-                            </canvas>
-                        </div>
-                    </div>
-                </div>
+            <div class="map-editor-sidebar-section">
+                <button class="btn btn-outline-primary btn-sm w-100"
+                        disabled="@(_map is null || _isLoading)"
+                        @onclick="OpenRelationshipTree">
+                    Character Tree
+                </button>
             </div>
-            <div class="col-12 col-xl-4">
-                <div class="card mb-3">
-                    <div class="card-header fw-semibold">Character Details</div>
-                    <div class="card-body">
-                        @if (_selectedCharacter is null)
-                        {
-                            <div class="text-muted small">Select a character below.</div>
-                        }
-                        else
-                        {
-                            <div class="mb-2">
-                                <div class="small text-muted">Name</div>
-                                <div>@GetCharacterLabel(_selectedCharacter)</div>
-                            </div>
-                            <div class="mb-2">
-                                <div class="small text-muted">Type</div>
-                                <div>@_selectedCharacter.CharacterType</div>
-                            </div>
-                            <div class="mb-2">
-                                <div class="small text-muted">Background</div>
-                                <div>@GetFallback(_selectedCharacter.Background)</div>
-                            </div>
-                            <div class="mb-2">
-                                <div class="small text-muted">Occupation</div>
-                                <div>@GetFallback(_selectedCharacter.Occupation)</div>
-                            </div>
-                            <div class="mb-0">
-                                <div class="small text-muted">Personality</div>
-                                <div>@GetFallback(_selectedCharacter.Personality)</div>
-                            </div>
-                        }
-                    </div>
+
+            @if (_selectedCharacter is not null)
+            {
+                <div class="map-editor-sidebar-section">
+                    <div class="small text-muted">Name</div>
+                    <div class="map-viewer-sidebar-value">@GetCharacterLabel(_selectedCharacter)</div>
                 </div>
-                <div class="card">
-                    <div class="card-header fw-semibold">Relationship Tree</div>
-                    <div class="card-body">
-                        @if (_map.Characters.Count == 0)
+                <div class="map-editor-sidebar-section">
+                    <div class="small text-muted">Type</div>
+                    <div class="map-viewer-sidebar-value">@_selectedCharacter.CharacterType</div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Background))
+                {
+                    <div class="map-editor-sidebar-section">
+                        <div class="small text-muted">Background</div>
+                        <div class="map-viewer-sidebar-value">@_selectedCharacter.Background</div>
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Occupation))
+                {
+                    <div class="map-editor-sidebar-section">
+                        <div class="small text-muted">Occupation</div>
+                        <div class="map-viewer-sidebar-value">@_selectedCharacter.Occupation</div>
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Personality))
+                {
+                    <div class="map-editor-sidebar-section">
+                        <div class="small text-muted">Personality</div>
+                        <div class="map-viewer-sidebar-value">@_selectedCharacter.Personality</div>
+                    </div>
+                }
+                @if (_selectedCharacter.Relationships is { Count: > 0 })
+                {
+                    <div class="map-editor-sidebar-section">
+                        <div class="small text-muted">Relationships</div>
+                        @foreach (var rel in _selectedCharacter.Relationships.OrderBy(r => r.TargetFeatureId))
                         {
-                            <div class="text-muted small">No characters to display.</div>
-                        }
-                        else
-                        {
-                            @foreach (var character in _map.Characters.OrderBy(character => character.Id))
-                            {
-                                <div class="mb-3">
-                                    <button class="btn btn-link p-0 text-start relationship-character-link"
-                                            @onclick="() => SelectCharacter(character)">
-                                        @GetCharacterLabel(character)
-                                    </button>
-                                    @if (character.Relationships is null || character.Relationships.Count == 0)
-                                    {
-                                        <div class="small text-muted">No relationships.</div>
-                                    }
-                                    else
-                                    {
-                                        <ul class="small mb-0 relationship-list">
-                                            @foreach (var relationship in character.Relationships.OrderBy(relationship => relationship.TargetFeatureId))
-                                            {
-                                                <li>
-                                                    <span class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType)</span>
-                                                    <span>: @FormatRelationshipTypes(relationship.RelationshipTypes)</span>
-                                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
-                                                    {
-                                                        <span class="text-muted"> - @relationship.Description</span>
-                                                    }
-                                                </li>
-                                            }
-                                        </ul>
-                                    }
+                            <div class="map-viewer-sidebar-relationship">
+                                <div class="fw-semibold map-viewer-sidebar-value">
+                                    @GetRelationshipTargetLabel(rel.TargetFeatureId, rel.TargetFeatureType)
                                 </div>
-                            }
+                                <div class="map-viewer-sidebar-value">@FormatRelationshipTypes(rel.RelationshipTypes)</div>
+                                @if (!string.IsNullOrWhiteSpace(rel.Description))
+                                {
+                                    <div class="text-muted map-viewer-sidebar-value">@rel.Description</div>
+                                }
+                            </div>
                         }
                     </div>
+                }
+            }
+            else if (_map is not null)
+            {
+                <div class="map-editor-sidebar-section">
+                    <div class="small text-muted">Click a character on the map to view details.</div>
+                </div>
+            }
+            else if (_isLoading)
+            {
+                <div class="map-editor-sidebar-section">
+                    <div class="small text-muted">Loading...</div>
+                </div>
+            }
+        </aside>
+
+        <section class="map-editor-main">
+            <div class="map-editor-canvas-card">
+                <div class="map-editor-canvas-shell">
+                    <canvas id="@CanvasId"
+                            width="1000"
+                            height="600"
+                            class="map-editor-canvas @(_isPanning ? "map-viewer-grabbing" : "map-viewer-grab")"
+                            style="touch-action:none;"
+                            @onmousedown="HandleMouseDown"
+                            @onmousemove="HandleMouseMove"
+                            @onmouseup="HandleMouseUp"
+                            @onmouseleave="HandleMouseLeave"
+                            @onwheel="HandleWheel"
+                            @onwheel:preventDefault="true">
+                    </canvas>
                 </div>
             </div>
-        </div>
-    }
+        </section>
+    </div>
 </div>
+
+@if (_isRelationshipTreeOpen)
+{
+    <div class="relationship-tree-overlay">
+        <div class="relationship-tree-card">
+            <div class="relationship-tree-header">
+                <div>
+                    <div class="fw-semibold">Character Tree</div>
+                    <div class="small text-muted">Relationship data for this map.</div>
+                </div>
+                <div class="relationship-tree-header-actions">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Character Tree zoom">
+                        <button class="btn btn-outline-secondary" type="button" @onclick="ZoomOutRelationshipTree">-</button>
+                        <button class="btn btn-outline-secondary" type="button" @onclick="ResetRelationshipTreeZoom">Reset</button>
+                        <button class="btn btn-outline-secondary" type="button" @onclick="ZoomInRelationshipTree">+</button>
+                    </div>
+                    <div class="small text-muted">@($"{_relationshipTreeZoom * 100:0}%")</div>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="CloseRelationshipTree">Close</button>
+                </div>
+            </div>
+            <div class="relationship-tree-body">
+                @if (_relationshipTreeNodes.Count == 0)
+                {
+                    <div class="text-muted">No characters found for this map.</div>
+                }
+                else
+                {
+                    <div class="@RelationshipTreeCanvasShellClass"
+                         @onmousedown="BeginRelationshipTreePan"
+                         @onmousemove="UpdateRelationshipTreePan"
+                         @onmouseup="EndRelationshipTreePan"
+                         @onmouseleave="EndRelationshipTreePan"
+                         @onmousedown:preventDefault="true"
+                         @onwheel="HandleRelationshipTreeWheel"
+                         @onwheel:preventDefault="true"
+                         @onwheel:stopPropagation="true">
+                        <svg class="relationship-tree-canvas"
+                             viewBox="@RelationshipTreeViewBox"
+                             preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <marker id="relationship-tree-arrowhead"
+                                        viewBox="0 0 10 10"
+                                        refX="8"
+                                        refY="5"
+                                        markerWidth="7"
+                                        markerHeight="7"
+                                        orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" class="relationship-tree-arrowhead" />
+                                </marker>
+                            </defs>
+                            @foreach (var edge in _relationshipTreeMergedEdges)
+                            {
+                                if (!_relationshipTreeNodeLookup.TryGetValue(edge.NodeAId, out var nodeA)
+                                    || !_relationshipTreeNodeLookup.TryGetValue(edge.NodeBId, out var nodeB))
+                                {
+                                    continue;
+                                }
+
+                                <line x1="@nodeA.X"
+                                      y1="@nodeA.Y"
+                                      x2="@nodeB.X"
+                                      y2="@nodeB.Y"
+                                      class="relationship-tree-edge"
+                                      marker-start="@GetRelationshipTreeMarkerStart(edge)"
+                                      marker-end="@GetRelationshipTreeMarkerEnd(edge)">
+                                    <title>@GetRelationshipTreeEdgeTooltip(edge)</title>
+                                </line>
+
+                                @if (edge.AToB is not null)
+                                {
+                                    var labelPosition = GetRelationshipTreeLabelPosition(nodeA, nodeB, 0.36f, -12f);
+                                    var labelText = GetRelationshipTreeEdgeLabel(edge.AToB);
+                                    if (!string.IsNullOrWhiteSpace(labelText))
+                                    {
+                                        <foreignObject x="@(labelPosition.X - 62f)"
+                                                       y="@(labelPosition.Y - 10f)"
+                                                       width="124"
+                                                       height="20">
+                                            <div xmlns="http://www.w3.org/1999/xhtml"
+                                                 class="relationship-tree-edge-label">@labelText</div>
+                                        </foreignObject>
+                                    }
+                                }
+
+                                @if (edge.BToA is not null)
+                                {
+                                    var labelPosition = GetRelationshipTreeLabelPosition(nodeB, nodeA, 0.36f, 12f);
+                                    var labelText = GetRelationshipTreeEdgeLabel(edge.BToA);
+                                    if (!string.IsNullOrWhiteSpace(labelText))
+                                    {
+                                        <foreignObject x="@(labelPosition.X - 62f)"
+                                                       y="@(labelPosition.Y - 10f)"
+                                                       width="124"
+                                                       height="20">
+                                            <div xmlns="http://www.w3.org/1999/xhtml"
+                                                 class="relationship-tree-edge-label">@labelText</div>
+                                        </foreignObject>
+                                    }
+                                }
+                            }
+
+                            @foreach (var node in _relationshipTreeNodes)
+                            {
+                                <g class="@GetRelationshipTreeNodeClass(node)"
+                                   @onclick="() => SelectRelationshipTreeNode(node)">
+                                    <circle cx="@node.X"
+                                            cy="@node.Y"
+                                            r="@GetRelationshipTreeNodeRadius(node)">
+                                        <title>@GetRelationshipTreeNodeTooltip(node)</title>
+                                    </circle>
+                                    <foreignObject x="@(node.X - 65f)"
+                                                   y="@(node.Y + GetRelationshipTreeNodeRadius(node) + 4f)"
+                                                   width="130"
+                                                   height="28">
+                                        <div xmlns="http://www.w3.org/1999/xhtml"
+                                             class="relationship-tree-node-label">@GetRelationshipTreeNodeShortLabel(node)</div>
+                                    </foreignObject>
+                                </g>
+                            }
+                        </svg>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        Use mouse wheel over this graph to zoom. Click a character node to view details in the sidebar.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private const string CanvasId = "map-viewer-canvas";
@@ -167,31 +255,60 @@
     private const float MapHeight = 1200f;
     private const float MinZoom = 0.5f;
     private const float MaxZoom = 3f;
+    private const float PanDragThreshold = 6f;
+    private const float RelationshipTreeCanvasWidth = 1400f;
+    private const float RelationshipTreeCanvasHeight = 900f;
+    private const float RelationshipTreeMinZoom = 1f;
+    private const float RelationshipTreeMaxZoom = 4f;
+    private const float RelationshipTreeZoomStep = 1.12f;
+
     [SupplyParameterFromQuery(Name = "published")]
     public int PublishedMapId { get; set; }
 
-    private string _shareCodeInput = string.Empty;
-    private string _statusMessage = string.Empty;
     private bool _isLoading;
+    private bool _mapJustLoaded;
     private MapDto? _map;
     private CharacterFeatureDto? _selectedCharacter;
+
+    // View state
     private float _zoom = 1f;
     private float _viewX;
     private float _viewY;
     private float _canvasClientWidth = CanvasWidth;
     private float _canvasClientHeight = CanvasHeight;
+
+    // Pan / click candidate state
     private bool _isPanning;
+    private bool _isPanCandidate;
+    private float _panCandidateStartClientX;
+    private float _panCandidateStartClientY;
+    private float _panCandidateStartOffsetX;
+    private float _panCandidateStartOffsetY;
     private float _panStartX;
     private float _panStartY;
     private float _panOriginX;
     private float _panOriginY;
+
+    // Relationship tree state
+    private bool _isRelationshipTreeOpen;
+    private float _relationshipTreeZoom = 1f;
+    private float _relationshipTreeViewX;
+    private float _relationshipTreeViewY;
+    private bool _isRelationshipTreePanning;
+    private bool _relationshipTreeSuppressNodeClick;
+    private float _relationshipTreePanStartClientX;
+    private float _relationshipTreePanStartClientY;
+    private float _relationshipTreePanOriginX;
+    private float _relationshipTreePanOriginY;
+    private readonly List<RelationshipTreeNode> _relationshipTreeNodes = new();
+    private readonly List<RelationshipTreeMergedEdge> _relationshipTreeMergedEdges = new();
+    private readonly Dictionary<int, RelationshipTreeNode> _relationshipTreeNodeLookup = new();
 
     protected override async Task OnInitializedAsync()
     {
         if (PublishedMapId > 0)
         {
             _isLoading = true;
-            _statusMessage = "Loading map...";
             try
             {
                 using var response = await Http.GetAsync($"api/demo-map/published/{PublishedMapId}");
@@ -201,18 +318,9 @@
                     if (map is not null && map.Id > 0)
                     {
                         _map = map;
-                        _selectedCharacter = map.Characters.FirstOrDefault();
+                        _mapJustLoaded = true;
                         ResetView();
-                        _statusMessage = map.Name;
                     }
-                    else
-                    {
-                        _statusMessage = "Map not found.";
-                    }
-                }
-                else
-                {
-                    _statusMessage = "Failed to load map.";
                 }
             }
             finally
@@ -229,76 +337,173 @@
             await UpdateCanvasClientSizeAsync();
             await DrawAsync();
         }
+        else if (_mapJustLoaded)
+        {
+            _mapJustLoaded = false;
+            await UpdateCanvasClientSizeAsync();
+            await DrawAsync();
+        }
     }
 
-    private async Task LoadSharedMapAsync()
+    // ── Canvas mouse handlers ─────────────────────────────────────────────────
+
+    private async Task HandleMouseDown(MouseEventArgs args)
     {
-        var code = NormalizeShareCode(_shareCodeInput);
-        if (string.IsNullOrWhiteSpace(code))
+        if (_map is null || args.Button != 0)
         {
-            _statusMessage = "Enter a share code.";
             return;
         }
 
-        _shareCodeInput = code;
-        _isLoading = true;
-        _statusMessage = "Loading shared map...";
-        _selectedCharacter = null;
+        await UpdateCanvasClientSizeAsync();
+        _isPanCandidate = true;
+        _panCandidateStartClientX = (float)args.ClientX;
+        _panCandidateStartClientY = (float)args.ClientY;
+        _panCandidateStartOffsetX = (float)args.OffsetX;
+        _panCandidateStartOffsetY = (float)args.OffsetY;
+    }
 
-        try
+    private async Task HandleMouseMove(MouseEventArgs args)
+    {
+        if (_isPanning)
         {
-            using var response = await Http.GetAsync($"api/demo-map/shared?code={Uri.EscapeDataString(code)}");
-            if (response.IsSuccessStatusCode)
-            {
-                var map = await response.Content.ReadFromJsonAsync<MapDto>();
-                if (map is null || map.Id <= 0)
-                {
-                    _map = null;
-                    _statusMessage = "Map not found.";
-                    return;
-                }
+            var dx = ((float)args.ClientX - _panStartX) * GetCanvasScaleX();
+            var dy = ((float)args.ClientY - _panStartY) * GetCanvasScaleY();
+            _viewX = _panOriginX - (dx / _zoom);
+            _viewY = _panOriginY - (dy / _zoom);
+            ClampView();
+            await DrawAsync();
+            return;
+        }
 
-                _map = map;
-                _selectedCharacter = map.Characters.FirstOrDefault();
-                ResetView();
-                _statusMessage = $"Loaded {map.Name}.";
-                await UpdateCanvasClientSizeAsync();
+        if (_isPanCandidate)
+        {
+            var dx = (float)args.ClientX - _panCandidateStartClientX;
+            var dy = (float)args.ClientY - _panCandidateStartClientY;
+            if ((dx * dx) + (dy * dy) >= (PanDragThreshold * PanDragThreshold))
+            {
+                _isPanning = true;
+                _isPanCandidate = false;
+                _panStartX = _panCandidateStartClientX;
+                _panStartY = _panCandidateStartClientY;
+                _panOriginX = _viewX;
+                _panOriginY = _viewY;
+                var actualDx = ((float)args.ClientX - _panStartX) * GetCanvasScaleX();
+                var actualDy = ((float)args.ClientY - _panStartY) * GetCanvasScaleY();
+                _viewX = _panOriginX - (actualDx / _zoom);
+                _viewY = _panOriginY - (actualDy / _zoom);
+                ClampView();
                 await DrawAsync();
-                return;
             }
-
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                _map = null;
-                _statusMessage = "Share code is invalid, closed, or expired.";
-                return;
-            }
-
-            var message = await response.Content.ReadAsStringAsync();
-            _map = null;
-            _statusMessage = string.IsNullOrWhiteSpace(message)
-                ? "Failed to load shared map."
-                : message;
         }
-        finally
+    }
+
+    private async Task HandleMouseUp(MouseEventArgs args)
+    {
+        if (_isPanning)
         {
-            _isLoading = false;
+            _isPanning = false;
+            _isPanCandidate = false;
+            return;
+        }
+
+        if (_isPanCandidate)
+        {
+            _isPanCandidate = false;
+            await HandleCanvasClickAsync();
         }
     }
 
-    private void ClearViewer()
+    private void HandleMouseLeave(MouseEventArgs args)
     {
-        _shareCodeInput = string.Empty;
-        _statusMessage = string.Empty;
-        _map = null;
-        _selectedCharacter = null;
-        ResetView();
+        _isPanning = false;
+        _isPanCandidate = false;
     }
 
-    private void SelectCharacter(CharacterFeatureDto character)
+    private async Task HandleCanvasClickAsync()
     {
-        _selectedCharacter = character;
+        if (_map is null)
+        {
+            return;
+        }
+
+        var (mapX, mapY) = ScreenToMap(_panCandidateStartOffsetX, _panCandidateStartOffsetY);
+        var hitRadius = GetHitRadius();
+        var character = FindCharacterAtPoint(mapX, mapY, hitRadius);
+        if (character is not null)
+        {
+            _selectedCharacter = character;
+            await DrawAsync();
+        }
     }
+
+    private async Task HandleWheel(WheelEventArgs args)
+    {
+        if (_map is null)
+        {
+            return;
+        }
+
+        await UpdateCanvasClientSizeAsync();
+        var delta = args.DeltaY < 0 ? 1f : -1f;
+        var oldZoom = _zoom;
+        _zoom = Math.Clamp(_zoom + (delta * 0.1f), MinZoom, MaxZoom);
+        if (Math.Abs(_zoom - oldZoom) < 0.0001f)
+        {
+            return;
+        }
+
+        var pointerX = (float)args.OffsetX * GetCanvasScaleX();
+        var pointerY = (float)args.OffsetY * GetCanvasScaleY();
+        var mapX = _viewX + (pointerX / oldZoom);
+        var mapY = _viewY + (pointerY / oldZoom);
+        _viewX = mapX - (pointerX / _zoom);
+        _viewY = mapY - (pointerY / _zoom);
+        ClampView();
+        await DrawAsync();
+    }
+
+    // ── Character hit detection ───────────────────────────────────────────────
+
+    private (float X, float Y) ScreenToMap(float screenX, float screenY)
+    {
+        return (
+            _viewX + (screenX * GetCanvasScaleX()) / _zoom,
+            _viewY + (screenY * GetCanvasScaleY()) / _zoom
+        );
+    }
+
+    private float GetHitRadius()
+    {
+        var scale = (GetCanvasScaleX() + GetCanvasScaleY()) / 2f;
+        return (10f * scale) / _zoom;
+    }
+
+    private CharacterFeatureDto? FindCharacterAtPoint(float mapX, float mapY, float threshold)
+    {
+        if (_map is null)
+        {
+            return null;
+        }
+
+        var thresholdSq = threshold * threshold;
+        CharacterFeatureDto? best = null;
+        var bestDist = float.MaxValue;
+        foreach (var character in _map.Characters)
+        {
+            var dx = character.X - mapX;
+            var dy = character.Y - mapY;
+            var dist = (dx * dx) + (dy * dy);
+            if (dist < thresholdSq && dist < bestDist)
+            {
+                bestDist = dist;
+                best = character;
+            }
+        }
+
+        return best;
+    }
+
+    // ── Draw ─────────────────────────────────────────────────────────────────
 
     private async Task DrawAsync()
     {
@@ -390,66 +595,7 @@
         };
     }
 
-    private async Task BeginPan(MouseEventArgs args)
-    {
-        if (_map is null || args.Button != 0)
-        {
-            return;
-        }
-
-        await UpdateCanvasClientSizeAsync();
-        _isPanning = true;
-        _panStartX = (float)args.ClientX;
-        _panStartY = (float)args.ClientY;
-        _panOriginX = _viewX;
-        _panOriginY = _viewY;
-    }
-
-    private async Task MovePan(MouseEventArgs args)
-    {
-        if (_map is null || !_isPanning)
-        {
-            return;
-        }
-
-        var dx = ((float)args.ClientX - _panStartX) * GetCanvasScaleX();
-        var dy = ((float)args.ClientY - _panStartY) * GetCanvasScaleY();
-        _viewX = _panOriginX - (dx / _zoom);
-        _viewY = _panOriginY - (dy / _zoom);
-        ClampView();
-        await DrawAsync();
-    }
-
-    private void EndPan(MouseEventArgs args)
-    {
-        _isPanning = false;
-    }
-
-    private async Task HandleWheel(WheelEventArgs args)
-    {
-        if (_map is null)
-        {
-            return;
-        }
-
-        await UpdateCanvasClientSizeAsync();
-        var delta = args.DeltaY < 0 ? 1f : -1f;
-        var oldZoom = _zoom;
-        _zoom = Math.Clamp(_zoom + (delta * 0.1f), MinZoom, MaxZoom);
-        if (Math.Abs(_zoom - oldZoom) < 0.0001f)
-        {
-            return;
-        }
-
-        var pointerX = (float)args.OffsetX * GetCanvasScaleX();
-        var pointerY = (float)args.OffsetY * GetCanvasScaleY();
-        var mapX = (_viewX + (pointerX / oldZoom));
-        var mapY = (_viewY + (pointerY / oldZoom));
-        _viewX = mapX - (pointerX / _zoom);
-        _viewY = mapY - (pointerY / _zoom);
-        ClampView();
-        await DrawAsync();
-    }
+    // ── View helpers ──────────────────────────────────────────────────────────
 
     private void ClampView()
     {
@@ -465,7 +611,1062 @@
         _viewX = 0f;
         _viewY = 0f;
         _isPanning = false;
+        _isPanCandidate = false;
     }
+
+    private async Task UpdateCanvasClientSizeAsync()
+    {
+        var size = await JS.InvokeAsync<CanvasClientSize?>("inkAndRealmDemo.getCanvasClientSize", CanvasId);
+        if (size is null || size.Width <= 0 || size.Height <= 0)
+        {
+            _canvasClientWidth = CanvasWidth;
+            _canvasClientHeight = CanvasHeight;
+            return;
+        }
+
+        _canvasClientWidth = size.Width;
+        _canvasClientHeight = size.Height;
+    }
+
+    private float GetCanvasScaleX() => _canvasClientWidth > 0 ? (CanvasWidth / _canvasClientWidth) : 1f;
+    private float GetCanvasScaleY() => _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
+
+    // ── Relationship tree – open / close ──────────────────────────────────────
+
+    private void OpenRelationshipTree()
+    {
+        if (_map is null || _isRelationshipTreeOpen)
+        {
+            return;
+        }
+
+        _isRelationshipTreeOpen = true;
+        _relationshipTreeNodes.Clear();
+        _relationshipTreeMergedEdges.Clear();
+        _relationshipTreeNodeLookup.Clear();
+        ResetRelationshipTreeViewport();
+        BuildRelationshipTree(_map);
+    }
+
+    private void CloseRelationshipTree()
+    {
+        _isRelationshipTreeOpen = false;
+        _relationshipTreeNodes.Clear();
+        _relationshipTreeMergedEdges.Clear();
+        _relationshipTreeNodeLookup.Clear();
+        ResetRelationshipTreeViewport();
+    }
+
+    private void SelectRelationshipTreeNode(RelationshipTreeNode node)
+    {
+        if (_relationshipTreeSuppressNodeClick)
+        {
+            _relationshipTreeSuppressNodeClick = false;
+            return;
+        }
+
+        if (node is null || !node.IsCharacter || node.Character is null)
+        {
+            return;
+        }
+
+        _selectedCharacter = node.Character;
+        CloseRelationshipTree();
+    }
+
+    // ── Relationship tree – pan / zoom ────────────────────────────────────────
+
+    private string RelationshipTreeViewBox => FormattableString.Invariant(
+        $"{_relationshipTreeViewX} {_relationshipTreeViewY} {RelationshipTreeCanvasWidth / _relationshipTreeZoom} {RelationshipTreeCanvasHeight / _relationshipTreeZoom}");
+
+    private string RelationshipTreeCanvasShellClass => _isRelationshipTreePanning
+        ? "relationship-tree-canvas-shell relationship-tree-canvas-shell-panning"
+        : "relationship-tree-canvas-shell";
+
+    private void BeginRelationshipTreePan(MouseEventArgs args)
+    {
+        if (_relationshipTreeNodes.Count == 0 || args.Button != 0)
+        {
+            return;
+        }
+
+        _isRelationshipTreePanning = true;
+        _relationshipTreeSuppressNodeClick = false;
+        _relationshipTreePanStartClientX = (float)args.ClientX;
+        _relationshipTreePanStartClientY = (float)args.ClientY;
+        _relationshipTreePanOriginX = _relationshipTreeViewX;
+        _relationshipTreePanOriginY = _relationshipTreeViewY;
+    }
+
+    private void UpdateRelationshipTreePan(MouseEventArgs args)
+    {
+        if (!_isRelationshipTreePanning)
+        {
+            return;
+        }
+
+        var dx = (float)args.ClientX - _relationshipTreePanStartClientX;
+        var dy = (float)args.ClientY - _relationshipTreePanStartClientY;
+        if (MathF.Abs(dx) > 3f || MathF.Abs(dy) > 3f)
+        {
+            _relationshipTreeSuppressNodeClick = true;
+        }
+
+        _relationshipTreeViewX = _relationshipTreePanOriginX - (dx / _relationshipTreeZoom);
+        _relationshipTreeViewY = _relationshipTreePanOriginY - (dy / _relationshipTreeZoom);
+        ClampRelationshipTreeViewport();
+    }
+
+    private void EndRelationshipTreePan(MouseEventArgs _)
+    {
+        _isRelationshipTreePanning = false;
+    }
+
+    private void HandleRelationshipTreeWheel(WheelEventArgs args)
+    {
+        if (_relationshipTreeNodes.Count == 0)
+        {
+            return;
+        }
+
+        if (args.DeltaY < 0)
+        {
+            ZoomRelationshipTree(RelationshipTreeZoomStep);
+        }
+        else
+        {
+            ZoomRelationshipTree(1f / RelationshipTreeZoomStep);
+        }
+    }
+
+    private void ZoomInRelationshipTree() => ZoomRelationshipTree(RelationshipTreeZoomStep);
+    private void ZoomOutRelationshipTree() => ZoomRelationshipTree(1f / RelationshipTreeZoomStep);
+    private void ResetRelationshipTreeZoom() => ResetRelationshipTreeViewport();
+
+    private void ZoomRelationshipTree(float factor)
+    {
+        var oldZoom = _relationshipTreeZoom;
+        var nextZoom = Math.Clamp(oldZoom * factor, RelationshipTreeMinZoom, RelationshipTreeMaxZoom);
+        if (Math.Abs(nextZoom - oldZoom) < 0.0001f)
+        {
+            return;
+        }
+
+        var oldViewWidth = RelationshipTreeCanvasWidth / oldZoom;
+        var oldViewHeight = RelationshipTreeCanvasHeight / oldZoom;
+        var centerX = _relationshipTreeViewX + (oldViewWidth * 0.5f);
+        var centerY = _relationshipTreeViewY + (oldViewHeight * 0.5f);
+        _relationshipTreeZoom = nextZoom;
+        var nextViewWidth = RelationshipTreeCanvasWidth / _relationshipTreeZoom;
+        var nextViewHeight = RelationshipTreeCanvasHeight / _relationshipTreeZoom;
+        _relationshipTreeViewX = centerX - (nextViewWidth * 0.5f);
+        _relationshipTreeViewY = centerY - (nextViewHeight * 0.5f);
+        ClampRelationshipTreeViewport();
+    }
+
+    private void ResetRelationshipTreeViewport()
+    {
+        _relationshipTreeZoom = 1f;
+        _relationshipTreeViewX = 0f;
+        _relationshipTreeViewY = 0f;
+        _isRelationshipTreePanning = false;
+        _relationshipTreeSuppressNodeClick = false;
+    }
+
+    private void ClampRelationshipTreeViewport()
+    {
+        var viewWidth = RelationshipTreeCanvasWidth / _relationshipTreeZoom;
+        var viewHeight = RelationshipTreeCanvasHeight / _relationshipTreeZoom;
+        var maxViewX = MathF.Max(0f, RelationshipTreeCanvasWidth - viewWidth);
+        var maxViewY = MathF.Max(0f, RelationshipTreeCanvasHeight - viewHeight);
+        _relationshipTreeViewX = Math.Clamp(_relationshipTreeViewX, 0f, maxViewX);
+        _relationshipTreeViewY = Math.Clamp(_relationshipTreeViewY, 0f, maxViewY);
+    }
+
+    // ── Relationship tree – build ─────────────────────────────────────────────
+
+    private void BuildRelationshipTree(MapDto map)
+    {
+        _relationshipTreeNodes.Clear();
+        _relationshipTreeMergedEdges.Clear();
+        _relationshipTreeNodeLookup.Clear();
+
+        var characters = (map.Characters ?? new List<CharacterFeatureDto>())
+            .Where(character => character is not null && character.Id > 0)
+            .GroupBy(character => character.Id)
+            .Select(group => group.First())
+            .OrderBy(character => character.Id)
+            .ToList();
+
+        var characterById = characters.ToDictionary(character => character.Id);
+        var treeIds = (map.Trees ?? new List<TreeFeatureDto>())
+            .Where(tree => tree is not null && tree.Id > 0)
+            .Select(tree => tree.Id)
+            .ToHashSet();
+        var houseIds = (map.Houses ?? new List<HouseFeatureDto>())
+            .Where(house => house is not null && house.Id > 0)
+            .Select(house => house.Id)
+            .ToHashSet();
+        var landIds = (map.AreaPolygons ?? new List<AreaPolygonDto>())
+            .Where(polygon => polygon is not null && polygon.Id > 0 && IsLandFeatureType(polygon.FeatureType))
+            .Select(polygon => polygon.Id)
+            .ToHashSet();
+        var waterIds = (map.AreaPolygons ?? new List<AreaPolygonDto>())
+            .Where(polygon => polygon is not null && polygon.Id > 0 && IsWaterFeatureType(polygon.FeatureType))
+            .Select(polygon => polygon.Id)
+            .ToHashSet();
+
+        var nodeById = new Dictionary<int, RelationshipTreeNode>();
+        foreach (var character in characters)
+        {
+            nodeById[character.Id] = new RelationshipTreeNode
+            {
+                FeatureId = character.Id,
+                FeatureType = "Character",
+                Label = BuildRelationshipTreeCharacterLabel(character),
+                IsCharacter = true,
+                Character = character
+            };
+        }
+
+        var directedEdges = new List<RelationshipTreeDirectedEdge>();
+        foreach (var character in characters)
+        {
+            if (character.Relationships is null || character.Relationships.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var relationship in character.Relationships)
+            {
+                if (relationship is null || relationship.TargetFeatureId <= 0)
+                {
+                    continue;
+                }
+
+                if (!TryResolveRelationshipTreeTargetNode(
+                        relationship,
+                        characterById,
+                        treeIds,
+                        houseIds,
+                        landIds,
+                        waterIds,
+                        out var targetNode))
+                {
+                    continue;
+                }
+
+                if (character.Id == targetNode.FeatureId)
+                {
+                    continue;
+                }
+
+                if (!nodeById.ContainsKey(targetNode.FeatureId))
+                {
+                    nodeById[targetNode.FeatureId] = targetNode;
+                }
+
+                directedEdges.Add(new RelationshipTreeDirectedEdge
+                {
+                    SourceId = character.Id,
+                    TargetId = targetNode.FeatureId,
+                    RelationshipTypes = relationship.RelationshipTypes is null
+                        ? new List<string>()
+                        : relationship.RelationshipTypes
+                            .Where(value => !string.IsNullOrWhiteSpace(value))
+                            .ToList(),
+                    Description = relationship.Description ?? string.Empty
+                });
+            }
+        }
+
+        var mergedByPair = new Dictionary<(int NodeAId, int NodeBId), RelationshipTreeMergedEdge>();
+        foreach (var edge in directedEdges)
+        {
+            if (edge.SourceId <= 0 || edge.TargetId <= 0 || edge.SourceId == edge.TargetId)
+            {
+                continue;
+            }
+
+            var nodeAId = Math.Min(edge.SourceId, edge.TargetId);
+            var nodeBId = Math.Max(edge.SourceId, edge.TargetId);
+            var pairKey = (nodeAId, nodeBId);
+            if (!mergedByPair.TryGetValue(pairKey, out var mergedEdge))
+            {
+                mergedEdge = new RelationshipTreeMergedEdge
+                {
+                    NodeAId = nodeAId,
+                    NodeBId = nodeBId
+                };
+                mergedByPair[pairKey] = mergedEdge;
+            }
+
+            if (edge.SourceId == nodeAId && edge.TargetId == nodeBId)
+            {
+                mergedEdge.AToB = MergeRelationshipTreeDirectedEdge(mergedEdge.AToB, edge);
+            }
+            else
+            {
+                mergedEdge.BToA = MergeRelationshipTreeDirectedEdge(mergedEdge.BToA, edge);
+            }
+        }
+
+        _relationshipTreeNodes.AddRange(nodeById.Values
+            .OrderBy(node => node.IsCharacter ? 0 : 1)
+            .ThenBy(node => node.FeatureType, StringComparer.Ordinal)
+            .ThenBy(node => node.FeatureId));
+
+        _relationshipTreeMergedEdges.AddRange(mergedByPair.Values
+            .Where(edge => edge.AToB is not null || edge.BToA is not null)
+            .OrderBy(edge => edge.NodeAId)
+            .ThenBy(edge => edge.NodeBId));
+
+        LayoutRelationshipTreeNodes(_relationshipTreeNodes, directedEdges);
+
+        foreach (var node in _relationshipTreeNodes)
+        {
+            _relationshipTreeNodeLookup[node.FeatureId] = node;
+        }
+    }
+
+    private static RelationshipTreeDirectedEdge MergeRelationshipTreeDirectedEdge(
+        RelationshipTreeDirectedEdge? existing,
+        RelationshipTreeDirectedEdge incoming)
+    {
+        if (existing is null)
+        {
+            return new RelationshipTreeDirectedEdge
+            {
+                SourceId = incoming.SourceId,
+                TargetId = incoming.TargetId,
+                RelationshipTypes = new List<string>(incoming.RelationshipTypes),
+                Description = incoming.Description
+            };
+        }
+
+        var mergedTypes = new List<string>(existing.RelationshipTypes);
+        foreach (var type in incoming.RelationshipTypes)
+        {
+            if (mergedTypes.Any(existingType => string.Equals(existingType, type, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            mergedTypes.Add(type);
+        }
+
+        return new RelationshipTreeDirectedEdge
+        {
+            SourceId = existing.SourceId,
+            TargetId = existing.TargetId,
+            RelationshipTypes = mergedTypes,
+            Description = string.IsNullOrWhiteSpace(incoming.Description)
+                ? existing.Description
+                : incoming.Description
+        };
+    }
+
+    private static string BuildRelationshipTreeCharacterLabel(CharacterFeatureDto character)
+    {
+        if (character is null)
+        {
+            return "Character";
+        }
+
+        return string.IsNullOrWhiteSpace(character.Name)
+            ? $"Character #{character.Id}"
+            : character.Name;
+    }
+
+    private static bool TryResolveRelationshipTreeTargetNode(
+        CharacterRelationshipDto relationship,
+        IReadOnlyDictionary<int, CharacterFeatureDto> characterById,
+        IReadOnlySet<int> treeIds,
+        IReadOnlySet<int> houseIds,
+        IReadOnlySet<int> landIds,
+        IReadOnlySet<int> waterIds,
+        out RelationshipTreeNode node)
+    {
+        node = new RelationshipTreeNode();
+
+        if (relationship is null || relationship.TargetFeatureId <= 0)
+        {
+            return false;
+        }
+
+        var targetId = relationship.TargetFeatureId;
+        if (characterById.TryGetValue(targetId, out var character))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Character",
+                Label = BuildRelationshipTreeCharacterLabel(character),
+                IsCharacter = true,
+                Character = character
+            };
+            return true;
+        }
+
+        if (treeIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Tree",
+                Label = $"Tree #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        if (houseIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "House",
+                Label = $"House #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        if (landIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Land",
+                Label = $"Land #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        if (waterIds.Contains(targetId))
+        {
+            node = new RelationshipTreeNode
+            {
+                FeatureId = targetId,
+                FeatureType = "Water",
+                Label = $"Water #{targetId}",
+                IsCharacter = false
+            };
+            return true;
+        }
+
+        var targetFeatureType = relationship.TargetFeatureType?.Trim() ?? string.Empty;
+        if (string.Equals(targetFeatureType, "Title", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var displayType = string.IsNullOrWhiteSpace(targetFeatureType) ? "Feature" : targetFeatureType;
+        node = new RelationshipTreeNode
+        {
+            FeatureId = targetId,
+            FeatureType = displayType,
+            Label = $"{displayType} #{targetId}",
+            IsCharacter = false
+        };
+        return true;
+    }
+
+    // ── Relationship tree – layout ─────────────────────────────────────────────
+
+    private static void LayoutRelationshipTreeNodes(
+        IReadOnlyList<RelationshipTreeNode> nodes,
+        IReadOnlyList<RelationshipTreeDirectedEdge> edges)
+    {
+        if (nodes is null || nodes.Count == 0)
+        {
+            return;
+        }
+
+        var centerX = RelationshipTreeCanvasWidth * 0.5f;
+        var centerY = RelationshipTreeCanvasHeight * 0.5f;
+        var characterNodes = nodes
+            .Where(node => node.IsCharacter)
+            .OrderBy(node => node.FeatureId)
+            .ToList();
+        var featureNodes = nodes
+            .Where(node => !node.IsCharacter)
+            .OrderBy(node => node.FeatureType, StringComparer.Ordinal)
+            .ThenBy(node => node.FeatureId)
+            .ToList();
+
+        if (characterNodes.Count <= 10)
+        {
+            LayoutRelationshipTreeCharactersCircular(characterNodes, centerX, centerY);
+        }
+        else
+        {
+            LayoutRelationshipTreeCharactersChaotic(characterNodes, edges, centerX, centerY);
+        }
+
+        var characterPositions = new Dictionary<int, MapPointDto>();
+        foreach (var characterNode in characterNodes)
+        {
+            characterPositions[characterNode.FeatureId] = new MapPointDto
+            {
+                X = characterNode.X,
+                Y = characterNode.Y
+            };
+        }
+
+        LayoutRelationshipTreeFeatureNodes(featureNodes, edges, characterPositions, centerX, centerY);
+    }
+
+    private static void LayoutRelationshipTreeCharactersCircular(
+        IReadOnlyList<RelationshipTreeNode> characterNodes,
+        float centerX,
+        float centerY)
+    {
+        if (characterNodes.Count == 0)
+        {
+            return;
+        }
+
+        if (characterNodes.Count == 1)
+        {
+            characterNodes[0].X = centerX;
+            characterNodes[0].Y = centerY;
+            return;
+        }
+
+        var radius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.26f;
+        for (var index = 0; index < characterNodes.Count; index += 1)
+        {
+            var angle = (-MathF.PI / 2f) + ((2f * MathF.PI * index) / characterNodes.Count);
+            var node = characterNodes[index];
+            node.X = centerX + (radius * MathF.Cos(angle));
+            node.Y = centerY + (radius * MathF.Sin(angle));
+        }
+    }
+
+    private static void LayoutRelationshipTreeCharactersChaotic(
+        IReadOnlyList<RelationshipTreeNode> characterNodes,
+        IReadOnlyList<RelationshipTreeDirectedEdge> edges,
+        float centerX,
+        float centerY)
+    {
+        if (characterNodes.Count == 0)
+        {
+            return;
+        }
+
+        if (characterNodes.Count == 1)
+        {
+            characterNodes[0].X = centerX;
+            characterNodes[0].Y = centerY;
+            return;
+        }
+
+        var indexById = characterNodes
+            .Select((node, index) => new { node.FeatureId, Index = index })
+            .ToDictionary(entry => entry.FeatureId, entry => entry.Index);
+        var characterIds = indexById.Keys.ToHashSet();
+        var neighborsById = new Dictionary<int, HashSet<int>>();
+        foreach (var node in characterNodes)
+        {
+            neighborsById[node.FeatureId] = new HashSet<int>();
+        }
+
+        var pairWeights = new Dictionary<(int NodeA, int NodeB), float>();
+        if (edges is not null)
+        {
+            foreach (var edge in edges)
+            {
+                if (!characterIds.Contains(edge.SourceId)
+                    || !characterIds.Contains(edge.TargetId)
+                    || edge.SourceId == edge.TargetId)
+                {
+                    continue;
+                }
+
+                var nodeA = Math.Min(edge.SourceId, edge.TargetId);
+                var nodeB = Math.Max(edge.SourceId, edge.TargetId);
+                var key = (nodeA, nodeB);
+                pairWeights[key] = pairWeights.TryGetValue(key, out var existing) ? existing + 1f : 1f;
+                neighborsById[edge.SourceId].Add(edge.TargetId);
+                neighborsById[edge.TargetId].Add(edge.SourceId);
+            }
+        }
+
+        var x = new float[characterNodes.Count];
+        var y = new float[characterNodes.Count];
+        var velocityX = new float[characterNodes.Count];
+        var velocityY = new float[characterNodes.Count];
+        var forceX = new float[characterNodes.Count];
+        var forceY = new float[characterNodes.Count];
+        var maxRadius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.34f;
+        var minRadius = maxRadius * 0.18f;
+        for (var index = 0; index < characterNodes.Count; index += 1)
+        {
+            var node = characterNodes[index];
+            var degree = neighborsById.TryGetValue(node.FeatureId, out var neighbors) ? neighbors.Count : 0;
+            var degreeRatio = characterNodes.Count <= 1 ? 0f : (degree / (float)(characterNodes.Count - 1));
+            var angle = RelationshipTreeNoise01((node.FeatureId * 0.61f) + (characterNodes.Count * 1.37f)) * (2f * MathF.PI);
+            var radialNoise = RelationshipTreeNoise01((node.FeatureId * 1.17f) + (degree * 13.11f));
+            var radiusWeight = (1f - degreeRatio) * (0.55f + (0.45f * radialNoise));
+            var radius = minRadius + (radiusWeight * (maxRadius - minRadius));
+            x[index] = ClampRelationshipTreeX(centerX + (radius * MathF.Cos(angle)));
+            y[index] = ClampRelationshipTreeY(centerY + (radius * MathF.Sin(angle)));
+        }
+
+        var springs = new List<(int IndexA, int IndexB, float Weight, float SharedRatio)>();
+        foreach (var pair in pairWeights)
+        {
+            if (!indexById.TryGetValue(pair.Key.NodeA, out var indexA)
+                || !indexById.TryGetValue(pair.Key.NodeB, out var indexB))
+            {
+                continue;
+            }
+
+            var neighborsA = neighborsById[pair.Key.NodeA];
+            var neighborsB = neighborsById[pair.Key.NodeB];
+            var sharedCount = neighborsA.Count < neighborsB.Count
+                ? neighborsA.Count(candidate => neighborsB.Contains(candidate))
+                : neighborsB.Count(candidate => neighborsA.Contains(candidate));
+            var possibleShared = Math.Max(1, Math.Min(neighborsA.Count, neighborsB.Count));
+            var sharedRatio = sharedCount / (float)possibleShared;
+            springs.Add((indexA, indexB, pair.Value, sharedRatio));
+        }
+
+        var iterations = Math.Clamp(140 + (characterNodes.Count * 5), 180, 360);
+        var repulsionStrength = 19000f + (characterNodes.Count * 160f);
+        var baseEdgeLength = Math.Clamp(220f - (characterNodes.Count * 2.4f), 88f, 180f);
+        const float springStrength = 0.055f;
+        const float centeringStrength = 0.010f;
+        const float damping = 0.84f;
+        const float maxStep = 17f;
+
+        for (var iteration = 0; iteration < iterations; iteration += 1)
+        {
+            Array.Fill(forceX, 0f);
+            Array.Fill(forceY, 0f);
+
+            for (var i = 0; i < characterNodes.Count; i += 1)
+            {
+                for (var j = i + 1; j < characterNodes.Count; j += 1)
+                {
+                    var dx = x[j] - x[i];
+                    var dy = y[j] - y[i];
+                    var distanceSquared = (dx * dx) + (dy * dy);
+                    if (distanceSquared < 0.1f)
+                    {
+                        dx = (RelationshipTreeNoise01((iteration * 193f) + i + (j * 17f)) - 0.5f) * 0.3f;
+                        dy = (RelationshipTreeNoise01((iteration * 311f) + j + (i * 13f)) - 0.5f) * 0.3f;
+                        distanceSquared = (dx * dx) + (dy * dy);
+                    }
+
+                    distanceSquared = MathF.Max(distanceSquared, 0.1f);
+                    var distance = MathF.Sqrt(distanceSquared);
+                    var unitX = dx / distance;
+                    var unitY = dy / distance;
+                    var force = repulsionStrength / distanceSquared;
+                    forceX[i] -= unitX * force;
+                    forceY[i] -= unitY * force;
+                    forceX[j] += unitX * force;
+                    forceY[j] += unitY * force;
+                }
+            }
+
+            foreach (var spring in springs)
+            {
+                var dx = x[spring.IndexB] - x[spring.IndexA];
+                var dy = y[spring.IndexB] - y[spring.IndexA];
+                var distanceSquared = (dx * dx) + (dy * dy);
+                if (distanceSquared < 0.1f)
+                {
+                    continue;
+                }
+
+                var distance = MathF.Sqrt(distanceSquared);
+                var desiredLength = baseEdgeLength * (1f - (spring.SharedRatio * 0.28f));
+                var connectionStrength = springStrength
+                    * (1f + ((spring.Weight - 1f) * 0.35f) + (spring.SharedRatio * 1.35f));
+                var delta = distance - desiredLength;
+                var force = connectionStrength * delta;
+                var unitX = dx / distance;
+                var unitY = dy / distance;
+                forceX[spring.IndexA] += unitX * force;
+                forceY[spring.IndexA] += unitY * force;
+                forceX[spring.IndexB] -= unitX * force;
+                forceY[spring.IndexB] -= unitY * force;
+            }
+
+            for (var index = 0; index < characterNodes.Count; index += 1)
+            {
+                forceX[index] += (centerX - x[index]) * centeringStrength;
+                forceY[index] += (centerY - y[index]) * centeringStrength;
+                velocityX[index] = (velocityX[index] + forceX[index]) * damping;
+                velocityY[index] = (velocityY[index] + forceY[index]) * damping;
+                var stepX = Math.Clamp(velocityX[index], -maxStep, maxStep);
+                var stepY = Math.Clamp(velocityY[index], -maxStep, maxStep);
+                x[index] = ClampRelationshipTreeX(x[index] + stepX);
+                y[index] = ClampRelationshipTreeY(y[index] + stepY);
+            }
+        }
+
+        for (var pass = 0; pass < 4; pass += 1)
+        {
+            for (var i = 0; i < characterNodes.Count; i += 1)
+            {
+                for (var j = i + 1; j < characterNodes.Count; j += 1)
+                {
+                    var dx = x[j] - x[i];
+                    var dy = y[j] - y[i];
+                    var distanceSquared = (dx * dx) + (dy * dy);
+                    if (distanceSquared < 0.1f)
+                    {
+                        continue;
+                    }
+
+                    var distance = MathF.Sqrt(distanceSquared);
+                    const float minDistance = 44f;
+                    if (distance >= minDistance)
+                    {
+                        continue;
+                    }
+
+                    var push = (minDistance - distance) * 0.5f;
+                    var unitX = dx / distance;
+                    var unitY = dy / distance;
+                    x[i] = ClampRelationshipTreeX(x[i] - (unitX * push));
+                    y[i] = ClampRelationshipTreeY(y[i] - (unitY * push));
+                    x[j] = ClampRelationshipTreeX(x[j] + (unitX * push));
+                    y[j] = ClampRelationshipTreeY(y[j] + (unitY * push));
+                }
+            }
+        }
+
+        for (var index = 0; index < characterNodes.Count; index += 1)
+        {
+            var node = characterNodes[index];
+            var jitterX = (RelationshipTreeNoise01((node.FeatureId * 31.7f) + 7f) - 0.5f) * 4f;
+            var jitterY = (RelationshipTreeNoise01((node.FeatureId * 63.1f) + 11f) - 0.5f) * 4f;
+            node.X = ClampRelationshipTreeX(x[index] + jitterX);
+            node.Y = ClampRelationshipTreeY(y[index] + jitterY);
+        }
+    }
+
+    private static void LayoutRelationshipTreeFeatureNodes(
+        IReadOnlyList<RelationshipTreeNode> featureNodes,
+        IReadOnlyList<RelationshipTreeDirectedEdge> edges,
+        IReadOnlyDictionary<int, MapPointDto> characterPositions,
+        float centerX,
+        float centerY)
+    {
+        if (featureNodes.Count == 0)
+        {
+            return;
+        }
+
+        var featureIds = featureNodes.Select(node => node.FeatureId).ToHashSet();
+        var charactersByFeature = new Dictionary<int, HashSet<int>>();
+        if (edges is not null && edges.Count > 0)
+        {
+            foreach (var edge in edges)
+            {
+                if (featureIds.Contains(edge.SourceId) && characterPositions.ContainsKey(edge.TargetId))
+                {
+                    if (!charactersByFeature.TryGetValue(edge.SourceId, out var related))
+                    {
+                        related = new HashSet<int>();
+                        charactersByFeature[edge.SourceId] = related;
+                    }
+
+                    related.Add(edge.TargetId);
+                }
+
+                if (featureIds.Contains(edge.TargetId) && characterPositions.ContainsKey(edge.SourceId))
+                {
+                    if (!charactersByFeature.TryGetValue(edge.TargetId, out var related))
+                    {
+                        related = new HashSet<int>();
+                        charactersByFeature[edge.TargetId] = related;
+                    }
+
+                    related.Add(edge.SourceId);
+                }
+            }
+        }
+
+        var occupiedNodes = new List<(float X, float Y, float Radius)>();
+        foreach (var position in characterPositions.Values)
+        {
+            occupiedNodes.Add((position.X, position.Y, 18f));
+        }
+
+        var outerRadius = MathF.Min(RelationshipTreeCanvasWidth, RelationshipTreeCanvasHeight) * 0.42f;
+        foreach (var node in featureNodes)
+        {
+            float anchorX;
+            float anchorY;
+            float placementRadius;
+            if (charactersByFeature.TryGetValue(node.FeatureId, out var relatedCharacters)
+                && relatedCharacters.Count > 0)
+            {
+                var relatedPositions = relatedCharacters
+                    .Where(characterId => characterPositions.ContainsKey(characterId))
+                    .Select(characterId => characterPositions[characterId])
+                    .ToList();
+                if (relatedPositions.Count == 0)
+                {
+                    anchorX = centerX;
+                    anchorY = centerY;
+                    placementRadius = 70f;
+                }
+                else
+                {
+                    anchorX = relatedPositions.Average(position => position.X);
+                    anchorY = relatedPositions.Average(position => position.Y);
+                    var density = MathF.Min(1f, relatedPositions.Count / 6f);
+                    placementRadius = 40f + ((1f - density) * 60f);
+                }
+            }
+            else
+            {
+                var angle = RelationshipTreeNoise01((node.FeatureId * 0.93f) + 17f) * (2f * MathF.PI);
+                var radiusFactor = 0.82f + (0.15f * RelationshipTreeNoise01((node.FeatureId * 1.31f) + 3f));
+                anchorX = centerX + ((outerRadius * radiusFactor) * MathF.Cos(angle));
+                anchorY = centerY + ((outerRadius * radiusFactor) * MathF.Sin(angle));
+                placementRadius = 30f + (35f * RelationshipTreeNoise01((node.FeatureId * 2.71f) + 5f));
+            }
+
+            var placement = FindRelationshipTreeOpenSpot(anchorX, anchorY, placementRadius, node.FeatureId, 13f, occupiedNodes);
+            node.X = placement.X;
+            node.Y = placement.Y;
+            occupiedNodes.Add((node.X, node.Y, 13f));
+        }
+    }
+
+    private static MapPointDto FindRelationshipTreeOpenSpot(
+        float anchorX,
+        float anchorY,
+        float baseRadius,
+        int seed,
+        float radius,
+        IReadOnlyList<(float X, float Y, float Radius)> occupiedNodes)
+    {
+        var startAngle = RelationshipTreeNoise01((seed * 0.87f) + 19.1f) * (2f * MathF.PI);
+        for (var ring = 0; ring <= 8; ring += 1)
+        {
+            var ringRadius = ring == 0 ? 0f : baseRadius + ((ring - 1) * 22f);
+            var samples = ring == 0 ? 1 : 12;
+            for (var sample = 0; sample < samples; sample += 1)
+            {
+                var angle = startAngle + ((2f * MathF.PI * sample) / samples) + (ring * 0.41f);
+                var x = ClampRelationshipTreeX(anchorX + (ringRadius * MathF.Cos(angle)));
+                var y = ClampRelationshipTreeY(anchorY + (ringRadius * MathF.Sin(angle)));
+                if (!IsRelationshipTreePositionOpen(x, y, radius, occupiedNodes))
+                {
+                    continue;
+                }
+
+                return new MapPointDto { X = x, Y = y };
+            }
+        }
+
+        return new MapPointDto
+        {
+            X = ClampRelationshipTreeX(anchorX),
+            Y = ClampRelationshipTreeY(anchorY)
+        };
+    }
+
+    private static bool IsRelationshipTreePositionOpen(
+        float x,
+        float y,
+        float radius,
+        IReadOnlyList<(float X, float Y, float Radius)> occupiedNodes)
+    {
+        const float minGap = 12f;
+        foreach (var occupied in occupiedNodes)
+        {
+            var dx = x - occupied.X;
+            var dy = y - occupied.Y;
+            var requiredDistance = radius + occupied.Radius + minGap;
+            if ((dx * dx) + (dy * dy) < (requiredDistance * requiredDistance))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static float ClampRelationshipTreeX(float x) =>
+        Math.Clamp(x, 84f, RelationshipTreeCanvasWidth - 84f);
+
+    private static float ClampRelationshipTreeY(float y) =>
+        Math.Clamp(y, 72f, RelationshipTreeCanvasHeight - 72f);
+
+    private static float RelationshipTreeNoise01(float value)
+    {
+        var raw = MathF.Sin(value * 12.9898f) * 43758.5453f;
+        return raw - MathF.Floor(raw);
+    }
+
+    // ── Relationship tree – rendering helpers ─────────────────────────────────
+
+    private static MapPointDto GetRelationshipTreeLabelPosition(
+        RelationshipTreeNode from,
+        RelationshipTreeNode to,
+        float distanceFactor,
+        float perpendicularOffset)
+    {
+        var x = from.X + ((to.X - from.X) * distanceFactor);
+        var y = from.Y + ((to.Y - from.Y) * distanceFactor);
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var length = MathF.Sqrt((dx * dx) + (dy * dy));
+        if (length <= 0.001f)
+        {
+            return new MapPointDto { X = x, Y = y };
+        }
+
+        var normalX = -dy / length;
+        var normalY = dx / length;
+        return new MapPointDto
+        {
+            X = x + (normalX * perpendicularOffset),
+            Y = y + (normalY * perpendicularOffset)
+        };
+    }
+
+    private static string? GetRelationshipTreeMarkerStart(RelationshipTreeMergedEdge edge) =>
+        edge.BToA is null ? null : "url(#relationship-tree-arrowhead)";
+
+    private static string? GetRelationshipTreeMarkerEnd(RelationshipTreeMergedEdge edge) =>
+        edge.AToB is null ? null : "url(#relationship-tree-arrowhead)";
+
+    private static string GetRelationshipTreeEdgeLabel(RelationshipTreeDirectedEdge edge)
+    {
+        var types = edge.RelationshipTypes is null || edge.RelationshipTypes.Count == 0
+            ? string.Empty
+            : string.Join(", ", edge.RelationshipTypes.Where(value => !string.IsNullOrWhiteSpace(value)));
+        return string.IsNullOrWhiteSpace(types) ? "Relationship" : types;
+    }
+
+    private string GetRelationshipTreeEdgeTooltip(RelationshipTreeMergedEdge edge)
+    {
+        var lines = new List<string>();
+        if (!_relationshipTreeNodeLookup.TryGetValue(edge.NodeAId, out var nodeA)
+            || !_relationshipTreeNodeLookup.TryGetValue(edge.NodeBId, out var nodeB))
+        {
+            return "Relationship";
+        }
+
+        if (edge.AToB is not null)
+        {
+            var detail = GetRelationshipTreeEdgeLabel(edge.AToB);
+            var description = string.IsNullOrWhiteSpace(edge.AToB.Description)
+                ? string.Empty
+                : $" ({edge.AToB.Description.Trim()})";
+            lines.Add($"{nodeA.Label} -> {nodeB.Label}: {detail}{description}");
+        }
+
+        if (edge.BToA is not null)
+        {
+            var detail = GetRelationshipTreeEdgeLabel(edge.BToA);
+            var description = string.IsNullOrWhiteSpace(edge.BToA.Description)
+                ? string.Empty
+                : $" ({edge.BToA.Description.Trim()})";
+            lines.Add($"{nodeB.Label} -> {nodeA.Label}: {detail}{description}");
+        }
+
+        return lines.Count == 0 ? "Relationship" : string.Join(Environment.NewLine, lines);
+    }
+
+    private static string GetRelationshipTreeNodeClass(RelationshipTreeNode node) =>
+        node.IsCharacter
+            ? "relationship-tree-node relationship-tree-node-character"
+            : "relationship-tree-node relationship-tree-node-feature";
+
+    private static float GetRelationshipTreeNodeRadius(RelationshipTreeNode node) =>
+        node.IsCharacter ? 18f : 13f;
+
+    private static string GetRelationshipTreeNodeShortLabel(RelationshipTreeNode node)
+    {
+        if (node is null || string.IsNullOrWhiteSpace(node.Label))
+        {
+            return "Feature";
+        }
+
+        var label = node.Label.Trim();
+        const int maxLength = 24;
+        return label.Length <= maxLength ? label : $"{label[..(maxLength - 3)]}...";
+    }
+
+    private static string GetRelationshipTreeNodeTooltip(RelationshipTreeNode node) =>
+        $"{node.Label} [{node.FeatureType}]";
+
+    // ── Feature type helpers ──────────────────────────────────────────────────
+
+    private static bool IsLandFeatureType(string? featureType) =>
+        string.Equals(featureType, "Land", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsWaterFeatureType(string? featureType) =>
+        string.Equals(featureType, "Water", StringComparison.OrdinalIgnoreCase);
+
+    // ── Label / format helpers ────────────────────────────────────────────────
+
+    private string GetRelationshipTargetLabel(int targetId, string targetType)
+    {
+        if (_map is null || targetId <= 0)
+        {
+            return "Unknown target";
+        }
+
+        var character = _map.Characters.FirstOrDefault(item => item.Id == targetId);
+        if (character is not null)
+        {
+            return GetCharacterLabel(character);
+        }
+
+        if (_map.Trees.Any(item => item.Id == targetId))
+        {
+            return $"Tree #{targetId}";
+        }
+
+        if (_map.Houses.Any(item => item.Id == targetId))
+        {
+            return $"House #{targetId}";
+        }
+
+        if (_map.AreaPolygons.Any(item => item.Id == targetId && IsLandFeatureType(item.FeatureType)))
+        {
+            return $"Land #{targetId}";
+        }
+
+        if (_map.AreaPolygons.Any(item => item.Id == targetId && IsWaterFeatureType(item.FeatureType)))
+        {
+            return $"Water #{targetId}";
+        }
+
+        return string.IsNullOrWhiteSpace(targetType)
+            ? $"Feature #{targetId}"
+            : $"{targetType} #{targetId}";
+    }
+
+    private static string FormatRelationshipTypes(IEnumerable<string>? values)
+    {
+        if (values is null)
+        {
+            return "Relationship";
+        }
+
+        var normalized = values.Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+        return normalized.Count == 0 ? "Relationship" : string.Join(", ", normalized);
+    }
+
+    private static string GetCharacterLabel(CharacterFeatureDto character) =>
+        string.IsNullOrWhiteSpace(character.Name) ? $"Character #{character.Id}" : character.Name;
+
+    // ── Map render helpers ────────────────────────────────────────────────────
 
     private static float NormalizeTitleSize(float size)
     {
@@ -558,104 +1759,35 @@
         return new MapPointDto { X = cx * factor, Y = cy * factor };
     }
 
-    private string GetRelationshipTargetLabel(int targetId, string targetType)
+    private void GoHome() => Navigation.NavigateTo("/");
+
+    // ── Private types ─────────────────────────────────────────────────────────
+
+    private sealed class RelationshipTreeNode
     {
-        if (_map is null || targetId <= 0)
-        {
-            return "Unknown target";
-        }
-
-        var character = _map.Characters.FirstOrDefault(item => item.Id == targetId);
-        if (character is not null)
-        {
-            return GetCharacterLabel(character);
-        }
-
-        if (_map.Trees.Any(item => item.Id == targetId))
-        {
-            return $"Tree #{targetId}";
-        }
-
-        if (_map.Houses.Any(item => item.Id == targetId))
-        {
-            return $"House #{targetId}";
-        }
-
-        if (_map.AreaPolygons.Any(item => item.Id == targetId && string.Equals(item.FeatureType, "Land", StringComparison.OrdinalIgnoreCase)))
-        {
-            return $"Land #{targetId}";
-        }
-
-        if (_map.AreaPolygons.Any(item => item.Id == targetId && string.Equals(item.FeatureType, "Water", StringComparison.OrdinalIgnoreCase)))
-        {
-            return $"Water #{targetId}";
-        }
-
-        return string.IsNullOrWhiteSpace(targetType)
-            ? $"Feature #{targetId}"
-            : $"{targetType} #{targetId}";
+        public int FeatureId { get; init; }
+        public string FeatureType { get; init; } = string.Empty;
+        public string Label { get; init; } = string.Empty;
+        public bool IsCharacter { get; init; }
+        public CharacterFeatureDto? Character { get; init; }
+        public float X { get; set; }
+        public float Y { get; set; }
     }
 
-    private static string FormatRelationshipTypes(IEnumerable<string>? values)
+    private sealed class RelationshipTreeDirectedEdge
     {
-        if (values is null)
-        {
-            return "Relationship";
-        }
-
-        var normalized = values
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .ToList();
-
-        return normalized.Count == 0 ? "Relationship" : string.Join(", ", normalized);
+        public int SourceId { get; init; }
+        public int TargetId { get; init; }
+        public List<string> RelationshipTypes { get; init; } = new();
+        public string Description { get; init; } = string.Empty;
     }
 
-    private static string GetCharacterLabel(CharacterFeatureDto character)
+    private sealed class RelationshipTreeMergedEdge
     {
-        return string.IsNullOrWhiteSpace(character.Name)
-            ? $"Character #{character.Id}"
-            : character.Name;
-    }
-
-    private static string GetFallback(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "(none)" : value;
-    }
-
-    private static string NormalizeShareCode(string code)
-    {
-        return string.IsNullOrWhiteSpace(code)
-            ? string.Empty
-            : code.Trim().ToUpperInvariant();
-    }
-
-    private async Task UpdateCanvasClientSizeAsync()
-    {
-        var size = await JS.InvokeAsync<CanvasClientSize?>("inkAndRealmDemo.getCanvasClientSize", CanvasId);
-        if (size is null || size.Width <= 0 || size.Height <= 0)
-        {
-            _canvasClientWidth = CanvasWidth;
-            _canvasClientHeight = CanvasHeight;
-            return;
-        }
-
-        _canvasClientWidth = size.Width;
-        _canvasClientHeight = size.Height;
-    }
-
-    private float GetCanvasScaleX()
-    {
-        return _canvasClientWidth > 0 ? (CanvasWidth / _canvasClientWidth) : 1f;
-    }
-
-    private float GetCanvasScaleY()
-    {
-        return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
-    }
-
-    private void GoHome()
-    {
-        Navigation.NavigateTo("/");
+        public int NodeAId { get; init; }
+        public int NodeBId { get; init; }
+        public RelationshipTreeDirectedEdge? AToB { get; set; }
+        public RelationshipTreeDirectedEdge? BToA { get; set; }
     }
 
     private sealed record CanvasClientSize(float Width, float Height);

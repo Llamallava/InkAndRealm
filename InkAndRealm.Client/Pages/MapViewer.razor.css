@@ -1,32 +1,26 @@
-.map-viewer-canvas-shell {
-    border: 1px solid var(--inkr-wood-600);
-    border-radius: 8px;
-    overflow: hidden;
-    background:
-        linear-gradient(135deg, rgba(255, 244, 220, 0.8), rgba(237, 216, 178, 0.7)),
-        #f0dfbf;
-}
-
-.map-viewer-canvas {
-    width: 100%;
-    display: block;
+.map-viewer-grab {
     cursor: grab;
 }
 
-.map-viewer-canvas:active {
+.map-viewer-grabbing {
     cursor: grabbing;
 }
 
-.relationship-character-link {
-    font-weight: 600;
-    text-decoration: none;
-    color: var(--inkr-gold-500);
+.map-viewer-sidebar-value {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
-.relationship-character-link:hover {
-    color: var(--inkr-gold-400);
+.map-viewer-sidebar-relationship {
+    margin-top: 0.4rem;
+    padding-top: 0.3rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
 }
 
-.relationship-list {
-    padding-left: 1rem;
+.map-viewer-sidebar-relationship:first-of-type {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0.2rem;
 }
