@@ -1,0 +1,404 @@
+@page "/my-maps"
+@using System
+@using System.Net
+@using System.Net.Http.Json
+@using InkAndRealm.Shared
+@using InkAndRealm.Client.State
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject UserState UserState
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>My Maps – Ink & Realm</PageTitle>
+
+<div class="container py-4 home-page">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <h2 class="mb-0">My Maps</h2>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert alert-info mb-3">@_statusMessage</div>
+    }
+
+    <div class="d-flex gap-2 mb-4 align-items-center">
+        <input class="form-control"
+               style="max-width: 320px;"
+               placeholder="Map name (optional)"
+               disabled="@(_isCreating)"
+               @bind="_newMapName" />
+        <button class="btn btn-primary"
+                disabled="@(_isCreating)"
+                @onclick="CreateMapAsync">
+            New Map
+        </button>
+    </div>
+
+    @if (_isLoading)
+    {
+        <p class="text-muted">Loading maps…</p>
+    }
+    else if (_maps.Count == 0)
+    {
+        <p class="text-muted">No maps yet. Create one above to get started.</p>
+    }
+    else
+    {
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+            @foreach (var map in _maps)
+            {
+                var share = GetShare(map.Id);
+                var isShareBusy = _pendingShareUpdates.Contains(map.Id);
+                <div class="col">
+                    <div class="card h-100 map-card">
+                        <canvas id="thumb-@map.Id" class="map-thumbnail-canvas" width="500" height="300"></canvas>
+                        <div class="card-body py-2">
+                            <div class="fw-semibold">@map.Name</div>
+                            <div class="text-muted small">Map #@map.Id</div>
+                            @if (!string.IsNullOrWhiteSpace(share?.ShareCode))
+                            {
+                                <div class="small mt-1">
+                                    <span class="text-muted">Share:</span>
+                                    <code>@share!.ShareCode</code>
+                                    @if (share!.IsOpen)
+                                    {
+                                        <span class="text-muted"> · Open until @FormatUtc(share.ExpiresUtc)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted"> · Closed</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="small text-muted mt-1">No share link yet.</div>
+                            }
+                        </div>
+                        <div class="card-footer d-flex gap-2 flex-wrap">
+                            <button type="button"
+                                    class="btn btn-primary btn-sm"
+                                    @onclick="() => OpenMap(map.Id)">
+                                Open Editor
+                            </button>
+                            @if (share?.IsOpen == true)
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-danger btn-sm"
+                                        disabled="@isShareBusy"
+                                        @onclick="() => SetShareStateAsync(map.Id, false)">
+                                    Close Share
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-success btn-sm"
+                                        disabled="@isShareBusy"
+                                        @onclick="() => SetShareStateAsync(map.Id, true)">
+                                    Open Share
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const float ThumbnailWidth = 500f;
+    private const float ThumbnailHeight = 300f;
+    private const float MapWidth = 2000f;
+    private const float MapHeight = 1200f;
+
+    private bool _isCreating;
+    private bool _isLoading;
+    private bool _thumbnailsRendered;
+    private string _statusMessage = string.Empty;
+    private string _newMapName = string.Empty;
+    private List<MapSummaryDto> _maps = new();
+    private readonly Dictionary<int, MapShareStatusDto> _sharesByMapId = new();
+    private readonly HashSet<int> _pendingShareUpdates = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserState.Changed += OnUserChanged;
+
+        if (UserState.CurrentUser is null)
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        await LoadMapsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_thumbnailsRendered && _maps.Count > 0 && !_isLoading)
+        {
+            _thumbnailsRendered = true;
+            await RenderThumbnailsAsync();
+        }
+    }
+
+    private async Task RenderThumbnailsAsync()
+    {
+        var tasks = _maps.Select(async map =>
+        {
+            try
+            {
+                var dto = await Http.GetFromJsonAsync<MapDto>(GetMapUrl(map.Id));
+                if (dto is not null)
+                {
+                    var renderState = BuildThumbnailRenderState(dto);
+                    await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", $"thumb-{map.Id}", renderState);
+                }
+            }
+            catch { /* thumbnail failure is non-critical */ }
+        }).ToList();
+
+        await Task.WhenAll(tasks);
+    }
+
+    private static MapRenderStateDto BuildThumbnailRenderState(MapDto map)
+    {
+        var zoom = ThumbnailWidth / MapWidth;
+
+        var pointFeatures = new List<MapPointFeatureDto>();
+        foreach (var tree in map.Trees)
+            pointFeatures.Add(new MapPointFeatureDto { FeatureType = "Tree", X = tree.X, Y = tree.Y, StyleKey = tree.TreeType, Size = tree.Size });
+        foreach (var house in map.Houses)
+            pointFeatures.Add(new MapPointFeatureDto { FeatureType = "House", X = house.X, Y = house.Y, StyleKey = house.HouseType, Size = house.Size });
+        foreach (var character in map.Characters)
+            pointFeatures.Add(new MapPointFeatureDto { FeatureType = "Character", X = character.X, Y = character.Y, Size = 1f });
+
+        var titleFeatures = map.Titles.Select(t => new MapTitleFeatureDto
+        {
+            Id = t.Id,
+            Name = t.Name,
+            X = t.X,
+            Y = t.Y,
+            Size = t.Size,
+            Points = t.Points
+        }).ToList();
+
+        return new MapRenderStateDto
+        {
+            PointFeatures = pointFeatures,
+            TitleFeatures = titleFeatures,
+            AreaLayers = map.AreaLayers,
+            AreaPolygons = map.AreaPolygons,
+            ViewState = new MapViewStateDto
+            {
+                ViewX = 0,
+                ViewY = 0,
+                Zoom = zoom,
+                MapWidth = MapWidth,
+                MapHeight = MapHeight
+            }
+        };
+    }
+
+    private async Task CreateMapAsync()
+    {
+        _isCreating = true;
+        _statusMessage = "Creating a new map…";
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/new", new CreateMapRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            Name = string.IsNullOrWhiteSpace(_newMapName) ? null : _newMapName.Trim()
+        });
+
+        if (response.IsSuccessStatusCode)
+        {
+            var map = await response.Content.ReadFromJsonAsync<MapDto>();
+            if (map is not null)
+            {
+                _newMapName = string.Empty;
+                Navigation.NavigateTo($"/map-demo/{map.Id}");
+                return;
+            }
+
+            await LoadMapsAsync();
+            return;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        var message = await response.Content.ReadAsStringAsync();
+        _statusMessage = string.IsNullOrWhiteSpace(message) ? "Failed to create a new map." : message;
+        _isCreating = false;
+    }
+
+    private async Task LoadMapsAsync()
+    {
+        _isLoading = true;
+        _thumbnailsRendered = false;
+        _statusMessage = string.Empty;
+
+        using var response = await Http.GetAsync(GetMapsUrl());
+        if (response.IsSuccessStatusCode)
+        {
+            var maps = await response.Content.ReadFromJsonAsync<List<MapSummaryDto>>();
+            _maps = maps ?? new List<MapSummaryDto>();
+            await LoadShareStatusesAsync();
+            _isLoading = false;
+            return;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        var message = await response.Content.ReadAsStringAsync();
+        _maps = new List<MapSummaryDto>();
+        _sharesByMapId.Clear();
+        _statusMessage = string.IsNullOrWhiteSpace(message) ? "Failed to load maps." : message;
+        _isLoading = false;
+    }
+
+    private async Task LoadShareStatusesAsync()
+    {
+        _sharesByMapId.Clear();
+        if (_maps.Count == 0) return;
+
+        using var response = await Http.GetAsync(GetSharesUrl());
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (!response.IsSuccessStatusCode) return;
+
+        var shares = await response.Content.ReadFromJsonAsync<List<MapShareStatusDto>>();
+        if (shares is null) return;
+
+        foreach (var share in shares)
+            _sharesByMapId[share.MapId] = share;
+    }
+
+    private void OpenMap(int mapId) => Navigation.NavigateTo($"/map-demo/{mapId}");
+
+    private async Task SetShareStateAsync(int mapId, bool open)
+    {
+        if (mapId <= 0 || _pendingShareUpdates.Contains(mapId)) return;
+
+        _pendingShareUpdates.Add(mapId);
+        _statusMessage = open ? "Opening map share…" : "Closing map share…";
+
+        try
+        {
+            var payload = new MapShareAccessRequest
+            {
+                UserId = UserState.CurrentUser?.UserId,
+                SessionToken = UserState.CurrentUser?.SessionToken,
+                MapId = mapId
+            };
+
+            var endpoint = open ? "api/demo-map/share/open" : "api/demo-map/share/close";
+            using var response = await Http.PostAsJsonAsync(endpoint, payload);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                await UserState.SetUserAsync(null);
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var failure = await response.Content.ReadAsStringAsync();
+                _statusMessage = string.IsNullOrWhiteSpace(failure) ? "Failed to update map sharing." : failure;
+                return;
+            }
+
+            var updated = await response.Content.ReadFromJsonAsync<MapShareStatusDto>();
+            if (updated is not null)
+            {
+                _sharesByMapId[mapId] = updated;
+                _statusMessage = open
+                    ? $"Share open. Code {updated.ShareCode} expires {FormatUtc(updated.ExpiresUtc)}."
+                    : "Share closed.";
+            }
+            else
+            {
+                _statusMessage = open ? "Share opened." : "Share closed.";
+            }
+        }
+        finally
+        {
+            _pendingShareUpdates.Remove(mapId);
+        }
+    }
+
+    private MapShareStatusDto? GetShare(int mapId) =>
+        _sharesByMapId.TryGetValue(mapId, out var share) ? share : null;
+
+    private string FormatUtc(DateTime? utc) =>
+        utc.HasValue ? utc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "N/A";
+
+    private string GetMapsUrl()
+    {
+        var sessionToken = UserState.CurrentUser?.SessionToken;
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+            return $"api/demo-map?sessionToken={Uri.EscapeDataString(sessionToken)}";
+
+        var userId = UserState.CurrentUser?.UserId;
+        return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+    }
+
+    private string GetSharesUrl()
+    {
+        var sessionToken = UserState.CurrentUser?.SessionToken;
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+            return $"api/demo-map/share?sessionToken={Uri.EscapeDataString(sessionToken)}";
+
+        var userId = UserState.CurrentUser?.UserId;
+        return userId is null ? "api/demo-map/share" : $"api/demo-map/share?userId={userId.Value}";
+    }
+
+    private string GetMapUrl(int mapId)
+    {
+        var sessionToken = UserState.CurrentUser?.SessionToken;
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+            return $"api/demo-map/{mapId}?sessionToken={Uri.EscapeDataString(sessionToken)}";
+
+        var userId = UserState.CurrentUser?.UserId;
+        return userId is null ? $"api/demo-map/{mapId}" : $"api/demo-map/{mapId}?userId={userId.Value}";
+    }
+
+    private void OnUserChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (UserState.CurrentUser is null)
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+            await LoadMapsAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        UserState.Changed -= OnUserChanged;
+    }
+}

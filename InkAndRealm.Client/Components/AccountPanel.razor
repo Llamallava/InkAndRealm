@@ -9,9 +9,11 @@
         <div class="account-panel-status">
             Signed in as <strong>@UserState.CurrentUser.Username</strong>
         </div>
+        <button class="btn btn-outline-secondary btn-sm w-100" type="button" @onclick="LogoutAsync">
+            Log out
+        </button>
     }
-
-    @if (showRegister)
+    else if (showRegister)
     {
         <h2 class="account-panel-title">Create account</h2>
         <EditForm Model="registerRequest" OnSubmit="RegisterAsync">
@@ -23,6 +25,10 @@
                 <label class="form-label">Password</label>
                 <InputText class="form-control" type="password" @bind-Value="registerRequest.Password" />
             </div>
+            @if (!string.IsNullOrWhiteSpace(registerMessage))
+            {
+                <div class="account-panel-message mb-2">@registerMessage</div>
+            }
             <button class="btn btn-primary w-100" type="submit">Create new</button>
         </EditForm>
         <button class="btn btn-link account-panel-switch" type="button" @onclick="ShowLogin">Back to login</button>
@@ -39,9 +45,13 @@
                 <label class="form-label">Password</label>
                 <InputText class="form-control" type="password" @bind-Value="loginRequest.Password" />
             </div>
+            @if (!string.IsNullOrWhiteSpace(loginMessage))
+            {
+                <div class="account-panel-message mb-2">@loginMessage</div>
+            }
             <button class="btn btn-primary w-100" type="submit">Log in</button>
         </EditForm>
-        <button class="btn btn-link account-panel-switch" type="button" @onclick="ShowRegister">Create new</button>
+        <button class="btn btn-link account-panel-switch" type="button" @onclick="ShowRegister">Create new account</button>
     }
 </div>
 
@@ -86,13 +96,14 @@
         {
             var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
             await UserState.SetUserAsync(user);
-            registerMessage = user is null ? "Registration succeeded." : $"Registered as {user.Username}.";
             registerRequest.Password = string.Empty;
             await OnCompleted.InvokeAsync();
             return;
         }
 
         registerMessage = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(registerMessage))
+            registerMessage = "Registration failed. Please try again.";
     }
 
     private async Task LoginAsync()
@@ -105,12 +116,19 @@
         {
             var user = await response.Content.ReadFromJsonAsync<AuthResponse>();
             await UserState.SetUserAsync(user);
-            loginMessage = user is null ? "Login succeeded." : $"Logged in as {user.Username}.";
             loginRequest.Password = string.Empty;
             await OnCompleted.InvokeAsync();
             return;
         }
 
         loginMessage = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(loginMessage))
+            loginMessage = "Login failed. Please try again.";
+    }
+
+    private async Task LogoutAsync()
+    {
+        await UserState.SetUserAsync(null);
+        await OnCompleted.InvokeAsync();
     }
 }

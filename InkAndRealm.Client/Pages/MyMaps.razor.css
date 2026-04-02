@@ -1,0 +1,15 @@
+.map-thumbnail-canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: calc(var(--bs-card-border-radius) - 1px) calc(var(--bs-card-border-radius) - 1px) 0 0;
+}
+
+.map-card {
+    transition: box-shadow 0.15s ease-in-out;
+    cursor: default;
+}
+
+.map-card:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}

@@ -49,6 +49,34 @@ main {
     gap: 0.75rem;
 }
 
+.account-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0.6rem;
+    color: var(--inkr-paper-100, #f6ebd5);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 0.55rem;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+.account-icon-btn:hover,
+.account-icon-btn:focus {
+    color: var(--inkr-gold-400, #edce8b);
+    background: rgba(223, 187, 104, 0.12);
+    border-color: rgba(223, 187, 104, 0.3);
+}
+
+.account-icon-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .login-panel {
     position: absolute;
     top: calc(100% + 0.5rem);

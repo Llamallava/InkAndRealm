@@ -1,0 +1,123 @@
+.landing-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 3.5rem);
+    margin: -1.1rem -1rem 0;
+    padding: 2rem 1rem;
+}
+
+.landing-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.5rem;
+    text-align: center;
+}
+
+.landing-title-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.landing-title {
+    font-size: clamp(3rem, 10vw, 6rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--inkr-gold-400);
+    text-shadow:
+        0 2px 24px rgba(223, 187, 104, 0.35),
+        0 1px 4px rgba(11, 7, 4, 0.7);
+    margin: 0;
+    line-height: 1.1;
+}
+
+.landing-subtitle {
+    font-size: clamp(1rem, 3vw, 1.35rem);
+    color: var(--inkr-paper-300);
+    letter-spacing: 0.06em;
+    margin: 0;
+}
+
+.landing-buttons {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.landing-btn {
+    min-width: 9rem;
+    padding: 0.75rem 2rem;
+    font-size: 1.1rem;
+    border-radius: 0.65rem;
+    letter-spacing: 0.04em;
+    transition: transform 90ms ease, box-shadow 90ms ease;
+}
+
+.landing-btn:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(11, 7, 4, 0.45);
+}
+
+.landing-btn-primary {
+    color: #2b1a0f;
+    background-color: var(--inkr-gold-500);
+    border-color: var(--inkr-gold-700);
+}
+
+.landing-btn-primary:hover,
+.landing-btn-primary:focus {
+    color: #2b1a0f;
+    background-color: var(--inkr-gold-400);
+    border-color: var(--inkr-gold-600);
+}
+
+.landing-btn-secondary {
+    color: var(--inkr-paper-200);
+    border-color: var(--inkr-wood-600);
+    background-color: rgba(31, 19, 11, 0.3);
+}
+
+.landing-btn-secondary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Login modal overlay */
+.landing-login-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 7, 4, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1300;
+    padding: 1.5rem;
+    backdrop-filter: blur(2px);
+}
+
+.landing-login-card {
+    width: min(400px, 95vw);
+    background:
+        linear-gradient(155deg, rgba(121, 83, 52, 0.2), rgba(31, 19, 11, 0.08)),
+        linear-gradient(180deg, var(--inkr-wood-700) 0%, var(--inkr-wood-800) 100%);
+    border: 1px solid var(--inkr-wood-600);
+    border-radius: 0.9rem;
+    box-shadow: 0 20px 48px rgba(11, 7, 4, 0.55);
+    overflow: hidden;
+}
+
+.landing-login-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1.1rem;
+    border-bottom: 1px solid var(--inkr-gold-800);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--inkr-paper-200);
+    background: linear-gradient(180deg, rgba(31, 19, 11, 0.42), rgba(31, 19, 11, 0.06));
+}
