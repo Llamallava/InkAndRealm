@@ -16,7 +16,7 @@
             <button class="btn landing-btn landing-btn-primary" @onclick="OnCreateClicked">
                 Create
             </button>
-            <button class="btn landing-btn landing-btn-secondary" disabled title="Coming soon">
+            <button class="btn landing-btn landing-btn-secondary" @onclick="OnExploreClicked">
                 Explore
             </button>
         </div>
@@ -46,6 +46,8 @@
         else
             _showLoginModal = true;
     }
+
+    private void OnExploreClicked() => Navigation.NavigateTo("/explore");
 
     private void CloseLoginModal() => _showLoginModal = false;
 

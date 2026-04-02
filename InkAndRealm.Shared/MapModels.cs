@@ -16,6 +16,22 @@ public sealed class MapSummaryDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public bool IsPublished { get; set; }
+}
+
+public sealed class PublishedMapSummaryDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string AuthorName { get; set; } = string.Empty;
+    public DateTime PublishedUtc { get; set; }
+}
+
+public sealed class PublishMapRequest
+{
+    public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
+    public int MapId { get; set; }
 }
 
 public sealed class MapShareStatusDto
@@ -32,6 +48,22 @@ public sealed class MapShareAccessRequest
     public int? UserId { get; set; }
     public string? SessionToken { get; set; }
     public int MapId { get; set; }
+}
+
+public sealed class RenameMapRequest
+{
+    public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
+    public int MapId { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+public sealed class DeleteMapRequest
+{
+    public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
+    public int MapId { get; set; }
+    public string ConfirmName { get; set; } = string.Empty;
 }
 
 public sealed class TreeFeatureDto

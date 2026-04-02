@@ -47,7 +47,8 @@ public sealed class DemoMapController : ControllerBase
             .Select(map => new MapSummaryDto
             {
                 Id = map.Id,
-                Name = map.Name
+                Name = map.Name,
+                IsPublished = map.IsPublished
             })
             .ToListAsync();
 
@@ -294,6 +295,156 @@ public sealed class DemoMapController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(ToDto(map, Array.Empty<FeatureRelationshipEntity>()));
+    }
+
+    [HttpGet("explore")]
+    public async Task<ActionResult<IReadOnlyList<PublishedMapSummaryDto>>> GetExplore()
+    {
+        var maps = await _context.Maps
+            .Where(map => map.IsPublished)
+            .OrderByDescending(map => map.PublishedUtc)
+            .Select(map => new PublishedMapSummaryDto
+            {
+                Id = map.Id,
+                Name = map.Name,
+                AuthorName = map.User != null ? map.User.Username : "Unknown",
+                PublishedUtc = map.PublishedUtc!.Value
+            })
+            .ToListAsync();
+
+        return Ok(maps);
+    }
+
+    [HttpGet("published/{mapId:int}")]
+    public async Task<ActionResult<MapDto>> GetPublishedMap([FromRoute] int mapId)
+    {
+        var map = await _context.Maps
+            .Include(m => m.Features)
+            .ThenInclude(feature => feature.Points)
+            .Include(m => m.Layers)
+            .FirstOrDefaultAsync(m => m.Id == mapId && m.IsPublished);
+
+        if (map is null)
+            return NotFound("Map not found.");
+
+        var relationships = await LoadRelationshipsAsync(map);
+        return Ok(ToDto(map, relationships));
+    }
+
+    [HttpPost("publish")]
+    public async Task<ActionResult<MapSummaryDto>> PublishMap([FromBody] PublishMapRequest request)
+    {
+        if (request is null)
+            return BadRequest("Publish request is required.");
+
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
+            return Unauthorized("Log in to publish maps.");
+
+        if (request.MapId <= 0)
+            return BadRequest("Map id is required.");
+
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
+            return Unauthorized("Invalid user.");
+
+        var map = await _context.Maps.FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
+        if (map is null)
+            return NotFound("Map not found.");
+
+        map.IsPublished = true;
+        map.PublishedUtc = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(new MapSummaryDto { Id = map.Id, Name = map.Name, IsPublished = true });
+    }
+
+    [HttpPost("unpublish")]
+    public async Task<ActionResult<MapSummaryDto>> UnpublishMap([FromBody] PublishMapRequest request)
+    {
+        if (request is null)
+            return BadRequest("Unpublish request is required.");
+
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
+            return Unauthorized("Log in to unpublish maps.");
+
+        if (request.MapId <= 0)
+            return BadRequest("Map id is required.");
+
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
+            return Unauthorized("Invalid user.");
+
+        var map = await _context.Maps.FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
+        if (map is null)
+            return NotFound("Map not found.");
+
+        map.IsPublished = false;
+        await _context.SaveChangesAsync();
+
+        return Ok(new MapSummaryDto { Id = map.Id, Name = map.Name, IsPublished = false });
+    }
+
+    [HttpPost("rename")]
+    public async Task<ActionResult<MapSummaryDto>> RenameMap([FromBody] RenameMapRequest request)
+    {
+        if (request is null)
+            return BadRequest("Rename request is required.");
+
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
+            return Unauthorized("Log in to rename maps.");
+
+        if (request.MapId <= 0)
+            return BadRequest("Map id is required.");
+
+        var trimmed = request.Name?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return BadRequest("Map name cannot be empty.");
+
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
+            return Unauthorized("Invalid user.");
+
+        var map = await _context.Maps.FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
+        if (map is null)
+            return NotFound("Map not found.");
+
+        map.Name = trimmed;
+        await _context.SaveChangesAsync();
+
+        return Ok(new MapSummaryDto { Id = map.Id, Name = map.Name });
+    }
+
+    [HttpPost("delete")]
+    public async Task<ActionResult> DeleteMap([FromBody] DeleteMapRequest request)
+    {
+        if (request is null)
+            return BadRequest("Delete request is required.");
+
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
+            return Unauthorized("Log in to delete maps.");
+
+        if (request.MapId <= 0)
+            return BadRequest("Map id is required.");
+
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
+            return Unauthorized("Invalid user.");
+
+        var map = await _context.Maps
+            .Include(m => m.Share)
+            .Include(m => m.Features)
+            .ThenInclude(f => f.Points)
+            .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
+        if (map is null)
+            return NotFound("Map not found.");
+
+        if (!string.Equals(map.Name, request.ConfirmName?.Trim(), StringComparison.OrdinalIgnoreCase))
+            return BadRequest("Map name does not match.");
+
+        _context.Maps.Remove(map);
+        await _context.SaveChangesAsync();
+
+        return Ok();
     }
 
     [HttpPost("edits")]

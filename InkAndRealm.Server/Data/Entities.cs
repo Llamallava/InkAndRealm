@@ -33,6 +33,8 @@ public sealed class MapEntity
     public string Name { get; set; } = string.Empty;
     public float Width { get; set; }
     public float Height { get; set; }
+    public bool IsPublished { get; set; }
+    public DateTime? PublishedUtc { get; set; }
     public MapShareEntity? Share { get; set; }
     public List<FeatureEntity> Features { get; set; } = new();
     public List<MapLayerEntity> Layers { get; set; } = new();

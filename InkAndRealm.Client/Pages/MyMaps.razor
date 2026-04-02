@@ -12,7 +12,7 @@
 
 <PageTitle>My Maps – Ink & Realm</PageTitle>
 
-<div class="container py-4 home-page">
+<div class="container py-4 home-page" @onclick="CloseMenu">
     <div class="d-flex align-items-center gap-3 mb-4">
         <h2 class="mb-0">My Maps</h2>
     </div>
@@ -45,61 +45,38 @@
     }
     else
     {
-        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+        <div class="row row-cols-1 row-cols-md-3 row-cols-xl-4 g-3">
             @foreach (var map in _maps)
             {
-                var share = GetShare(map.Id);
-                var isShareBusy = _pendingShareUpdates.Contains(map.Id);
                 <div class="col">
-                    <div class="card h-100 map-card">
-                        <canvas id="thumb-@map.Id" class="map-thumbnail-canvas" width="500" height="300"></canvas>
-                        <div class="card-body py-2">
-                            <div class="fw-semibold">@map.Name</div>
-                            <div class="text-muted small">Map #@map.Id</div>
-                            @if (!string.IsNullOrWhiteSpace(share?.ShareCode))
-                            {
-                                <div class="small mt-1">
-                                    <span class="text-muted">Share:</span>
-                                    <code>@share!.ShareCode</code>
-                                    @if (share!.IsOpen)
+                    <div class="card map-card">
+                        <div class="map-card-title-row">
+                            <span class="map-card-name">@map.Name</span>
+                            <div class="map-card-actions">
+                                <button class="post-btn"
+                                        @onclick="() => OpenPost(map)"
+                                        @onclick:stopPropagation="true">
+                                    Post
+                                </button>
+                                <div class="map-menu-wrapper">
+                                    <button class="map-menu-btn"
+                                            title="Map options"
+                                            @onclick="(e) => ToggleMenu(map.Id, e)"
+                                            @onclick:stopPropagation="true">
+                                        &#8942;
+                                    </button>
+                                    @if (_openMenuMapId == map.Id)
                                     {
-                                        <span class="text-muted"> · Open until @FormatUtc(share.ExpiresUtc)</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted"> · Closed</span>
+                                        <div class="map-dropdown-menu" @onclick:stopPropagation="true">
+                                            <button class="map-dropdown-item" @onclick="() => StartRename(map)">Rename</button>
+                                            <button class="map-dropdown-item map-dropdown-item-danger" @onclick="() => StartDelete(map)">Delete</button>
+                                        </div>
                                     }
                                 </div>
-                            }
-                            else
-                            {
-                                <div class="small text-muted mt-1">No share link yet.</div>
-                            }
+                            </div>
                         </div>
-                        <div class="card-footer d-flex gap-2 flex-wrap">
-                            <button type="button"
-                                    class="btn btn-primary btn-sm"
-                                    @onclick="() => OpenMap(map.Id)">
-                                Open Editor
-                            </button>
-                            @if (share?.IsOpen == true)
-                            {
-                                <button type="button"
-                                        class="btn btn-outline-danger btn-sm"
-                                        disabled="@isShareBusy"
-                                        @onclick="() => SetShareStateAsync(map.Id, false)">
-                                    Close Share
-                                </button>
-                            }
-                            else
-                            {
-                                <button type="button"
-                                        class="btn btn-outline-success btn-sm"
-                                        disabled="@isShareBusy"
-                                        @onclick="() => SetShareStateAsync(map.Id, true)">
-                                    Open Share
-                                </button>
-                            }
+                        <div class="map-card-clickable" @onclick="() => OpenMap(map.Id)" title="Open @map.Name">
+                            <canvas id="thumb-@map.Id" class="map-thumbnail-canvas" width="500" height="300"></canvas>
                         </div>
                     </div>
                 </div>
@@ -107,6 +84,146 @@
         </div>
     }
 </div>
+
+@if (_renameMap is not null)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-custom">
+        <div class="modal-custom-header">
+            <span>Rename Map</span>
+            <button class="modal-close-btn" @onclick="CloseModals">&times;</button>
+        </div>
+        <div class="modal-custom-body">
+            <input class="form-control"
+                   placeholder="New name"
+                   @bind="_renameValue"
+                   @bind:event="oninput"
+                   @onkeydown="OnRenameKeyDown" />
+        </div>
+        <div class="modal-custom-footer">
+            <button class="btn btn-secondary btn-sm" @onclick="CloseModals">Cancel</button>
+            <button class="btn btn-primary btn-sm"
+                    disabled="@(string.IsNullOrWhiteSpace(_renameValue))"
+                    @onclick="ConfirmRenameAsync">
+                Rename
+            </button>
+        </div>
+    </div>
+}
+
+@if (_deleteMap is not null)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-custom">
+        <div class="modal-custom-header">
+            <span>Delete Map</span>
+            <button class="modal-close-btn" @onclick="CloseModals">&times;</button>
+        </div>
+        <div class="modal-custom-body">
+            <p class="mb-2">Type <strong>@_deleteMap.Name</strong> to confirm deletion.</p>
+            <input class="form-control"
+                   placeholder="@_deleteMap.Name"
+                   @bind="_deleteConfirmValue"
+                   @bind:event="oninput"
+                   @onkeydown="OnDeleteKeyDown" />
+        </div>
+        <div class="modal-custom-footer">
+            <button class="btn btn-secondary btn-sm" @onclick="CloseModals">Cancel</button>
+            <button class="btn btn-danger btn-sm"
+                    disabled="@(!string.Equals(_deleteConfirmValue, _deleteMap.Name, StringComparison.OrdinalIgnoreCase))"
+                    @onclick="ConfirmDeleteAsync">
+                I'm Sure
+            </button>
+        </div>
+    </div>
+}
+
+@if (_postMap is not null)
+{
+    var postShare = GetShare(_postMap.Id);
+    var postShareOpen = postShare?.IsOpen == true;
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-custom post-modal">
+        <div class="modal-custom-header">
+            <span>Post</span>
+            <button class="modal-close-btn" @onclick="CloseModals">&times;</button>
+        </div>
+        <div class="modal-custom-body">
+            <div class="post-section">
+                <div class="post-section-label">Publish to Explore</div>
+                <p class="post-section-desc">
+                    Make this map publicly visible to all users on the Explore page.
+                </p>
+                @if (_postMap.IsPublished)
+                {
+                    <div class="publish-active-row">
+                        <span class="publish-active-badge">Published</span>
+                    </div>
+                    <button class="btn btn-outline-secondary btn-sm mt-2"
+                            disabled="@_postPublishBusy"
+                            @onclick="PostUnpublishAsync">
+                        Remove from Explore
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-primary btn-sm"
+                            disabled="@_postPublishBusy"
+                            @onclick="PostPublishAsync">
+                        Publish
+                    </button>
+                }
+            </div>
+            <div class="post-section">
+                <div class="post-section-label">Share Link</div>
+                <p class="post-section-desc">
+                    Generate a code others can use to view this map.
+                </p>
+                @if (postShareOpen && postShare is not null)
+                {
+                    <div class="share-code-row">
+                        <code class="share-code-display">@postShare.ShareCode</code>
+                        <button class="btn btn-outline-secondary btn-sm"
+                                title="Copy code"
+                                @onclick="() => CopyShareCodeAsync(postShare.ShareCode!)">
+                            Copy
+                        </button>
+                    </div>
+                    <div class="share-expiry">Expires @FormatUtc(postShare.ExpiresUtc)</div>
+                    <button class="btn btn-outline-danger btn-sm mt-2"
+                            disabled="@_postShareBusy"
+                            @onclick="PostCloseShareAsync">
+                        Close Share
+                    </button>
+                }
+                else if (!string.IsNullOrWhiteSpace(postShare?.ShareCode))
+                {
+                    <div class="share-code-row">
+                        <code class="share-code-display share-code-closed">@postShare!.ShareCode</code>
+                    </div>
+                    <div class="share-expiry text-muted">Share is closed.</div>
+                    <button class="btn btn-outline-success btn-sm mt-2"
+                            disabled="@_postShareBusy"
+                            @onclick="PostOpenShareAsync">
+                        Re-open Share
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-success btn-sm"
+                            disabled="@_postShareBusy"
+                            @onclick="PostOpenShareAsync">
+                        Generate Share Code
+                    </button>
+                }
+                @if (_postStatusMessage is not null)
+                {
+                    <div class="post-status-msg mt-2">@_postStatusMessage</div>
+                }
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private const float ThumbnailWidth = 500f;
@@ -122,6 +239,16 @@
     private List<MapSummaryDto> _maps = new();
     private readonly Dictionary<int, MapShareStatusDto> _sharesByMapId = new();
     private readonly HashSet<int> _pendingShareUpdates = new();
+
+    private int? _openMenuMapId;
+    private MapSummaryDto? _renameMap;
+    private string _renameValue = string.Empty;
+    private MapSummaryDto? _deleteMap;
+    private string _deleteConfirmValue = string.Empty;
+    private MapSummaryDto? _postMap;
+    private bool _postShareBusy;
+    private bool _postPublishBusy;
+    private string? _postStatusMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -295,13 +422,249 @@
 
     private void OpenMap(int mapId) => Navigation.NavigateTo($"/map-demo/{mapId}");
 
+    private void CloseMenu() => _openMenuMapId = null;
+
+    private void ToggleMenu(int mapId, MouseEventArgs e)
+    {
+        _openMenuMapId = _openMenuMapId == mapId ? null : mapId;
+    }
+
+    private void StartRename(MapSummaryDto map)
+    {
+        _openMenuMapId = null;
+        _renameMap = map;
+        _renameValue = map.Name;
+    }
+
+    private void StartDelete(MapSummaryDto map)
+    {
+        _openMenuMapId = null;
+        _deleteMap = map;
+        _deleteConfirmValue = string.Empty;
+    }
+
+    private void CloseModals()
+    {
+        _renameMap = null;
+        _deleteMap = null;
+        _postMap = null;
+        _renameValue = string.Empty;
+        _deleteConfirmValue = string.Empty;
+        _postStatusMessage = null;
+        _postShareBusy = false;
+        _postPublishBusy = false;
+    }
+
+    private void OpenPost(MapSummaryDto map)
+    {
+        CloseModals();
+        _postMap = map;
+    }
+
+    private async Task PostPublishAsync()
+    {
+        if (_postMap is null || _postPublishBusy) return;
+        _postPublishBusy = true;
+        _postStatusMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/publish", new PublishMapRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = _postMap.Id
+        });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var updated = await response.Content.ReadFromJsonAsync<MapSummaryDto>();
+            if (updated is not null)
+            {
+                var idx = _maps.FindIndex(m => m.Id == _postMap.Id);
+                if (idx >= 0) _maps[idx] = updated;
+                _postMap = updated;
+            }
+        }
+        else
+        {
+            var msg = await response.Content.ReadAsStringAsync();
+            _postStatusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to publish map." : msg;
+        }
+
+        _postPublishBusy = false;
+    }
+
+    private async Task PostUnpublishAsync()
+    {
+        if (_postMap is null || _postPublishBusy) return;
+        _postPublishBusy = true;
+        _postStatusMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/unpublish", new PublishMapRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = _postMap.Id
+        });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var updated = await response.Content.ReadFromJsonAsync<MapSummaryDto>();
+            if (updated is not null)
+            {
+                var idx = _maps.FindIndex(m => m.Id == _postMap.Id);
+                if (idx >= 0) _maps[idx] = updated;
+                _postMap = updated;
+            }
+        }
+        else
+        {
+            var msg = await response.Content.ReadAsStringAsync();
+            _postStatusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to unpublish map." : msg;
+        }
+
+        _postPublishBusy = false;
+    }
+
+    private async Task PostOpenShareAsync()
+    {
+        if (_postMap is null || _postShareBusy) return;
+        _postShareBusy = true;
+        _postStatusMessage = null;
+        await SetShareStateAsync(_postMap.Id, true);
+        _postShareBusy = false;
+    }
+
+    private async Task PostCloseShareAsync()
+    {
+        if (_postMap is null || _postShareBusy) return;
+        _postShareBusy = true;
+        _postStatusMessage = null;
+        await SetShareStateAsync(_postMap.Id, false);
+        _postShareBusy = false;
+    }
+
+    private async Task CopyShareCodeAsync(string code)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", code);
+            _postStatusMessage = "Copied!";
+        }
+        catch
+        {
+            _postStatusMessage = code;
+        }
+    }
+
+    private async Task OnRenameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_renameValue))
+            await ConfirmRenameAsync();
+        else if (e.Key == "Escape")
+            CloseModals();
+    }
+
+    private async Task OnDeleteKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && string.Equals(_deleteConfirmValue, _deleteMap?.Name, StringComparison.OrdinalIgnoreCase))
+            await ConfirmDeleteAsync();
+        else if (e.Key == "Escape")
+            CloseModals();
+    }
+
+    private async Task ConfirmRenameAsync()
+    {
+        if (_renameMap is null || string.IsNullOrWhiteSpace(_renameValue)) return;
+
+        var mapId = _renameMap.Id;
+        var newName = _renameValue.Trim();
+        CloseModals();
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/rename", new RenameMapRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = mapId,
+            Name = newName
+        });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var updated = await response.Content.ReadFromJsonAsync<MapSummaryDto>();
+            if (updated is not null)
+            {
+                var idx = _maps.FindIndex(m => m.Id == mapId);
+                if (idx >= 0) _maps[idx] = updated;
+            }
+        }
+        else
+        {
+            var msg = await response.Content.ReadAsStringAsync();
+            _statusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to rename map." : msg;
+        }
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteMap is null) return;
+
+        var mapId = _deleteMap.Id;
+        var confirmName = _deleteConfirmValue;
+        CloseModals();
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/delete", new DeleteMapRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = mapId,
+            ConfirmName = confirmName
+        });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            _maps.RemoveAll(m => m.Id == mapId);
+            _sharesByMapId.Remove(mapId);
+        }
+        else
+        {
+            var msg = await response.Content.ReadAsStringAsync();
+            _statusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to delete map." : msg;
+        }
+    }
+
     private async Task SetShareStateAsync(int mapId, bool open)
     {
         if (mapId <= 0 || _pendingShareUpdates.Contains(mapId)) return;
 
         _pendingShareUpdates.Add(mapId);
-        _statusMessage = open ? "Opening map share…" : "Closing map share…";
-
         try
         {
             var payload = new MapShareAccessRequest
@@ -324,22 +687,13 @@
             if (!response.IsSuccessStatusCode)
             {
                 var failure = await response.Content.ReadAsStringAsync();
-                _statusMessage = string.IsNullOrWhiteSpace(failure) ? "Failed to update map sharing." : failure;
+                _postStatusMessage = string.IsNullOrWhiteSpace(failure) ? "Failed to update sharing." : failure;
                 return;
             }
 
             var updated = await response.Content.ReadFromJsonAsync<MapShareStatusDto>();
             if (updated is not null)
-            {
                 _sharesByMapId[mapId] = updated;
-                _statusMessage = open
-                    ? $"Share open. Code {updated.ShareCode} expires {FormatUtc(updated.ExpiresUtc)}."
-                    : "Share closed.";
-            }
-            else
-            {
-                _statusMessage = open ? "Share opened." : "Share closed.";
-            }
         }
         finally
         {

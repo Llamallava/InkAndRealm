@@ -167,6 +167,9 @@
     private const float MapHeight = 1200f;
     private const float MinZoom = 0.5f;
     private const float MaxZoom = 3f;
+    [SupplyParameterFromQuery(Name = "published")]
+    public int PublishedMapId { get; set; }
+
     private string _shareCodeInput = string.Empty;
     private string _statusMessage = string.Empty;
     private bool _isLoading;
@@ -182,6 +185,42 @@
     private float _panStartY;
     private float _panOriginX;
     private float _panOriginY;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (PublishedMapId > 0)
+        {
+            _isLoading = true;
+            _statusMessage = "Loading map...";
+            try
+            {
+                using var response = await Http.GetAsync($"api/demo-map/published/{PublishedMapId}");
+                if (response.IsSuccessStatusCode)
+                {
+                    var map = await response.Content.ReadFromJsonAsync<MapDto>();
+                    if (map is not null && map.Id > 0)
+                    {
+                        _map = map;
+                        _selectedCharacter = map.Characters.FirstOrDefault();
+                        ResetView();
+                        _statusMessage = map.Name;
+                    }
+                    else
+                    {
+                        _statusMessage = "Map not found.";
+                    }
+                }
+                else
+                {
+                    _statusMessage = "Failed to load map.";
+                }
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
