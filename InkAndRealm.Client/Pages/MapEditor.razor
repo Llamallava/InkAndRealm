@@ -205,38 +205,48 @@
             </div>
 
             <div class="map-editor-bottombar">
-                <div class="map-editor-bottombar-block">
-                    <div class="small text-muted">Map Items</div>
-                    <div class="map-editor-item-tabs" role="tablist" aria-label="Map item tabs">
-                        @foreach (var placement in PlacementDefinitions)
-                        {
-                            <button class="btn map-editor-tab-button @(_placementType == placement.PlacementType ? "btn-primary" : "btn-outline-primary")"
+                <div class="map-editor-item-tabs" role="tablist" aria-label="Map item tabs">
+                    @foreach (var placement in PlacementDefinitions)
+                    {
+                        var isSelected = _placementType == placement.PlacementType;
+                        var isMenuOpen = _styleMenuOpenFor == placement.PlacementType;
+                        var currentStyle = GetStyleForPlacement(placement.PlacementType);
+                        var currentStyleImage = GetStyleImageUrl(placement.PlacementType, currentStyle);
+                        <div class="map-editor-item-wrapper">
+                            @if (isMenuOpen)
+                            {
+                                <div class="map-editor-style-popup" role="listbox" aria-label="@($"{placement.Label} styles")">
+                                    @foreach (var style in GetStylesForPlacement(placement.PlacementType))
+                                    {
+                                        var isSelectedStyle = string.Equals(style, currentStyle, StringComparison.OrdinalIgnoreCase);
+                                        <button class="btn map-editor-style-button @(isSelectedStyle ? "btn-primary" : "btn-outline-primary")"
+                                                role="option"
+                                                aria-selected="@isSelectedStyle"
+                                                aria-label="@($"{style} style")"
+                                                title="@style"
+                                                @onclick="() => SelectPlacementStyleAndCloseMenu(placement.PlacementType, style)">
+                                            <img src="@GetStyleImageUrl(placement.PlacementType, style)" alt="" />
+                                            <span>@style</span>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            <button class="btn map-editor-tab-button @(isSelected ? "btn-primary" : "btn-outline-primary")"
                                     role="tab"
-                                    aria-selected="@(_placementType == placement.PlacementType)"
+                                    aria-selected="@isSelected"
                                     aria-label="@placement.Label"
-                                    @onclick="() => SelectPlacement(placement.PlacementType)">
-                                <img src="@placement.ImageUrl" alt="" />
+                                    @onclick="() => HandlePlacementButtonClick(placement.PlacementType)">
+                                <img src="@currentStyleImage" alt="" />
                                 <span>@placement.Label</span>
                             </button>
-                        }
-                    </div>
-                </div>
-                <div class="map-editor-bottombar-block">
-                    <div class="map-editor-style-grid" role="tabpanel" aria-label="@($"{ActiveStyleDefinition.MenuLabel} selection")">
-                        @foreach (var style in ActiveStyleDefinition.Styles)
-                        {
-                            var isSelectedStyle = string.Equals(style, GetStyleForPlacement(_placementType), StringComparison.OrdinalIgnoreCase);
-                            <button class="btn map-editor-style-button @(isSelectedStyle ? "btn-primary" : "btn-outline-primary")"
-                                    aria-label="@($"{style} style")"
-                                    title="@style"
-                                    @onclick="() => SelectPlacementStyle(_placementType, style)">
-                                <img src="@GetStyleImageUrl(_placementType, style)" alt="" />
-                                <span>@style</span>
-                            </button>
-                        }
-                    </div>
+                        </div>
+                    }
                 </div>
             </div>
+            @if (_styleMenuOpenFor.HasValue)
+            {
+                <div class="map-editor-style-backdrop" @onclick="CloseStyleMenu"></div>
+            }
         </section>
     </div>
 </div>
@@ -719,6 +729,7 @@
     private DotNetObjectReference<MapEditor>? _undoShortcutRef;
     private bool IsLoggedIn => UserState.CurrentUser is not null;
     private PlacementType _placementType = PlacementType.Tree;
+    private PlacementType? _styleMenuOpenFor = null;
     private readonly Dictionary<PlacementType, string> _selectedStyleByPlacement = new()
     {
         { PlacementType.Tree, "Oak" },
@@ -2371,6 +2382,35 @@
         _selectedStyleByPlacement[placementType] = style;
         return SelectPlacement(placementType);
     }
+
+    private void HandlePlacementButtonClick(PlacementType placementType)
+    {
+        if (_placementType == placementType)
+        {
+            // Already selected: toggle style menu open/closed
+            _styleMenuOpenFor = _styleMenuOpenFor == placementType ? null : placementType;
+        }
+        else
+        {
+            // Not selected: select it and close any open menu
+            _styleMenuOpenFor = null;
+            _ = SelectPlacement(placementType);
+        }
+    }
+
+    private Task SelectPlacementStyleAndCloseMenu(PlacementType placementType, string style)
+    {
+        _styleMenuOpenFor = null;
+        return SelectPlacementStyle(placementType, style);
+    }
+
+    private void CloseStyleMenu()
+    {
+        _styleMenuOpenFor = null;
+    }
+
+    private IReadOnlyList<string> GetStylesForPlacement(PlacementType placementType)
+        => FeatureStyleDefinitions.First(d => d.PlacementType == placementType).Styles;
 
     private async Task SelectTool(MapToolType tool)
     {

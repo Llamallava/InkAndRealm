@@ -265,6 +265,9 @@
     [SupplyParameterFromQuery(Name = "published")]
     public int PublishedMapId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? ShareCode { get; set; }
+
     private bool _isLoading;
     private bool _mapJustLoaded;
     private MapDto? _map;
@@ -312,6 +315,28 @@
             try
             {
                 using var response = await Http.GetAsync($"api/demo-map/published/{PublishedMapId}");
+                if (response.IsSuccessStatusCode)
+                {
+                    var map = await response.Content.ReadFromJsonAsync<MapDto>();
+                    if (map is not null && map.Id > 0)
+                    {
+                        _map = map;
+                        _mapJustLoaded = true;
+                        ResetView();
+                    }
+                }
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(ShareCode))
+        {
+            _isLoading = true;
+            try
+            {
+                using var response = await Http.GetAsync($"api/demo-map/shared?code={Uri.EscapeDataString(ShareCode)}");
                 if (response.IsSuccessStatusCode)
                 {
                     var map = await response.Content.ReadFromJsonAsync<MapDto>();

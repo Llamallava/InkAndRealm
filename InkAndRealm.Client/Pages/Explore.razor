@@ -12,7 +12,32 @@
     <div class="d-flex align-items-center gap-3 mb-4">
         <button class="btn btn-outline-secondary btn-sm" @onclick="GoHome">&#8592; Back</button>
         <h2 class="mb-0">Explore</h2>
+        <button class="btn btn-outline-primary btn-sm ms-auto" @onclick="OpenCodeModal">Enter a map code</button>
     </div>
+
+    @if (_showCodeModal)
+    {
+        <div class="code-modal-backdrop" @onclick="CloseCodeModal">
+            <div class="code-modal-box" @onclick:stopPropagation="true">
+                <h5 class="mb-3">Enter a map code</h5>
+                <input class="form-control mb-3"
+                       placeholder="Map code"
+                       @bind="_codeInput"
+                       @bind:event="oninput"
+                       @onkeydown="OnCodeKeyDown"
+                       maxlength="32"
+                       autofocus />
+                @if (_codeError is not null)
+                {
+                    <p class="text-danger small mb-2">@_codeError</p>
+                }
+                <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="CloseCodeModal">Cancel</button>
+                    <button class="btn btn-primary btn-sm" @onclick="OpenByCode" disabled="@string.IsNullOrWhiteSpace(_codeInput)">Open</button>
+                </div>
+            </div>
+        </div>
+    }
 
     @if (_isLoading)
     {
@@ -138,4 +163,31 @@
 
     private void ViewMap(int mapId) => Navigation.NavigateTo($"/map-viewer?published={mapId}");
     private void GoHome() => Navigation.NavigateTo("/");
+
+    // Map code modal
+    private bool _showCodeModal;
+    private string _codeInput = string.Empty;
+    private string? _codeError;
+
+    private void OpenCodeModal()
+    {
+        _codeInput = string.Empty;
+        _codeError = null;
+        _showCodeModal = true;
+    }
+
+    private void CloseCodeModal() => _showCodeModal = false;
+
+    private void OpenByCode()
+    {
+        var code = _codeInput.Trim();
+        if (string.IsNullOrEmpty(code)) return;
+        Navigation.NavigateTo($"/map-viewer?code={Uri.EscapeDataString(code)}");
+    }
+
+    private void OnCodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") OpenByCode();
+        else if (e.Key == "Escape") CloseCodeModal();
+    }
 }
