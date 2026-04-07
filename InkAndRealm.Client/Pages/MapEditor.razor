@@ -167,11 +167,6 @@
                             @onclick="OpenRelationshipTreeAsync">
                         Character Tree
                     </button>
-                    <button class="btn btn-primary btn-sm"
-                            disabled="@(PendingCount == 0 || _isSaving || !IsLoggedIn || !_hasMap)"
-                            @onclick="SaveEditsAsync">
-                        Save All
-                    </button>
                     <button class="btn btn-outline-secondary btn-sm"
                             disabled="@(_isLoading)"
                             @onclick="ReloadAsync">
@@ -256,7 +251,7 @@
                     <div class="small text-muted">
                         @(_isCharacterEditorReadOnly
                             ? "Switch to the Edit tool to modify character details."
-                            : "Edits are unsaved until you click Save All.")
+                            : "Changes are auto-saved.")
                     </div>
                 </div>
                 <button class="btn btn-outline-secondary btn-sm" @onclick="() => ClearEditSelection(true)">
@@ -341,10 +336,11 @@
                 }
                 <div class="character-editor-row">
                     <label class="form-label">Relationships</label>
-                    @if (editingCharacter.Relationships is not null && editingCharacter.Relationships.Count > 0)
+                    @{ var savedRelationships = editingCharacter.Relationships?.Where(r => r.Id > 0).ToList() ?? new(); }
+                    @if (savedRelationships.Count > 0)
                     {
                         <div class="small">
-                            @foreach (var relationship in editingCharacter.Relationships)
+                            @foreach (var relationship in savedRelationships)
                             {
                                 <div class="mb-2">
                                     <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType)</div>
@@ -664,14 +660,6 @@
 
 @code {
     private const string CanvasId = "map-demo-canvas";
-    private List<TreeFeatureDto> _trees = new();
-    private List<HouseFeatureDto> _houses = new();
-    private List<CharacterFeatureDto> _characters = new();
-    private List<TitleFeatureDto> _titles = new();
-    private readonly List<TreeFeatureDto> _stagedTrees = new();
-    private readonly List<HouseFeatureDto> _stagedHouses = new();
-    private readonly List<CharacterFeatureDto> _stagedCharacters = new();
-    private readonly List<TitleFeatureDto> _stagedTitles = new();
     private readonly List<AddCharacterRelationshipDto> _stagedRelationships = new();
     private readonly Dictionary<int, UpdateCharacterRelationshipDto> _updatedRelationships = new();
     private readonly Dictionary<int, (int SourceCharacterId, int TargetFeatureId)> _deletedRelationships = new();
@@ -777,22 +765,15 @@
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
     private readonly List<MapPointDto> _activePolygonPoints = new();
-    private readonly List<AreaPolygonDto> _waterPolygons = new();
-    private readonly List<AreaPolygonDto> _stagedWaterPolygons = new();
-    private readonly Dictionary<int, AreaPolygonDto> _editedWaterPolygons = new();
-    private readonly HashSet<int> _deletedWaterPolygonIds = new();
-    private readonly List<AreaPolygonDto> _landPolygons = new();
-    private readonly List<AreaPolygonDto> _stagedLandPolygons = new();
-    private readonly Dictionary<int, AreaPolygonDto> _editedLandPolygons = new();
-    private readonly HashSet<int> _deletedLandPolygonIds = new();
-    private readonly Dictionary<int, TreeFeatureDto> _editedTrees = new();
-    private readonly Dictionary<int, HouseFeatureDto> _editedHouses = new();
-    private readonly Dictionary<int, CharacterFeatureDto> _editedCharacters = new();
-    private readonly Dictionary<int, TitleFeatureDto> _editedTitles = new();
-    private readonly HashSet<int> _deletedTreeIds = new();
-    private readonly HashSet<int> _deletedHouseIds = new();
-    private readonly HashSet<int> _deletedCharacterIds = new();
-    private readonly HashSet<int> _deletedTitleIds = new();
+    private List<TreeFeatureDto> _liveTrees = new();
+    private List<HouseFeatureDto> _liveHouses = new();
+    private List<CharacterFeatureDto> _liveCharacters = new();
+    private List<TitleFeatureDto> _liveTitles = new();
+    private List<AreaPolygonDto> _liveWaterPolygons = new();
+    private List<AreaPolygonDto> _liveLandPolygons = new();
+    private LiveMapSnapshot? _lastSavedSnapshot;
+    private bool _autoSavePending;
+    private System.Threading.Timer? _autoSaveTimer;
     private AreaPolygonDto? _editingPolygon;
     private List<MapPointDto>? _editingOriginalPoints;
     private int _editingPointIndex = -1;
@@ -829,27 +810,7 @@
     private bool _isDraggingTitleFeature;
     private EraserTarget _eraserTarget = EraserTarget.All;
     private bool _useChaoticLandEdges = true;
-    private int PendingCount => _stagedTrees.Count
-        + _stagedHouses.Count
-        + _stagedCharacters.Count
-        + _stagedTitles.Count
-        + _stagedWaterPolygons.Count
-        + _editedWaterPolygons.Count
-        + _deletedWaterPolygonIds.Count
-        + _stagedLandPolygons.Count
-        + _editedLandPolygons.Count
-        + _deletedLandPolygonIds.Count
-        + _editedTrees.Count
-        + _editedHouses.Count
-        + _editedCharacters.Count
-        + _editedTitles.Count
-        + _stagedRelationships.Count
-        + _updatedRelationships.Count
-        + _deletedRelationships.Count
-        + _deletedTreeIds.Count
-        + _deletedHouseIds.Count
-        + _deletedCharacterIds.Count
-        + _deletedTitleIds.Count;
+    private bool HasUnsavedChanges => _lastSavedSnapshot is not null && DiffHasChanges(ComputeDiff(_lastSavedSnapshot));
     private bool CanUndo => _undoStack.Count > 0;
     private bool CanRedo => _redoStack.Count > 0;
     [Parameter] public int MapId { get; set; }
@@ -1028,6 +989,16 @@
         UserState.Changed += OnUserChanged;
         EnsureAreaLayers();
         await LoadMapAsync();
+        _autoSaveTimer = new System.Threading.Timer(_ =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                if (IsBlockingActionActive)
+                    _autoSavePending = true;
+                else
+                    _ = AutoSaveFiredAsync();
+            });
+        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -1634,6 +1605,7 @@
                 ? "Title area updated. Right-click to confirm."
                 : "Polygon updated. Right-click to confirm.";
             await DrawAsync();
+            TryReturnToIdle();
             return;
         }
 
@@ -1643,6 +1615,7 @@
             _statusMessage = IsEditingTitlePolygon()
                 ? "Title vertex updated. Right-click to confirm."
                 : "Polygon point updated. Right-click to confirm.";
+            TryReturnToIdle();
             return;
         }
 
@@ -1654,12 +1627,14 @@
                 ? "Brush stroke canceled."
                 : $"Brush stroke placed ({_brushStrokeCount} item{(_brushStrokeCount == 1 ? string.Empty : "s")}).";
             EndUndoBatch(_brushStrokeCount > 0);
+            TryReturnToIdle();
             return;
         }
 
         if (_activeTool == MapToolType.Eraser && _isErasing)
         {
             StopEraser();
+            TryReturnToIdle();
             return;
         }
 
@@ -1667,6 +1642,7 @@
         {
             _isDraggingEditPointFeature = false;
             _statusMessage = "Point feature updated. Right-click to confirm.";
+            TryReturnToIdle();
             return;
         }
 
@@ -1674,6 +1650,7 @@
         {
             _isDraggingTitleFeature = false;
             _statusMessage = "Title updated. Right-click to confirm.";
+            TryReturnToIdle();
             return;
         }
 
@@ -1810,11 +1787,11 @@
 
             if (IsLandFeatureType(polygon.FeatureType))
             {
-                _stagedLandPolygons.Add(polygon);
+                _liveLandPolygons.Add(polygon);
             }
             else
             {
-                _stagedWaterPolygons.Add(polygon);
+                _liveWaterPolygons.Add(polygon);
             }
             _activePolygonPoints.Clear();
             _statusMessage = $"Polygon placed on {GetLayerLabel(layer)} (unsaved).";
@@ -2064,7 +2041,7 @@
 
         PushUndoState();
         _activePolygonPoints.Clear();
-        _stagedLandPolygons.Add(new AreaPolygonDto
+        _liveLandPolygons.Add(new AreaPolygonDto
         {
             FeatureType = "Land",
             LayerIndex = layer.LayerIndex,
@@ -2145,7 +2122,7 @@
 
     private async Task SaveEditsAsync()
     {
-        if (PendingCount == 0)
+        if (!HasUnsavedChanges)
         {
             return;
         }
@@ -2163,84 +2140,27 @@
         }
 
         _isSaving = true;
-        var pendingCount = PendingCount;
-        _statusMessage = $"Saving {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}...";
+        _statusMessage = "Saving changes...";
 
-        var request = new MapEditsRequest
-        {
-            UserId = UserState.CurrentUser?.UserId,
-            SessionToken = UserState.CurrentUser?.SessionToken,
-            MapId = MapId,
-            AreaLayers = _areaLayers
-                .OrderBy(layer => layer.LayerIndex)
-                .Select(layer => new AreaLayerDto
-                {
-                    LayerKey = layer.LayerKey,
-                    LayerIndex = layer.LayerIndex,
-                    FeatureType = layer.FeatureType
-                })
-                .ToList(),
-            AddedTrees = new List<TreeFeatureDto>(_stagedTrees),
-            AddedHouses = new List<HouseFeatureDto>(_stagedHouses),
-            AddedCharacters = new List<CharacterFeatureDto>(_stagedCharacters),
-            AddedTitles = new List<TitleFeatureDto>(_stagedTitles),
-            UpdatedTrees = _editedTrees.Values.ToList(),
-            UpdatedHouses = _editedHouses.Values.ToList(),
-            UpdatedCharacters = _editedCharacters.Values.ToList(),
-            UpdatedTitles = _editedTitles.Values.ToList(),
-            AddedRelationships = new List<AddCharacterRelationshipDto>(_stagedRelationships),
-            UpdatedRelationships = _updatedRelationships.Values.ToList(),
-            DeletedRelationshipIds = _deletedRelationships.Keys.ToList(),
-            DeletedTreeIds = _deletedTreeIds.ToList(),
-            DeletedHouseIds = _deletedHouseIds.ToList(),
-            DeletedCharacterIds = _deletedCharacterIds.ToList(),
-            DeletedTitleIds = _deletedTitleIds.ToList(),
-            AddedWaterPolygons = new List<AreaPolygonDto>(_stagedWaterPolygons),
-            DeletedWaterPolygonIds = _deletedWaterPolygonIds.ToList(),
-            UpdatedWaterPolygons = _editedWaterPolygons.Values
-                .Select(ClonePolygon)
-                .ToList(),
-            AddedLandPolygons = new List<AreaPolygonDto>(_stagedLandPolygons),
-            DeletedLandPolygonIds = _deletedLandPolygonIds.ToList(),
-            UpdatedLandPolygons = _editedLandPolygons.Values
-                .Select(ClonePolygon)
-                .ToList()
-        };
+        var request = ComputeDiff(_lastSavedSnapshot!);
 
         using var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
 
         if (response.IsSuccessStatusCode)
         {
             var map = await response.Content.ReadFromJsonAsync<MapDto>();
-            _trees = map?.Trees ?? new List<TreeFeatureDto>();
-            _houses = map?.Houses ?? new List<HouseFeatureDto>();
-            _characters = map?.Characters ?? new List<CharacterFeatureDto>();
-            _titles = map?.Titles ?? new List<TitleFeatureDto>();
-            _waterPolygons.Clear();
-            _landPolygons.Clear();
+            _liveTrees = CloneList(map?.Trees ?? new List<TreeFeatureDto>());
+            _liveHouses = CloneList(map?.Houses ?? new List<HouseFeatureDto>());
+            _liveCharacters = CloneList(map?.Characters ?? new List<CharacterFeatureDto>());
+            _liveTitles = CloneList(map?.Titles ?? new List<TitleFeatureDto>());
+            _liveWaterPolygons.Clear();
+            _liveLandPolygons.Clear();
             LoadAreaPolygons(map);
-            _editedWaterPolygons.Clear();
-            _deletedWaterPolygonIds.Clear();
-            _editedLandPolygons.Clear();
-            _deletedLandPolygonIds.Clear();
-            _editedTrees.Clear();
-            _editedHouses.Clear();
-            _editedCharacters.Clear();
-            _editedTitles.Clear();
-            _deletedTreeIds.Clear();
-            _deletedHouseIds.Clear();
-            _deletedCharacterIds.Clear();
-            _deletedTitleIds.Clear();
             LoadAreaLayers(map);
-            _stagedTrees.Clear();
-            _stagedHouses.Clear();
-            _stagedCharacters.Clear();
-            _stagedTitles.Clear();
-            _stagedRelationships.Clear();
-            _updatedRelationships.Clear();
-            _deletedRelationships.Clear();
+            ClearStaged();
+            _lastSavedSnapshot = CaptureLiveSnapshot();
             CancelRelationshipEdit();
-            _statusMessage = $"Saved {pendingCount} item{(pendingCount == 1 ? string.Empty : "s")}.";
+            _statusMessage = "Changes saved.";
             ClearEditSelection(true);
             await DrawAsync();
         }
@@ -2258,6 +2178,7 @@
         }
 
         _isSaving = false;
+        TryReturnToIdle();
     }
 
     private async Task ReloadAsync()
@@ -2341,16 +2262,17 @@
 
         if (!IsLoggedIn)
         {
-            _trees = new List<TreeFeatureDto>();
-            _houses = new List<HouseFeatureDto>();
-            _characters = new List<CharacterFeatureDto>();
-            _titles = new List<TitleFeatureDto>();
-            _waterPolygons.Clear();
-            _landPolygons.Clear();
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
             ClearUndoHistory();
+            _liveTrees = new List<TreeFeatureDto>();
+            _liveHouses = new List<HouseFeatureDto>();
+            _liveCharacters = new List<CharacterFeatureDto>();
+            _liveTitles = new List<TitleFeatureDto>();
+            _liveWaterPolygons.Clear();
+            _liveLandPolygons.Clear();
+            _lastSavedSnapshot = new LiveMapSnapshot();
             _statusMessage = "Log in, then return to Start to create a map.";
             _isLoading = false;
             return;
@@ -2358,16 +2280,17 @@
 
         if (MapId <= 0)
         {
-            _trees = new List<TreeFeatureDto>();
-            _houses = new List<HouseFeatureDto>();
-            _characters = new List<CharacterFeatureDto>();
-            _titles = new List<TitleFeatureDto>();
-            _waterPolygons.Clear();
-            _landPolygons.Clear();
             _hasMap = false;
             ResetAreaLayers();
             ClearStaged();
             ClearUndoHistory();
+            _liveTrees = new List<TreeFeatureDto>();
+            _liveHouses = new List<HouseFeatureDto>();
+            _liveCharacters = new List<CharacterFeatureDto>();
+            _liveTitles = new List<TitleFeatureDto>();
+            _liveWaterPolygons.Clear();
+            _liveLandPolygons.Clear();
+            _lastSavedSnapshot = new LiveMapSnapshot();
             _statusMessage = "Select a map from Start.";
             _isLoading = false;
             return;
@@ -2393,22 +2316,18 @@
         }
 
         var map = await response.Content.ReadFromJsonAsync<MapDto>();
-        _trees = map?.Trees ?? new List<TreeFeatureDto>();
-        _houses = map?.Houses ?? new List<HouseFeatureDto>();
-        _characters = map?.Characters ?? new List<CharacterFeatureDto>();
-        _titles = map?.Titles ?? new List<TitleFeatureDto>();
-        _waterPolygons.Clear();
-        _landPolygons.Clear();
+        _liveTrees = CloneList(map?.Trees ?? new List<TreeFeatureDto>());
+        _liveHouses = CloneList(map?.Houses ?? new List<HouseFeatureDto>());
+        _liveCharacters = CloneList(map?.Characters ?? new List<CharacterFeatureDto>());
+        _liveTitles = CloneList(map?.Titles ?? new List<TitleFeatureDto>());
+        _liveWaterPolygons.Clear();
+        _liveLandPolygons.Clear();
         LoadAreaPolygons(map);
-        _editedWaterPolygons.Clear();
-        _editedLandPolygons.Clear();
-        _editedTrees.Clear();
-        _editedHouses.Clear();
-        _editedCharacters.Clear();
         _hasMap = map?.Id > 0;
         LoadAreaLayers(map);
         ClearStaged();
         ClearUndoHistory();
+        _lastSavedSnapshot = CaptureLiveSnapshot();
 
         _statusMessage = _hasMap
             ? "Map loaded from the database."
@@ -2576,11 +2495,11 @@
 
             if (IsLandFeatureType(polygon.FeatureType))
             {
-                _landPolygons.Add(polygon);
+                _liveLandPolygons.Add(polygon);
             }
             else if (IsWaterFeatureType(polygon.FeatureType))
             {
-                _waterPolygons.Add(polygon);
+                _liveWaterPolygons.Add(polygon);
             }
         }
     }
@@ -2659,43 +2578,18 @@
             ClearEditSelection(true);
         }
 
-        _stagedWaterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
-        _stagedLandPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
-
-        foreach (var polygonId in _editedWaterPolygons
-                     .Where(entry => entry.Value.LayerIndex == layerIndex)
-                     .Select(entry => entry.Key)
-                     .ToList())
+        foreach (var polygon in _liveWaterPolygons.Where(p => p.LayerIndex == layerIndex && p.Id > 0).ToList())
         {
-            _editedWaterPolygons.Remove(polygonId);
+            RemoveStagedRelationshipChangesForTarget(polygon.Id);
         }
 
-        foreach (var polygonId in _editedLandPolygons
-                     .Where(entry => entry.Value.LayerIndex == layerIndex)
-                     .Select(entry => entry.Key)
-                     .ToList())
+        foreach (var polygon in _liveLandPolygons.Where(p => p.LayerIndex == layerIndex && p.Id > 0).ToList())
         {
-            _editedLandPolygons.Remove(polygonId);
+            RemoveStagedRelationshipChangesForTarget(polygon.Id);
         }
 
-        foreach (var polygonId in _waterPolygons
-                     .Where(polygon => polygon.LayerIndex == layerIndex && polygon.Id > 0)
-                     .Select(polygon => polygon.Id))
-        {
-            _deletedWaterPolygonIds.Add(polygonId);
-            RemoveStagedRelationshipChangesForTarget(polygonId);
-        }
-
-        foreach (var polygonId in _landPolygons
-                     .Where(polygon => polygon.LayerIndex == layerIndex && polygon.Id > 0)
-                     .Select(polygon => polygon.Id))
-        {
-            _deletedLandPolygonIds.Add(polygonId);
-            RemoveStagedRelationshipChangesForTarget(polygonId);
-        }
-
-        _waterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
-        _landPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
+        _liveWaterPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
+        _liveLandPolygons.RemoveAll(polygon => polygon.LayerIndex == layerIndex);
         _areaLayers.RemoveAll(existing => existing.LayerIndex == layerIndex);
 
         if (_activeAreaLayer == layer)
@@ -2921,7 +2815,7 @@
             }
 
             BuildRelationshipTree(map);
-            if (PendingCount > 0)
+            if (HasUnsavedChanges)
             {
                 _relationshipTreeStatusMessage = "Showing saved state only. Unsaved changes are not included.";
             }
@@ -2945,6 +2839,7 @@
         _relationshipTreeMergedEdges.Clear();
         _relationshipTreeNodeLookup.Clear();
         ResetRelationshipTreeViewport();
+        TryReturnToIdle();
     }
 
     private void BuildRelationshipTree(MapDto map)
@@ -3829,14 +3724,18 @@
         });
     }
 
-    private void GoHome()
+    private async Task GoHome()
     {
+        if (HasUnsavedChanges)
+            await SaveEditsAsync();
         Navigation.NavigateTo("/");
     }
 
     public void Dispose()
     {
         UserState.Changed -= OnUserChanged;
+        _autoSaveTimer?.Dispose();
+        _autoSaveTimer = null;
         if (_undoShortcutRef is not null)
         {
             _ = JS.InvokeVoidAsync("inkAndRealmDemo.unregisterUndoShortcut", CanvasId);
@@ -3847,27 +3746,9 @@
 
     private void ClearStaged()
     {
-        _stagedTrees.Clear();
-        _stagedHouses.Clear();
-        _stagedCharacters.Clear();
-        _stagedTitles.Clear();
         _stagedRelationships.Clear();
         _updatedRelationships.Clear();
         _deletedRelationships.Clear();
-        _stagedWaterPolygons.Clear();
-        _stagedLandPolygons.Clear();
-        _editedWaterPolygons.Clear();
-        _deletedWaterPolygonIds.Clear();
-        _editedLandPolygons.Clear();
-        _deletedLandPolygonIds.Clear();
-        _editedTrees.Clear();
-        _editedHouses.Clear();
-        _editedCharacters.Clear();
-        _editedTitles.Clear();
-        _deletedTreeIds.Clear();
-        _deletedHouseIds.Clear();
-        _deletedCharacterIds.Clear();
-        _deletedTitleIds.Clear();
         _activePolygonPoints.Clear();
         ClearEditSelection(false);
         _hasLastPlacement = false;
@@ -3889,6 +3770,214 @@
         _redoStack.Clear();
         _undoBatchKind = UndoBatchKind.None;
         _undoBatchPushed = false;
+    }
+
+    private LiveMapSnapshot CaptureLiveSnapshot() => new LiveMapSnapshot
+    {
+        Trees = CloneList(_liveTrees),
+        Houses = CloneList(_liveHouses),
+        Characters = CloneList(_liveCharacters),
+        Titles = CloneList(_liveTitles),
+        WaterPolygons = CloneList(_liveWaterPolygons),
+        LandPolygons = CloneList(_liveLandPolygons)
+    };
+
+    private MapEditsRequest ComputeDiff(LiveMapSnapshot saved)
+    {
+        // Trees
+        var savedTreeMap = saved.Trees.Where(t => t.Id > 0).ToDictionary(t => t.Id);
+        var liveTreeIds = _liveTrees.Where(t => t.Id > 0).Select(t => t.Id).ToHashSet();
+        var addedTrees = _liveTrees.Where(t => t.Id == 0).ToList();
+        var updatedTrees = _liveTrees
+            .Where(t => t.Id > 0 && savedTreeMap.TryGetValue(t.Id, out var s) && !AreEqualByJson(t, s))
+            .ToList();
+        var deletedTreeIds = saved.Trees
+            .Where(t => t.Id > 0 && !liveTreeIds.Contains(t.Id))
+            .Select(t => t.Id).ToList();
+
+        // Houses
+        var savedHouseMap = saved.Houses.Where(h => h.Id > 0).ToDictionary(h => h.Id);
+        var liveHouseIds = _liveHouses.Where(h => h.Id > 0).Select(h => h.Id).ToHashSet();
+        var addedHouses = _liveHouses.Where(h => h.Id == 0).ToList();
+        var updatedHouses = _liveHouses
+            .Where(h => h.Id > 0 && savedHouseMap.TryGetValue(h.Id, out var s) && !AreEqualByJson(h, s))
+            .ToList();
+        var deletedHouseIds = saved.Houses
+            .Where(h => h.Id > 0 && !liveHouseIds.Contains(h.Id))
+            .Select(h => h.Id).ToList();
+
+        // Titles
+        var savedTitleMap = saved.Titles.Where(t => t.Id > 0).ToDictionary(t => t.Id);
+        var liveTitleIds = _liveTitles.Where(t => t.Id > 0).Select(t => t.Id).ToHashSet();
+        var addedTitles = _liveTitles.Where(t => t.Id == 0).ToList();
+        var updatedTitles = _liveTitles
+            .Where(t => t.Id > 0 && savedTitleMap.TryGetValue(t.Id, out var s) && !AreEqualByJson(t, s))
+            .ToList();
+        var deletedTitleIds = saved.Titles
+            .Where(t => t.Id > 0 && !liveTitleIds.Contains(t.Id))
+            .Select(t => t.Id).ToList();
+
+        // Water polygons
+        var savedWaterMap = saved.WaterPolygons.Where(p => p.Id > 0).ToDictionary(p => p.Id);
+        var liveWaterIds = _liveWaterPolygons.Where(p => p.Id > 0).Select(p => p.Id).ToHashSet();
+        var addedWater = _liveWaterPolygons.Where(p => p.Id == 0).ToList();
+        var updatedWater = _liveWaterPolygons
+            .Where(p => p.Id > 0 && savedWaterMap.TryGetValue(p.Id, out var s) && !AreEqualByJson(p, s))
+            .ToList();
+        var deletedWaterIds = saved.WaterPolygons
+            .Where(p => p.Id > 0 && !liveWaterIds.Contains(p.Id))
+            .Select(p => p.Id).ToList();
+
+        // Land polygons
+        var savedLandMap = saved.LandPolygons.Where(p => p.Id > 0).ToDictionary(p => p.Id);
+        var liveLandIds = _liveLandPolygons.Where(p => p.Id > 0).Select(p => p.Id).ToHashSet();
+        var addedLand = _liveLandPolygons.Where(p => p.Id == 0).ToList();
+        var updatedLand = _liveLandPolygons
+            .Where(p => p.Id > 0 && savedLandMap.TryGetValue(p.Id, out var s) && !AreEqualByJson(p, s))
+            .ToList();
+        var deletedLandIds = saved.LandPolygons
+            .Where(p => p.Id > 0 && !liveLandIds.Contains(p.Id))
+            .Select(p => p.Id).ToList();
+
+        // Characters + relationships
+        var savedCharMap = saved.Characters.Where(c => c.Id > 0).ToDictionary(c => c.Id);
+        var liveCharIds = _liveCharacters.Where(c => c.Id > 0).Select(c => c.Id).ToHashSet();
+        var addedCharacters = _liveCharacters.Where(c => c.Id == 0).ToList();
+        var updatedCharacters = new List<CharacterFeatureDto>();
+        var addedRelationships = new List<AddCharacterRelationshipDto>();
+        var updatedRelationships = new List<UpdateCharacterRelationshipDto>();
+        var deletedRelationshipIds = new List<int>();
+
+        foreach (var liveChar in _liveCharacters.Where(c => c.Id > 0))
+        {
+            if (!savedCharMap.TryGetValue(liveChar.Id, out var savedChar))
+                continue;
+
+            // Compare character fields only (relationships handled separately below)
+            var liveJson = JsonSerializer.Serialize(new
+            {
+                liveChar.Id, liveChar.X, liveChar.Y, liveChar.CharacterType,
+                liveChar.Name, liveChar.Background, liveChar.Occupation,
+                liveChar.Personality, liveChar.LayerIndex
+            });
+            var savedJson = JsonSerializer.Serialize(new
+            {
+                savedChar.Id, savedChar.X, savedChar.Y, savedChar.CharacterType,
+                savedChar.Name, savedChar.Background, savedChar.Occupation,
+                savedChar.Personality, savedChar.LayerIndex
+            });
+            if (liveJson != savedJson)
+                updatedCharacters.Add(liveChar);
+
+            // Relationship diff
+            var savedRelMap = savedChar.Relationships.Where(r => r.Id > 0).ToDictionary(r => r.Id);
+            var liveRelIds = liveChar.Relationships.Where(r => r.Id > 0).Select(r => r.Id).ToHashSet();
+
+            foreach (var liveRel in liveChar.Relationships.Where(r => r.Id == 0))
+            {
+                addedRelationships.Add(new AddCharacterRelationshipDto
+                {
+                    SourceCharacterId = liveChar.Id,
+                    TargetFeatureId = liveRel.TargetFeatureId,
+                    RelationshipTypes = new List<string>(liveRel.RelationshipTypes),
+                    Description = liveRel.Description
+                });
+            }
+
+            foreach (var liveRel in liveChar.Relationships.Where(r => r.Id > 0))
+            {
+                if (savedRelMap.TryGetValue(liveRel.Id, out var savedRel) && !AreEqualByJson(liveRel, savedRel))
+                {
+                    updatedRelationships.Add(new UpdateCharacterRelationshipDto
+                    {
+                        Id = liveRel.Id,
+                        SourceCharacterId = liveChar.Id,
+                        TargetFeatureId = liveRel.TargetFeatureId,
+                        RelationshipTypes = new List<string>(liveRel.RelationshipTypes),
+                        Description = liveRel.Description
+                    });
+                }
+            }
+
+            foreach (var savedRel in savedChar.Relationships.Where(r => r.Id > 0))
+            {
+                if (!liveRelIds.Contains(savedRel.Id))
+                    deletedRelationshipIds.Add(savedRel.Id);
+            }
+        }
+
+        var deletedCharacterIds = saved.Characters
+            .Where(c => c.Id > 0 && !liveCharIds.Contains(c.Id))
+            .Select(c => c.Id).ToList();
+
+        return new MapEditsRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = MapId,
+            AreaLayers = _areaLayers.OrderBy(l => l.LayerIndex).Select(l => new AreaLayerDto
+            {
+                LayerKey = l.LayerKey,
+                LayerIndex = l.LayerIndex,
+                FeatureType = l.FeatureType
+            }).ToList(),
+            AddedTrees = addedTrees,
+            UpdatedTrees = updatedTrees,
+            DeletedTreeIds = deletedTreeIds,
+            AddedHouses = addedHouses,
+            UpdatedHouses = updatedHouses,
+            DeletedHouseIds = deletedHouseIds,
+            AddedCharacters = addedCharacters,
+            UpdatedCharacters = updatedCharacters,
+            DeletedCharacterIds = deletedCharacterIds,
+            AddedTitles = addedTitles,
+            UpdatedTitles = updatedTitles,
+            DeletedTitleIds = deletedTitleIds,
+            AddedRelationships = addedRelationships,
+            UpdatedRelationships = updatedRelationships,
+            DeletedRelationshipIds = deletedRelationshipIds,
+            AddedWaterPolygons = addedWater,
+            UpdatedWaterPolygons = updatedWater,
+            DeletedWaterPolygonIds = deletedWaterIds,
+            AddedLandPolygons = addedLand,
+            UpdatedLandPolygons = updatedLand,
+            DeletedLandPolygonIds = deletedLandIds
+        };
+    }
+
+    private static bool DiffHasChanges(MapEditsRequest diff) =>
+        diff.AddedTrees.Count > 0 || diff.UpdatedTrees.Count > 0 || diff.DeletedTreeIds.Count > 0
+        || diff.AddedHouses.Count > 0 || diff.UpdatedHouses.Count > 0 || diff.DeletedHouseIds.Count > 0
+        || diff.AddedCharacters.Count > 0 || diff.UpdatedCharacters.Count > 0 || diff.DeletedCharacterIds.Count > 0
+        || diff.AddedTitles.Count > 0 || diff.UpdatedTitles.Count > 0 || diff.DeletedTitleIds.Count > 0
+        || diff.AddedRelationships.Count > 0 || diff.UpdatedRelationships.Count > 0 || diff.DeletedRelationshipIds.Count > 0
+        || diff.AddedWaterPolygons.Count > 0 || diff.UpdatedWaterPolygons.Count > 0 || diff.DeletedWaterPolygonIds.Count > 0
+        || diff.AddedLandPolygons.Count > 0 || diff.UpdatedLandPolygons.Count > 0 || diff.DeletedLandPolygonIds.Count > 0;
+
+    private static bool AreEqualByJson<T>(T a, T b) =>
+        JsonSerializer.Serialize(a) == JsonSerializer.Serialize(b);
+
+    private bool IsBlockingActionActive =>
+        _isBrushing || _isErasing || _isDraggingEditPolygon || _isDraggingEditPoint ||
+        _isDraggingEditPointFeature || _isDraggingTitleFeature || _isCharacterEditorOpen ||
+        _isRelationshipTreeOpen || _isSaving;
+
+    private void TryReturnToIdle()
+    {
+        if (IsBlockingActionActive) return;
+        if (_autoSavePending)
+        {
+            _autoSavePending = false;
+            _ = AutoSaveFiredAsync();
+        }
+    }
+
+    private async Task AutoSaveFiredAsync()
+    {
+        if (!HasUnsavedChanges || !IsLoggedIn || !_hasMap)
+            return;
+        await SaveEditsAsync();
+        StateHasChanged();
     }
 
     private void BeginUndoBatch(UndoBatchKind kind)
@@ -3942,26 +4031,11 @@
     {
         return new UndoState
         {
-            Trees = CloneList(_trees),
-            Houses = CloneList(_houses),
-            Titles = CloneList(_titles),
-            StagedTrees = CloneList(_stagedTrees),
-            StagedHouses = CloneList(_stagedHouses),
-            StagedTitles = CloneList(_stagedTitles),
-            WaterPolygons = CloneList(_waterPolygons),
-            StagedWaterPolygons = CloneList(_stagedWaterPolygons),
-            EditedWaterPolygons = CloneDictionary(_editedWaterPolygons),
-            DeletedWaterPolygonIds = new HashSet<int>(_deletedWaterPolygonIds),
-            LandPolygons = CloneList(_landPolygons),
-            StagedLandPolygons = CloneList(_stagedLandPolygons),
-            EditedLandPolygons = CloneDictionary(_editedLandPolygons),
-            DeletedLandPolygonIds = new HashSet<int>(_deletedLandPolygonIds),
-            EditedTrees = CloneDictionary(_editedTrees),
-            EditedHouses = CloneDictionary(_editedHouses),
-            EditedTitles = CloneDictionary(_editedTitles),
-            DeletedTreeIds = new HashSet<int>(_deletedTreeIds),
-            DeletedHouseIds = new HashSet<int>(_deletedHouseIds),
-            DeletedTitleIds = new HashSet<int>(_deletedTitleIds),
+            Trees = CloneList(_liveTrees),
+            Houses = CloneList(_liveHouses),
+            Titles = CloneList(_liveTitles),
+            WaterPolygons = CloneList(_liveWaterPolygons),
+            LandPolygons = CloneList(_liveLandPolygons),
             AreaLayers = CloneList(_areaLayers),
             ActiveAreaLayerKey = _activeAreaLayer?.LayerKey,
             ActiveAreaLayerIndex = _activeAreaLayer?.LayerIndex,
@@ -3973,26 +4047,11 @@
 
     private void ApplyUndoState(UndoState state)
     {
-        ReplaceListContents(_trees, state.Trees);
-        ReplaceListContents(_houses, state.Houses);
-        ReplaceListContents(_titles, state.Titles);
-        ReplaceListContents(_stagedTrees, state.StagedTrees);
-        ReplaceListContents(_stagedHouses, state.StagedHouses);
-        ReplaceListContents(_stagedTitles, state.StagedTitles);
-        ReplaceListContents(_waterPolygons, state.WaterPolygons);
-        ReplaceListContents(_stagedWaterPolygons, state.StagedWaterPolygons);
-        ReplaceDictionaryContents(_editedWaterPolygons, state.EditedWaterPolygons);
-        ReplaceSetContents(_deletedWaterPolygonIds, state.DeletedWaterPolygonIds);
-        ReplaceListContents(_landPolygons, state.LandPolygons);
-        ReplaceListContents(_stagedLandPolygons, state.StagedLandPolygons);
-        ReplaceDictionaryContents(_editedLandPolygons, state.EditedLandPolygons);
-        ReplaceSetContents(_deletedLandPolygonIds, state.DeletedLandPolygonIds);
-        ReplaceDictionaryContents(_editedTrees, state.EditedTrees);
-        ReplaceDictionaryContents(_editedHouses, state.EditedHouses);
-        ReplaceDictionaryContents(_editedTitles, state.EditedTitles);
-        ReplaceSetContents(_deletedTreeIds, state.DeletedTreeIds);
-        ReplaceSetContents(_deletedHouseIds, state.DeletedHouseIds);
-        ReplaceSetContents(_deletedTitleIds, state.DeletedTitleIds);
+        ReplaceListContents(_liveTrees, state.Trees);
+        ReplaceListContents(_liveHouses, state.Houses);
+        ReplaceListContents(_liveTitles, state.Titles);
+        ReplaceListContents(_liveWaterPolygons, state.WaterPolygons);
+        ReplaceListContents(_liveLandPolygons, state.LandPolygons);
         ReplaceListContents(_areaLayers, state.AreaLayers);
 
         _activeAreaLayer = null;
@@ -4287,6 +4346,7 @@
         {
             ResetRelationshipForm();
         }
+        TryReturnToIdle();
     }
 
     private void ResetRelationshipForm()
@@ -4303,11 +4363,7 @@
 
     private void TrackEditedCharacter(CharacterFeatureDto character, bool redraw)
     {
-        if (character.Id > 0 && !_stagedCharacters.Contains(character))
-        {
-            _editedCharacters[character.Id] = character;
-        }
-
+        // in-place mutation on _liveCharacters item; diff detects at save time
         if (redraw)
         {
             _ = InvokeAsync(DrawAsync);
@@ -4573,7 +4629,7 @@
         _relationshipReciprocalTypesInput = string.Empty;
         _relationshipReciprocalDescription = string.Empty;
         _relationshipCreateReciprocal = false;
-        _relationshipStatusMessage = "Relationship staged. Save All to persist.";
+        _relationshipStatusMessage = "Relationship staged.";
         _statusMessage = "Relationship staged (unsaved).";
     }
 
@@ -4695,7 +4751,7 @@
         AreaPolygonDto? selected = null;
         var selectedLayer = int.MinValue;
         var selectedOrder = -1;
-        var candidates = _waterPolygons.Concat(_landPolygons).ToList();
+        var candidates = _liveWaterPolygons.Concat(_liveLandPolygons).ToList();
 
         for (var i = 0; i < candidates.Count; i += 1)
         {
@@ -4731,26 +4787,45 @@
         if (existing is null)
         {
             _stagedRelationships.Add(request);
-            return;
         }
-
-        existing.RelationshipTypes = NormalizeRelationshipTypes(existing.RelationshipTypes.Concat(request.RelationshipTypes));
-        if (!string.IsNullOrWhiteSpace(request.Description))
+        else
         {
-            existing.Description = request.Description;
-        }
-
-        if (request.CreateReciprocal)
-        {
-            existing.CreateReciprocal = true;
-            if (request.ReciprocalRelationshipTypes is not null && request.ReciprocalRelationshipTypes.Count > 0)
+            existing.RelationshipTypes = NormalizeRelationshipTypes(existing.RelationshipTypes.Concat(request.RelationshipTypes));
+            if (!string.IsNullOrWhiteSpace(request.Description))
             {
-                var current = existing.ReciprocalRelationshipTypes ?? new List<string>();
-                existing.ReciprocalRelationshipTypes = NormalizeRelationshipTypes(current.Concat(request.ReciprocalRelationshipTypes));
+                existing.Description = request.Description;
             }
-            if (!string.IsNullOrWhiteSpace(request.ReciprocalDescription))
+
+            if (request.CreateReciprocal)
             {
-                existing.ReciprocalDescription = request.ReciprocalDescription;
+                existing.CreateReciprocal = true;
+                if (request.ReciprocalRelationshipTypes is not null && request.ReciprocalRelationshipTypes.Count > 0)
+                {
+                    var current = existing.ReciprocalRelationshipTypes ?? new List<string>();
+                    existing.ReciprocalRelationshipTypes = NormalizeRelationshipTypes(current.Concat(request.ReciprocalRelationshipTypes));
+                }
+                if (!string.IsNullOrWhiteSpace(request.ReciprocalDescription))
+                {
+                    existing.ReciprocalDescription = request.ReciprocalDescription;
+                }
+            }
+        }
+
+        // Also add to the live character's Relationships so ComputeDiff can detect it
+        var liveSource = _liveCharacters.FirstOrDefault(c => c.Id == request.SourceCharacterId);
+        if (liveSource is not null)
+        {
+            var alreadyPresent = liveSource.Relationships.Any(r =>
+                r.Id == 0 && r.TargetFeatureId == request.TargetFeatureId);
+            if (!alreadyPresent)
+            {
+                liveSource.Relationships.Add(new CharacterRelationshipDto
+                {
+                    Id = 0,
+                    TargetFeatureId = request.TargetFeatureId,
+                    RelationshipTypes = new List<string>(request.RelationshipTypes),
+                    Description = request.Description
+                });
             }
         }
     }
@@ -4764,12 +4839,7 @@
 
         StageRelationshipDeletion(relationship.Id, _editingCharacter.Id, relationship.TargetFeatureId);
         _editingCharacter.Relationships.RemoveAll(item => item.Id == relationship.Id);
-        if (_characters.FirstOrDefault(character => character.Id == _editingCharacter.Id) is { } sourceCharacter
-            && !ReferenceEquals(sourceCharacter, _editingCharacter))
-        {
-            sourceCharacter.Relationships.RemoveAll(item => item.Id == relationship.Id);
-        }
-        _relationshipStatusMessage = "Relationship deletion staged. Save All to persist.";
+        _relationshipStatusMessage = "Relationship deletion staged.";
         _statusMessage = "Relationship deletion staged (unsaved).";
     }
 
@@ -4787,6 +4857,10 @@
         {
             return;
         }
+
+        // Also remove the Id=0 entry from the live character's Relationships
+        var liveSource = _liveCharacters.FirstOrDefault(c => c.Id == relationship.SourceCharacterId);
+        liveSource?.Relationships.RemoveAll(r => r.Id == 0 && r.TargetFeatureId == relationship.TargetFeatureId);
 
         _relationshipStatusMessage = "Pending relationship removed.";
         _statusMessage = "Pending relationship removed.";
@@ -4808,7 +4882,7 @@
         }
 
         StageRelationshipDeletion(relationship.Id, relationship.SourceCharacterId, relationship.TargetFeatureId);
-        _relationshipStatusMessage = "Relationship deletion staged. Save All to persist.";
+        _relationshipStatusMessage = "Relationship deletion staged.";
         _statusMessage = "Relationship deletion staged (unsaved).";
     }
 
@@ -4898,7 +4972,7 @@
         _deletedRelationships.Remove(relationship.Id);
 
         CancelRelationshipEdit();
-        _relationshipStatusMessage = "Relationship update staged. Save All to persist.";
+        _relationshipStatusMessage = "Relationship update staged.";
         _statusMessage = "Relationship update staged (unsaved).";
     }
 
@@ -4998,7 +5072,7 @@
 
     private string? TryGetTargetLabelById(int targetId)
     {
-        var character = _characters.FirstOrDefault(item => item.Id == targetId);
+        var character = _liveCharacters.FirstOrDefault(item => item.Id == targetId);
         if (character is not null)
         {
             return string.IsNullOrWhiteSpace(character.Name)
@@ -5006,22 +5080,22 @@
                 : $"{character.Name} (Character #{character.Id})";
         }
 
-        if (_trees.Any(item => item.Id == targetId))
+        if (_liveTrees.Any(item => item.Id == targetId))
         {
             return $"Tree #{targetId}";
         }
 
-        if (_houses.Any(item => item.Id == targetId))
+        if (_liveHouses.Any(item => item.Id == targetId))
         {
             return $"House #{targetId}";
         }
 
-        if (_landPolygons.Any(item => item.Id == targetId))
+        if (_liveLandPolygons.Any(item => item.Id == targetId))
         {
             return $"Land #{targetId}";
         }
 
-        if (_waterPolygons.Any(item => item.Id == targetId))
+        if (_liveWaterPolygons.Any(item => item.Id == targetId))
         {
             return $"Water #{targetId}";
         }
@@ -5072,67 +5146,11 @@
         return list.Count == 0 ? string.Empty : string.Join(", ", list);
     }
 
-    private void TrackEditedPolygon(AreaPolygonDto polygon)
-    {
-        if (polygon.Id <= 0)
-        {
-            return;
-        }
+    private static void TrackEditedPolygon(AreaPolygonDto polygon) { /* in-place mutation; diff detects at save time */ }
 
-        if (IsLandFeatureType(polygon.FeatureType))
-        {
-            _editedLandPolygons[polygon.Id] = ClonePolygon(polygon);
-        }
-        else
-        {
-            _editedWaterPolygons[polygon.Id] = ClonePolygon(polygon);
-        }
-    }
+    private static void TrackEditedPointFeature(EditingPointFeature feature) { /* in-place mutation; diff detects at save time */ }
 
-    private void TrackEditedPointFeature(EditingPointFeature feature)
-    {
-        if (feature.Tree is not null)
-        {
-            if (feature.IsStaged || feature.Tree.Id <= 0)
-            {
-                return;
-            }
-
-            _editedTrees[feature.Tree.Id] = feature.Tree;
-            return;
-        }
-
-        if (feature.House is not null)
-        {
-            if (feature.IsStaged || feature.House.Id <= 0)
-            {
-                return;
-            }
-
-            _editedHouses[feature.House.Id] = feature.House;
-            return;
-        }
-
-        if (feature.Character is not null)
-        {
-            if (feature.IsStaged || feature.Character.Id <= 0)
-            {
-                return;
-            }
-
-            _editedCharacters[feature.Character.Id] = feature.Character;
-        }
-    }
-
-    private void TrackEditedTitleFeature(EditingTitleFeature feature)
-    {
-        if (feature.IsStaged || feature.Title.Id <= 0)
-        {
-            return;
-        }
-
-        _editedTitles[feature.Title.Id] = feature.Title;
-    }
+    private static void TrackEditedTitleFeature(EditingTitleFeature feature) { /* in-place mutation; diff detects at save time */ }
 
     private static AreaPolygonDto ClonePolygon(AreaPolygonDto polygon)
     {
@@ -5189,9 +5207,7 @@
 
     private List<AreaPolygonDto> GetPolygonCandidates(string? featureTypeFilter)
     {
-        IEnumerable<AreaPolygonDto> candidates = _waterPolygons.Concat(_stagedWaterPolygons)
-            .Concat(_landPolygons)
-            .Concat(_stagedLandPolygons);
+        IEnumerable<AreaPolygonDto> candidates = _liveWaterPolygons.Concat(_liveLandPolygons);
 
         if (!string.IsNullOrWhiteSpace(featureTypeFilter))
         {
@@ -5289,7 +5305,7 @@
             clone.Id = 0;
             clone.X = newX;
             clone.Y = newY;
-            _stagedTrees.Add(clone);
+            _liveTrees.Add(clone);
             return true;
         }
 
@@ -5299,7 +5315,7 @@
             clone.Id = 0;
             clone.X = newX;
             clone.Y = newY;
-            _stagedHouses.Add(clone);
+            _liveHouses.Add(clone);
             return true;
         }
 
@@ -5309,7 +5325,7 @@
             clone.Id = 0;
             clone.X = newX;
             clone.Y = newY;
-            _stagedCharacters.Add(clone);
+            _liveCharacters.Add(clone);
             return true;
         }
 
@@ -5341,7 +5357,7 @@
             clone.Y = newY;
         }
 
-        _stagedTitles.Add(clone);
+        _liveTitles.Add(clone);
         return true;
     }
 
@@ -5360,11 +5376,11 @@
 
         if (IsLandFeatureType(clone.FeatureType))
         {
-            _stagedLandPolygons.Add(clone);
+            _liveLandPolygons.Add(clone);
         }
         else
         {
-            _stagedWaterPolygons.Add(clone);
+            _liveWaterPolygons.Add(clone);
         }
     }
 
@@ -5507,25 +5523,11 @@
 
         if (IsLandFeatureType(polygon.FeatureType))
         {
-            if (polygon.Id > 0)
-            {
-                _deletedLandPolygonIds.Add(polygon.Id);
-                _editedLandPolygons.Remove(polygon.Id);
-            }
-
-            _landPolygons.Remove(polygon);
-            _stagedLandPolygons.Remove(polygon);
+            _liveLandPolygons.Remove(polygon);
         }
         else
         {
-            if (polygon.Id > 0)
-            {
-                _deletedWaterPolygonIds.Add(polygon.Id);
-                _editedWaterPolygons.Remove(polygon.Id);
-            }
-
-            _waterPolygons.Remove(polygon);
-            _stagedWaterPolygons.Remove(polygon);
+            _liveWaterPolygons.Remove(polygon);
         }
 
         RemoveStagedRelationshipChangesForTarget(polygon.Id);
@@ -5553,73 +5555,36 @@
 
         if (feature.Tree is not null)
         {
-            if (feature.IsStaged)
+            _liveTrees.Remove(feature.Tree);
+            if (feature.Tree.Id > 0)
             {
-                _stagedTrees.Remove(feature.Tree);
-            }
-            else
-            {
-                if (feature.Tree.Id > 0)
-                {
-                    _deletedTreeIds.Add(feature.Tree.Id);
-                }
-                _editedTrees.Remove(feature.Tree.Id);
-                _trees.Remove(feature.Tree);
                 RemoveTitlesForTargetFeature(feature.Tree.Id);
             }
-
             RemoveStagedRelationshipChangesForTarget(feature.Tree.Id);
-
             status = "Tree erased (unsaved).";
             return true;
         }
 
         if (feature.House is not null)
         {
-            if (feature.IsStaged)
+            _liveHouses.Remove(feature.House);
+            if (feature.House.Id > 0)
             {
-                _stagedHouses.Remove(feature.House);
-            }
-            else
-            {
-                if (feature.House.Id > 0)
-                {
-                    _deletedHouseIds.Add(feature.House.Id);
-                }
-                _editedHouses.Remove(feature.House.Id);
-                _houses.Remove(feature.House);
                 RemoveTitlesForTargetFeature(feature.House.Id);
             }
-
             RemoveStagedRelationshipChangesForTarget(feature.House.Id);
-
             status = "House erased (unsaved).";
             return true;
         }
 
         if (feature.Character is not null)
         {
-            if (feature.IsStaged)
-            {
-                _stagedCharacters.Remove(feature.Character);
-            }
-            else
-            {
-                if (feature.Character.Id > 0)
-                {
-                    _deletedCharacterIds.Add(feature.Character.Id);
-                }
-                _editedCharacters.Remove(feature.Character.Id);
-                _characters.Remove(feature.Character);
-            }
-
+            _liveCharacters.Remove(feature.Character);
             RemoveStagedRelationshipChangesForTarget(feature.Character.Id);
-
             if (_editingCharacter == feature.Character)
             {
                 CloseCharacterEditor();
             }
-
             status = "Character erased (unsaved).";
             return true;
         }
@@ -5641,20 +5606,7 @@
             ClearEditSelection(true);
         }
 
-        if (title.IsStaged)
-        {
-            _stagedTitles.Remove(title.Title);
-        }
-        else
-        {
-            if (title.Title.Id > 0)
-            {
-                _deletedTitleIds.Add(title.Title.Id);
-            }
-            _editedTitles.Remove(title.Title.Id);
-            _titles.Remove(title.Title);
-        }
-
+        _liveTitles.Remove(title.Title);
         status = "Title erased (unsaved).";
         return true;
     }
@@ -5666,25 +5618,12 @@
             return;
         }
 
-        var stagedMatches = _stagedTitles
-            .Where(title => title.TargetFeatureId == featureId)
-            .ToList();
-        foreach (var title in stagedMatches)
-        {
-            _stagedTitles.Remove(title);
-        }
-
-        var matches = _titles
+        var matches = _liveTitles
             .Where(title => title.TargetFeatureId == featureId)
             .ToList();
         foreach (var title in matches)
         {
-            _titles.Remove(title);
-            if (title.Id > 0)
-            {
-                _deletedTitleIds.Add(title.Id);
-            }
-            _editedTitles.Remove(title.Id);
+            _liveTitles.Remove(title);
         }
     }
 
@@ -5881,40 +5820,25 @@
 
         if (considerTrees)
         {
-            foreach (var tree in _trees)
+            foreach (var tree in _liveTrees)
             {
-                ConsiderTree(tree, false);
-            }
-
-            foreach (var tree in _stagedTrees)
-            {
-                ConsiderTree(tree, true);
+                ConsiderTree(tree, tree.Id == 0);
             }
         }
 
         if (considerHouses)
         {
-            foreach (var house in _houses)
+            foreach (var house in _liveHouses)
             {
-                ConsiderHouse(house, false);
-            }
-
-            foreach (var house in _stagedHouses)
-            {
-                ConsiderHouse(house, true);
+                ConsiderHouse(house, house.Id == 0);
             }
         }
 
         if (considerCharacters)
         {
-            foreach (var character in _characters)
+            foreach (var character in _liveCharacters)
             {
-                ConsiderCharacter(character, false);
-            }
-
-            foreach (var character in _stagedCharacters)
-            {
-                ConsiderCharacter(character, true);
+                ConsiderCharacter(character, character.Id == 0);
             }
         }
 
@@ -5946,14 +5870,9 @@
             };
         }
 
-        foreach (var title in _titles)
+        foreach (var title in _liveTitles)
         {
-            ConsiderTitle(title, false);
-        }
-
-        foreach (var title in _stagedTitles)
-        {
-            ConsiderTitle(title, true);
+            ConsiderTitle(title, title.Id == 0);
         }
 
         return best;
@@ -6036,14 +5955,9 @@
             }
         }
 
-        foreach (var title in _titles)
+        foreach (var title in _liveTitles)
         {
-            ConsiderTitle(title, false);
-        }
-
-        foreach (var title in _stagedTitles)
-        {
-            ConsiderTitle(title, true);
+            ConsiderTitle(title, title.Id == 0);
         }
 
         if (best is null)
@@ -6119,13 +6033,13 @@
         if (title.TargetFeatureId.HasValue)
         {
             var targetId = title.TargetFeatureId.Value;
-            var tree = _trees.FirstOrDefault(candidate => candidate.Id == targetId);
+            var tree = _liveTrees.FirstOrDefault(candidate => candidate.Id == targetId);
             if (tree is not null)
             {
                 return new MapPointDto { X = tree.X, Y = tree.Y };
             }
 
-            var house = _houses.FirstOrDefault(candidate => candidate.Id == targetId);
+            var house = _liveHouses.FirstOrDefault(candidate => candidate.Id == targetId);
             if (house is not null)
             {
                 return new MapPointDto { X = house.X, Y = house.Y };
@@ -6288,7 +6202,7 @@
         var selectedSize = GetPointSizeForPlacement(_placementType);
         if (_placementType == PlacementType.House)
         {
-            _stagedHouses.Add(new HouseFeatureDto
+            _liveHouses.Add(new HouseFeatureDto
             {
                 X = mapX,
                 Y = mapY,
@@ -6299,7 +6213,7 @@
         }
         else if (_placementType == PlacementType.Character)
         {
-            _stagedCharacters.Add(new CharacterFeatureDto
+            _liveCharacters.Add(new CharacterFeatureDto
             {
                 X = mapX,
                 Y = mapY,
@@ -6313,7 +6227,7 @@
         }
         else
         {
-            _stagedTrees.Add(new TreeFeatureDto
+            _liveTrees.Add(new TreeFeatureDto
             {
                 X = mapX,
                 Y = mapY,
@@ -6380,7 +6294,7 @@
         _lastX = mapX;
         _lastY = mapY;
         _hasLastPlacement = true;
-        _stagedTitles.Add(title);
+        _liveTitles.Add(title);
         _statusMessage = "Title placed (unsaved).";
         return true;
     }
@@ -6788,7 +6702,7 @@
         var pointFeatures = new List<MapPointFeatureDto>();
         var titleFeatures = new List<MapTitleFeatureDto>();
 
-        foreach (var tree in _trees)
+        foreach (var tree in _liveTrees)
         {
             pointFeatures.Add(new MapPointFeatureDto
             {
@@ -6796,12 +6710,12 @@
                 X = tree.X,
                 Y = tree.Y,
                 StyleKey = tree.TreeType,
-                IsStaged = false,
+                IsStaged = tree.Id == 0,
                 Size = NormalizePointSize(tree.Size)
             });
         }
 
-        foreach (var house in _houses)
+        foreach (var house in _liveHouses)
         {
             pointFeatures.Add(new MapPointFeatureDto
             {
@@ -6809,12 +6723,12 @@
                 X = house.X,
                 Y = house.Y,
                 StyleKey = house.HouseType,
-                IsStaged = false,
+                IsStaged = house.Id == 0,
                 Size = NormalizePointSize(house.Size)
             });
         }
 
-        foreach (var character in _characters)
+        foreach (var character in _liveCharacters)
         {
             pointFeatures.Add(new MapPointFeatureDto
             {
@@ -6822,51 +6736,12 @@
                 X = character.X,
                 Y = character.Y,
                 StyleKey = character.CharacterType,
-                IsStaged = false,
+                IsStaged = character.Id == 0,
                 Size = 1f
             });
         }
 
-        foreach (var tree in _stagedTrees)
-        {
-            pointFeatures.Add(new MapPointFeatureDto
-            {
-                FeatureType = "Tree",
-                X = tree.X,
-                Y = tree.Y,
-                StyleKey = tree.TreeType,
-                IsStaged = true,
-                Size = NormalizePointSize(tree.Size)
-            });
-        }
-
-        foreach (var house in _stagedHouses)
-        {
-            pointFeatures.Add(new MapPointFeatureDto
-            {
-                FeatureType = "House",
-                X = house.X,
-                Y = house.Y,
-                StyleKey = house.HouseType,
-                IsStaged = true,
-                Size = NormalizePointSize(house.Size)
-            });
-        }
-
-        foreach (var character in _stagedCharacters)
-        {
-            pointFeatures.Add(new MapPointFeatureDto
-            {
-                FeatureType = "Character",
-                X = character.X,
-                Y = character.Y,
-                StyleKey = character.CharacterType,
-                IsStaged = true,
-                Size = 1f
-            });
-        }
-
-        foreach (var title in _titles)
+        foreach (var title in _liveTitles)
         {
             var position = GetTitlePosition(title);
             titleFeatures.Add(new MapTitleFeatureDto
@@ -6875,24 +6750,7 @@
                 Name = title.Name,
                 X = position.X,
                 Y = position.Y,
-                IsStaged = false,
-                Size = NormalizeTitleSize(title.Size),
-                Points = title.Points
-                    .Select(point => new MapPointDto { X = point.X, Y = point.Y })
-                    .ToList()
-            });
-        }
-
-        foreach (var title in _stagedTitles)
-        {
-            var position = GetTitlePosition(title);
-            titleFeatures.Add(new MapTitleFeatureDto
-            {
-                Id = title.Id,
-                Name = title.Name,
-                X = position.X,
-                Y = position.Y,
-                IsStaged = true,
+                IsStaged = title.Id == 0,
                 Size = NormalizeTitleSize(title.Size),
                 Points = title.Points
                     .Select(point => new MapPointDto { X = point.X, Y = point.Y })
@@ -6907,10 +6765,8 @@
             AreaLayers = _areaLayers
                 .OrderBy(layer => layer.LayerIndex)
                 .ToList(),
-            AreaPolygons = _waterPolygons
-                .Concat(_stagedWaterPolygons)
-                .Concat(_landPolygons)
-                .Concat(_stagedLandPolygons)
+            AreaPolygons = _liveWaterPolygons
+                .Concat(_liveLandPolygons)
                 .OrderBy(polygon => polygon.LayerIndex)
                 .ToList(),
             ActivePolygon = _activePolygonPoints.Count >= 1
@@ -7034,28 +6890,23 @@
         Edit
     }
 
+    private sealed class LiveMapSnapshot
+    {
+        public List<TreeFeatureDto> Trees { get; init; } = new();
+        public List<HouseFeatureDto> Houses { get; init; } = new();
+        public List<CharacterFeatureDto> Characters { get; init; } = new();
+        public List<TitleFeatureDto> Titles { get; init; } = new();
+        public List<AreaPolygonDto> WaterPolygons { get; init; } = new();
+        public List<AreaPolygonDto> LandPolygons { get; init; } = new();
+    }
+
     private sealed class UndoState
     {
         public List<TreeFeatureDto> Trees { get; init; } = new();
         public List<HouseFeatureDto> Houses { get; init; } = new();
         public List<TitleFeatureDto> Titles { get; init; } = new();
-        public List<TreeFeatureDto> StagedTrees { get; init; } = new();
-        public List<HouseFeatureDto> StagedHouses { get; init; } = new();
-        public List<TitleFeatureDto> StagedTitles { get; init; } = new();
         public List<AreaPolygonDto> WaterPolygons { get; init; } = new();
-        public List<AreaPolygonDto> StagedWaterPolygons { get; init; } = new();
-        public Dictionary<int, AreaPolygonDto> EditedWaterPolygons { get; init; } = new();
-        public HashSet<int> DeletedWaterPolygonIds { get; init; } = new();
         public List<AreaPolygonDto> LandPolygons { get; init; } = new();
-        public List<AreaPolygonDto> StagedLandPolygons { get; init; } = new();
-        public Dictionary<int, AreaPolygonDto> EditedLandPolygons { get; init; } = new();
-        public HashSet<int> DeletedLandPolygonIds { get; init; } = new();
-        public Dictionary<int, TreeFeatureDto> EditedTrees { get; init; } = new();
-        public Dictionary<int, HouseFeatureDto> EditedHouses { get; init; } = new();
-        public Dictionary<int, TitleFeatureDto> EditedTitles { get; init; } = new();
-        public HashSet<int> DeletedTreeIds { get; init; } = new();
-        public HashSet<int> DeletedHouseIds { get; init; } = new();
-        public HashSet<int> DeletedTitleIds { get; init; } = new();
         public List<AreaLayerDto> AreaLayers { get; init; } = new();
         public string? ActiveAreaLayerKey { get; init; }
         public int? ActiveAreaLayerIndex { get; init; }
