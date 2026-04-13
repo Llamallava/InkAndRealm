@@ -19,9 +19,13 @@
     <div class="map-editor-layout">
         <aside class="map-editor-sidebar">
             <div class="map-editor-sidebar-header">
-                <div class="map-editor-sidebar-title">Tools</div>
                 <button class="btn btn-outline-secondary btn-sm map-editor-sidebar-back" @onclick="GoHome" aria-label="Back" title="Back">
                     <span aria-hidden="true">&#8592;</span>
+                </button>
+                <div class="map-editor-sidebar-title">Tools</div>
+                <button class="btn btn-sm map-editor-sidebar-back @(_isSettingsPanelOpen ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="ToggleSettingsPanel" aria-label="Map Settings" title="Map Settings">
+                    <span aria-hidden="true">&#9881;</span>
                 </button>
             </div>
             <div class="map-editor-tool-grid" role="group" aria-label="Tool selection">
@@ -82,77 +86,6 @@
                         </div>
                     </div>
                 }
-                @if (ShowPointSize)
-                {
-                    <div class="map-editor-sidebar-control-block">
-                        <div class="small text-muted">Point Size (@($"{SelectedPointSize:0.0}x"))</div>
-                        <input class="form-range"
-                               type="range"
-                               min="@PointSizeMin"
-                               max="@PointSizeMax"
-                               step="@PointSizeStep"
-                               @bind="SelectedPointSize"
-                               @bind:event="oninput" />
-                    </div>
-                }
-                @if (ShowTitleSize)
-                {
-                    <div class="map-editor-sidebar-control-block">
-                        <div class="small text-muted">Title Size (@($"{SelectedTitleSize:0.0}x"))</div>
-                        <input class="form-range"
-                               type="range"
-                               min="@TitleSizeMin"
-                               max="@TitleSizeMax"
-                               step="@TitleSizeStep"
-                               @bind="SelectedTitleSize"
-                               @bind:event="oninput" />
-                    </div>
-                }
-                <div class="map-editor-sidebar-control-block">
-                    <div class="small text-muted">Brush Tightness</div>
-                    <input class="form-range"
-                           type="range"
-                           min="1"
-                           max="10"
-                           step="1"
-                           disabled="@(_activeTool != MapToolType.Brush)"
-                           @bind="_brushTightness" />
-                </div>
-                <div class="map-editor-sidebar-control-block">
-                    <div class="small text-muted">Brush Size</div>
-                    <input class="form-range"
-                           type="range"
-                           min="1"
-                           max="10"
-                           step="1"
-                           disabled="@(_activeTool != MapToolType.Brush)"
-                           @bind="_brushSize" />
-                </div>
-                <div class="map-editor-sidebar-control-block">
-                    <div class="small text-muted">Polygon Density</div>
-                    <input class="form-range"
-                           type="range"
-                           min="1"
-                           max="10"
-                           step="1"
-                           disabled="@(!ShowPolygonDensity)"
-                           @bind="_polygonDensity" />
-                </div>
-                @if (ShowChaoticEdgesToggle)
-                {
-                    <div class="map-editor-sidebar-control-block">
-                        <div class="small text-muted">Chaotic Edges</div>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input"
-                                   type="checkbox"
-                                   id="land-chaos-toggle"
-                                   @bind="UseChaoticLandEdges" />
-                            <label class="form-check-label" for="land-chaos-toggle">
-                                @(_useChaoticLandEdges ? "On" : "Off")
-                            </label>
-                        </div>
-                    </div>
-                }
                 <div class="map-editor-sidebar-actions">
                     @if (_placementType == PlacementType.Land)
                     {
@@ -166,11 +99,6 @@
                             disabled="@(_isLoading || !IsLoggedIn || !_hasMap)"
                             @onclick="OpenRelationshipTreeAsync">
                         Character Tree
-                    </button>
-                    <button class="btn btn-outline-secondary btn-sm"
-                            disabled="@(_isLoading)"
-                            @onclick="ReloadAsync">
-                        Reload
                     </button>
                 </div>
             </div>
@@ -249,6 +177,65 @@
             }
         </section>
     </div>
+
+    @if (_isSettingsPanelOpen)
+    {
+        <div class="map-settings-panel">
+            <div class="map-settings-panel-header">
+                <span class="map-settings-panel-title">Settings</span>
+                <button class="btn btn-outline-secondary btn-sm map-editor-sidebar-back" @onclick="ToggleSettingsPanel" aria-label="Close settings">&times;</button>
+            </div>
+            <div class="map-settings-panel-body">
+                <div class="map-settings-section-label">Map</div>
+                <div class="map-settings-control-block">
+                    <label class="map-settings-label" for="bg-color-picker">Background</label>
+                    <input id="bg-color-picker"
+                           type="color"
+                           class="map-settings-color-input"
+                           @bind="BackgroundColor"
+                           @bind:event="onchange" />
+                </div>
+                <div class="map-settings-control-block">
+                    <div class="form-check form-switch map-settings-switch">
+                        <input class="form-check-input" type="checkbox" id="grid-toggle" @bind="ShowGrid" />
+                        <label class="form-check-label" for="grid-toggle">Grid Lines</label>
+                    </div>
+                </div>
+                <div class="map-settings-section-label">Brush</div>
+                <div class="map-settings-control-block">
+                    <div class="map-settings-label">Tightness</div>
+                    <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushTightness" />
+                </div>
+                <div class="map-settings-control-block">
+                    <div class="map-settings-label">Size</div>
+                    <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushSize" />
+                </div>
+                <div class="map-settings-control-block">
+                    <div class="map-settings-label">Polygon Density</div>
+                    <input class="form-range" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
+                </div>
+                <div class="map-settings-control-block">
+                    <div class="form-check form-switch map-settings-switch">
+                        <input class="form-check-input" type="checkbox" id="land-chaos-panel" @bind="UseChaoticLandEdges" />
+                        <label class="form-check-label" for="land-chaos-panel">Chaotic Land Edges</label>
+                    </div>
+                </div>
+                <div class="map-settings-section-label">Feature Sizes</div>
+                <div class="map-settings-control-block">
+                    <div class="map-settings-label">Point Size (@($"{SelectedPointSize:0.0}x"))</div>
+                    <input class="form-range" type="range"
+                           min="@PointSizeMin" max="@PointSizeMax" step="@PointSizeStep"
+                           @bind="SelectedPointSize" @bind:event="oninput" />
+                </div>
+                <div class="map-settings-control-block">
+                    <div class="map-settings-label">Title Size (@($"{SelectedTitleSize:0.0}x"))</div>
+                    <input class="form-range" type="range"
+                           min="@TitleSizeMin" max="@TitleSizeMax" step="@TitleSizeStep"
+                           @bind="SelectedTitleSize" @bind:event="oninput" />
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @if (_isCharacterEditorOpen && _editingCharacter is not null)
@@ -821,6 +808,9 @@
     private bool _isDraggingTitleFeature;
     private EraserTarget _eraserTarget = EraserTarget.All;
     private bool _useChaoticLandEdges = true;
+    private bool _showGrid = true;
+    private string _backgroundColor = "#b8d4e8";
+    private bool _isSettingsPanelOpen;
     private bool HasUnsavedChanges => _lastSavedSnapshot is not null && DiffHasChanges(ComputeDiff(_lastSavedSnapshot));
     private bool CanUndo => _undoStack.Count > 0;
     private bool CanRedo => _redoStack.Count > 0;
@@ -994,6 +984,25 @@
             _ = InvokeAsync(DrawAsync);
         }
     }
+    private bool ShowGrid
+    {
+        get => _showGrid;
+        set
+        {
+            _showGrid = value;
+            _ = InvokeAsync(DrawAsync);
+        }
+    }
+    private string BackgroundColor
+    {
+        get => _backgroundColor;
+        set
+        {
+            _backgroundColor = value;
+            _ = InvokeAsync(DrawAsync);
+        }
+    }
+    private void ToggleSettingsPanel() => _isSettingsPanelOpen = !_isSettingsPanelOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -6885,7 +6894,9 @@
                 Zoom = _zoom,
                 MapWidth = MapWidth,
                 MapHeight = MapHeight
-            }
+            },
+            ShowGrid = _showGrid,
+            BackgroundColor = _backgroundColor
         };
     }
 

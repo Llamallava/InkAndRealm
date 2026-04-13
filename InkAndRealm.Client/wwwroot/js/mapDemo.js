@@ -50,22 +50,27 @@ window.inkAndRealmDemo = {
 
         ctx.setTransform(zoom, 0, 0, zoom, -viewX * zoom, -viewY * zoom);
 
-        ctx.fillStyle = "#f5f1e8";
+        const bgColor = (renderState && renderState.backgroundColor) ? renderState.backgroundColor : "#b8d4e8";
+        const showGrid = !(renderState && renderState.showGrid === false);
+
+        ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, mapWidth, mapHeight);
 
-        ctx.strokeStyle = "#e1ddd4";
-        ctx.lineWidth = 1 / zoom;
-        for (let x = 0; x <= mapWidth; x += 40) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, mapHeight);
-            ctx.stroke();
-        }
-        for (let y = 0; y <= mapHeight; y += 40) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(mapWidth, y);
-            ctx.stroke();
+        if (showGrid) {
+            ctx.strokeStyle = "#e1ddd4";
+            ctx.lineWidth = 1 / zoom;
+            for (let x = 0; x <= mapWidth; x += 40) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapHeight);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= mapHeight; y += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapWidth, y);
+                ctx.stroke();
+            }
         }
 
         ctx.strokeStyle = "#c9c2b6";

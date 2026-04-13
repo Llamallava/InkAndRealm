@@ -118,6 +118,7 @@ code {
     height: calc(100vh - 3.5rem);
     padding: 0.75rem;
     margin: -1.1rem -1.5rem 0 -1.5rem;
+    position: relative;
 }
 
 .map-editor-layout {
@@ -946,4 +947,104 @@ textarea.form-control {
 
 code {
     color: var(--inkr-gold-400);
+}
+
+/* ── Map Settings Panel ─────────────────────────────────── */
+
+.map-settings-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 210px;
+    background: #ffffff;
+    border-left: 1px solid #d9dee5;
+    border-radius: 0 0.75rem 0.75rem 0;
+    box-shadow: -4px 0 16px rgba(15, 23, 42, 0.1);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    overflow: hidden;
+}
+
+.map-settings-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+    border-bottom: 1px solid #e9ecef;
+    flex-shrink: 0;
+}
+
+.map-settings-panel-title {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.map-settings-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    overflow-y: auto;
+    flex: 1 1 0;
+}
+
+.map-settings-section-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #8a9ab0;
+    padding-top: 0.25rem;
+    border-top: 1px solid #e9ecef;
+    margin-top: 0.1rem;
+}
+
+.map-settings-section-label:first-child {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+}
+
+.map-settings-control-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+}
+
+.map-settings-label {
+    font-size: 0.66rem;
+    color: #6b7585;
+    line-height: 1.2;
+}
+
+.map-settings-control-block .form-range {
+    margin: 0;
+    height: 0.95rem;
+}
+
+.map-settings-switch {
+    margin: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.map-settings-switch .form-check-label {
+    font-size: 0.7rem;
+    line-height: 1.2;
+}
+
+.map-settings-color-input {
+    width: 100%;
+    height: 1.75rem;
+    padding: 0.1rem 0.2rem;
+    border: 1px solid #d9dee5;
+    border-radius: 0.35rem;
+    cursor: pointer;
+    background: none;
 }

@@ -229,6 +229,8 @@ public sealed class MapRenderStateDto
     public bool EditPolygonCenterActive { get; set; }
     public BrushPreviewDto? BrushPreview { get; set; }
     public MapViewStateDto ViewState { get; set; } = new();
+    public bool ShowGrid { get; set; } = true;
+    public string BackgroundColor { get; set; } = "#b8d4e8";
 }
 
 public sealed class BrushPreviewDto
