@@ -4,6 +4,8 @@ public sealed class MapDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string BackgroundColor { get; set; } = "#b8d4e8";
+    public bool ShowGrid { get; set; } = true;
     public List<TreeFeatureDto> Trees { get; set; } = new();
     public List<HouseFeatureDto> Houses { get; set; } = new();
     public List<CharacterFeatureDto> Characters { get; set; } = new();
@@ -142,6 +144,8 @@ public sealed class MapEditsRequest
     public int? UserId { get; set; }
     public string? SessionToken { get; set; }
     public int MapId { get; set; }
+    public string? BackgroundColor { get; set; }
+    public bool? ShowGrid { get; set; }
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();

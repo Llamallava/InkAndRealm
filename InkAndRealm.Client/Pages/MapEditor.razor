@@ -201,38 +201,74 @@
                         <label class="form-check-label" for="grid-toggle">Grid Lines</label>
                     </div>
                 </div>
-                <div class="map-settings-section-label">Brush</div>
-                <div class="map-settings-control-block">
-                    <div class="map-settings-label">Tightness</div>
-                    <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushTightness" />
-                </div>
-                <div class="map-settings-control-block">
-                    <div class="map-settings-label">Size</div>
-                    <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushSize" />
-                </div>
-                <div class="map-settings-control-block">
-                    <div class="map-settings-label">Polygon Density</div>
-                    <input class="form-range" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
-                </div>
-                <div class="map-settings-control-block">
-                    <div class="form-check form-switch map-settings-switch">
-                        <input class="form-check-input" type="checkbox" id="land-chaos-panel" @bind="UseChaoticLandEdges" />
-                        <label class="form-check-label" for="land-chaos-panel">Chaotic Land Edges</label>
+
+                @if (_activeTool == MapToolType.Brush)
+                {
+                    <div class="map-settings-section-label">Brush</div>
+                    <div class="map-settings-control-block">
+                        <div class="map-settings-label">Tightness</div>
+                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushTightness" />
                     </div>
-                </div>
-                <div class="map-settings-section-label">Feature Sizes</div>
-                <div class="map-settings-control-block">
-                    <div class="map-settings-label">Point Size (@($"{SelectedPointSize:0.0}x"))</div>
-                    <input class="form-range" type="range"
-                           min="@PointSizeMin" max="@PointSizeMax" step="@PointSizeStep"
-                           @bind="SelectedPointSize" @bind:event="oninput" />
-                </div>
-                <div class="map-settings-control-block">
-                    <div class="map-settings-label">Title Size (@($"{SelectedTitleSize:0.0}x"))</div>
-                    <input class="form-range" type="range"
-                           min="@TitleSizeMin" max="@TitleSizeMax" step="@TitleSizeStep"
-                           @bind="SelectedTitleSize" @bind:event="oninput" />
-                </div>
+                    <div class="map-settings-control-block">
+                        <div class="map-settings-label">Size</div>
+                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushSize" />
+                    </div>
+                    <div class="map-settings-control-block">
+                        <div class="map-settings-label">Polygon Density</div>
+                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
+                    </div>
+                    @if (ShowChaoticEdgesToggle)
+                    {
+                        <div class="map-settings-control-block">
+                            <div class="form-check form-switch map-settings-switch">
+                                <input class="form-check-input" type="checkbox" id="land-chaos-panel" @bind="UseChaoticLandEdges" />
+                                <label class="form-check-label" for="land-chaos-panel">Chaotic Land Edges</label>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (_activeTool == MapToolType.Polygon)
+                {
+                    <div class="map-settings-section-label">Polygon</div>
+                    <div class="map-settings-control-block">
+                        <div class="map-settings-label">Polygon Density</div>
+                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
+                    </div>
+                    @if (ShowChaoticEdgesToggle)
+                    {
+                        <div class="map-settings-control-block">
+                            <div class="form-check form-switch map-settings-switch">
+                                <input class="form-check-input" type="checkbox" id="land-chaos-panel-poly" @bind="UseChaoticLandEdges" />
+                                <label class="form-check-label" for="land-chaos-panel-poly">Chaotic Land Edges</label>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (_activeTool == MapToolType.Point)
+                {
+                    @if (ShowPointSize || ShowTitleSize)
+                    {
+                        <div class="map-settings-section-label">Point</div>
+                        @if (ShowPointSize)
+                        {
+                            <div class="map-settings-control-block">
+                                <div class="map-settings-label">Point Size (@($"{SelectedPointSize:0.0}x"))</div>
+                                <input class="form-range" type="range"
+                                       min="@PointSizeMin" max="@PointSizeMax" step="@PointSizeStep"
+                                       @bind="SelectedPointSize" @bind:event="oninput" />
+                            </div>
+                        }
+                        @if (ShowTitleSize)
+                        {
+                            <div class="map-settings-control-block">
+                                <div class="map-settings-label">Title Size (@($"{SelectedTitleSize:0.0}x"))</div>
+                                <input class="form-range" type="range"
+                                       min="@TitleSizeMin" max="@TitleSizeMax" step="@TitleSizeStep"
+                                       @bind="SelectedTitleSize" @bind:event="oninput" />
+                            </div>
+                        }
+                    }
+                }
             </div>
         </div>
     }
@@ -2345,6 +2381,8 @@
         LoadAreaPolygons(map);
         _hasMap = map?.Id > 0;
         LoadAreaLayers(map);
+        _backgroundColor = map?.BackgroundColor ?? "#b8d4e8";
+        _showGrid = map?.ShowGrid ?? true;
         ClearStaged();
         ClearUndoHistory();
         _lastSavedSnapshot = CaptureLiveSnapshot();
@@ -3828,7 +3866,9 @@
         Characters = CloneList(_liveCharacters),
         Titles = CloneList(_liveTitles),
         WaterPolygons = CloneList(_liveWaterPolygons),
-        LandPolygons = CloneList(_liveLandPolygons)
+        LandPolygons = CloneList(_liveLandPolygons),
+        BackgroundColor = _backgroundColor,
+        ShowGrid = _showGrid
     };
 
     private MapEditsRequest ComputeDiff(LiveMapSnapshot saved)
@@ -3964,6 +4004,8 @@
             UserId = UserState.CurrentUser?.UserId,
             SessionToken = UserState.CurrentUser?.SessionToken,
             MapId = MapId,
+            BackgroundColor = _backgroundColor != saved.BackgroundColor ? _backgroundColor : null,
+            ShowGrid = _showGrid != saved.ShowGrid ? _showGrid : null,
             AreaLayers = _areaLayers.OrderBy(l => l.LayerIndex).Select(l => new AreaLayerDto
             {
                 LayerKey = l.LayerKey,
@@ -4001,7 +4043,8 @@
         || diff.AddedTitles.Count > 0 || diff.UpdatedTitles.Count > 0 || diff.DeletedTitleIds.Count > 0
         || diff.AddedRelationships.Count > 0 || diff.UpdatedRelationships.Count > 0 || diff.DeletedRelationshipIds.Count > 0
         || diff.AddedWaterPolygons.Count > 0 || diff.UpdatedWaterPolygons.Count > 0 || diff.DeletedWaterPolygonIds.Count > 0
-        || diff.AddedLandPolygons.Count > 0 || diff.UpdatedLandPolygons.Count > 0 || diff.DeletedLandPolygonIds.Count > 0;
+        || diff.AddedLandPolygons.Count > 0 || diff.UpdatedLandPolygons.Count > 0 || diff.DeletedLandPolygonIds.Count > 0
+        || diff.BackgroundColor is not null || diff.ShowGrid.HasValue;
 
     private static bool AreEqualByJson<T>(T a, T b) =>
         JsonSerializer.Serialize(a) == JsonSerializer.Serialize(b);
@@ -6949,6 +6992,8 @@
         public List<TitleFeatureDto> Titles { get; init; } = new();
         public List<AreaPolygonDto> WaterPolygons { get; init; } = new();
         public List<AreaPolygonDto> LandPolygons { get; init; } = new();
+        public string BackgroundColor { get; init; } = "#b8d4e8";
+        public bool ShowGrid { get; init; } = true;
     }
 
     private sealed class UndoState

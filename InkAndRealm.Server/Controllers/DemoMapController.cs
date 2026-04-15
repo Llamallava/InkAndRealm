@@ -999,6 +999,18 @@ public sealed class DemoMapController : ControllerBase
             }
         }
 
+        if (request.BackgroundColor is not null && request.BackgroundColor != map.BackgroundColor)
+        {
+            map.BackgroundColor = request.BackgroundColor;
+            hasChanges = true;
+        }
+
+        if (request.ShowGrid.HasValue && request.ShowGrid.Value != map.ShowGrid)
+        {
+            map.ShowGrid = request.ShowGrid.Value;
+            hasChanges = true;
+        }
+
         if (hasChanges)
         {
             await _context.SaveChangesAsync();
@@ -1347,6 +1359,8 @@ public sealed class DemoMapController : ControllerBase
         {
             Id = map.Id,
             Name = map.Name,
+            BackgroundColor = map.BackgroundColor,
+            ShowGrid = map.ShowGrid,
             Trees = map.Features
                 .OfType<TreeFeatureEntity>()
                 .Select(tree =>
