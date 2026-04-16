@@ -316,6 +316,12 @@ code {
     box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
 }
 
+.map-editor-bottombar--inactive {
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+}
+
 .map-editor-icon-group {
     gap: 0.5rem;
 }
@@ -1047,4 +1053,91 @@ code {
     border-radius: 0.35rem;
     cursor: pointer;
     background: none;
+}
+
+/* Point feature editor — overlay panel */
+.map-editor-canvas-area {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-height: 0;
+    min-width: 0;
+    flex: 1;
+}
+
+/* The card needs to be a positioning context for the overlay panel */
+.map-editor-canvas-card {
+    position: relative;
+}
+
+.point-feature-editor-panel {
+    position: absolute;
+    /* Inset by the card's padding (0.35rem) so it aligns flush with the canvas shell */
+    top: 0.35rem;
+    right: 0.35rem;
+    bottom: 0.35rem;
+    width: 40%;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 0.65rem;
+    border: 1px solid #d9dee5;
+    box-shadow: -4px 0 24px rgba(15, 23, 42, 0.14);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.point-feature-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #e1e6ee;
+    flex-shrink: 0;
+}
+
+.point-feature-editor-body {
+    padding: 0.85rem 1rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.point-feature-editor-section {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.point-feature-editor-section .form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.point-feature-editor-styles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+/* Reposition mode overlay inside canvas shell */
+.map-editor-reposition-overlay {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(15, 23, 42, 0.72);
+    padding: 0.4rem 0.85rem;
+    border-radius: 2rem;
+    white-space: nowrap;
+    pointer-events: auto;
+    z-index: 10;
 }

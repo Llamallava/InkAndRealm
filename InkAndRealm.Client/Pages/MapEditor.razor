@@ -113,68 +113,135 @@
         </aside>
 
         <section class="map-editor-main">
-            <div class="map-editor-canvas-card">
-                <div class="map-editor-canvas-shell">
-                    <canvas id="@CanvasId"
-                            width="1000"
-                            height="600"
-                            class="map-editor-canvas"
-                            style="touch-action:none;"
-                            @onmousedown="HandlePointerDown"
-                            @onmousemove="HandlePointerMove"
-                            @onmouseup="HandlePointerUp"
-                            @onmouseleave="HandlePointerLeave"
-                            @oncontextmenu="HandleContextMenu"
-                            @oncontextmenu:preventDefault="true"
-                            @onwheel="HandleWheel"
-                            @onwheel:preventDefault="true">
-                    </canvas>
-                </div>
-            </div>
+            <div class="map-editor-canvas-area">
+                <div class="map-editor-canvas-card">
+                    <div class="map-editor-canvas-shell">
+                        <canvas id="@CanvasId"
+                                width="1000"
+                                height="600"
+                                class="map-editor-canvas"
+                                style="touch-action:none;"
+                                @onmousedown="HandlePointerDown"
+                                @onmousemove="HandlePointerMove"
+                                @onmouseup="HandlePointerUp"
+                                @onmouseleave="HandlePointerLeave"
+                                @oncontextmenu="HandleContextMenu"
+                                @oncontextmenu:preventDefault="true"
+                                @onwheel="HandleWheel"
+                                @onwheel:preventDefault="true">
+                        </canvas>
+                        @if (_isRepositioning)
+                        {
+                            <div class="map-editor-reposition-overlay">
+                                <div class="small text-white-50">Click on the map to place here</div>
+                                <button class="btn btn-outline-light btn-sm" @onclick="CancelRepositionAsync">
+                                    Cancel
+                                </button>
+                            </div>
+                        }
+                    </div>
 
-            <div class="map-editor-bottombar">
-                <div class="map-editor-item-tabs" role="tablist" aria-label="Map item tabs">
-                    @foreach (var placement in PlacementDefinitions)
+                    @if (_isPointFeatureEditorOpen && _editingPointFeature is not null)
                     {
-                        var isSelected = _placementType == placement.PlacementType;
-                        var isMenuOpen = _styleMenuOpenFor == placement.PlacementType;
-                        var currentStyle = GetStyleForPlacement(placement.PlacementType);
-                        var currentStyleImage = GetStyleImageUrl(placement.PlacementType, currentStyle);
-                        <div class="map-editor-item-wrapper">
-                            @if (isMenuOpen)
-                            {
-                                <div class="map-editor-style-popup" role="listbox" aria-label="@($"{placement.Label} styles")">
-                                    @foreach (var style in GetStylesForPlacement(placement.PlacementType))
-                                    {
-                                        var isSelectedStyle = string.Equals(style, currentStyle, StringComparison.OrdinalIgnoreCase);
-                                        <button class="btn map-editor-style-button @(isSelectedStyle ? "btn-primary" : "btn-outline-primary")"
-                                                role="option"
-                                                aria-selected="@isSelectedStyle"
-                                                aria-label="@($"{style} style")"
-                                                title="@style"
-                                                @onclick="() => SelectPlacementStyleAndCloseMenu(placement.PlacementType, style)">
-                                            <img src="@GetStyleImageUrl(placement.PlacementType, style)" alt="" />
-                                            <span>@style</span>
-                                        </button>
-                                    }
+                        <div class="point-feature-editor-panel">
+                            <div class="point-feature-editor-header">
+                                <div>
+                                    <div class="fw-semibold">Edit @GetEditingPointFeatureLabel()</div>
+                                    <div class="small text-muted">Changes are applied live.</div>
                                 </div>
-                            }
-                            <button class="btn map-editor-tab-button @(isSelected ? "btn-primary" : "btn-outline-primary")"
-                                    role="tab"
-                                    aria-selected="@isSelected"
-                                    aria-label="@placement.Label"
-                                    @onclick="() => HandlePlacementButtonClick(placement.PlacementType)">
-                                <img src="@currentStyleImage" alt="" />
-                                <span>@placement.Label</span>
-                            </button>
+                                <button class="btn btn-primary btn-sm" @onclick="DoneEditingPointFeatureAsync">
+                                    Done
+                                </button>
+                            </div>
+                            <div class="point-feature-editor-body">
+                                <div class="point-feature-editor-section">
+                                    <label class="form-label">Size</label>
+                                    <input class="form-range"
+                                           type="range"
+                                           min="@PointSizeMin"
+                                           max="@PointSizeMax"
+                                           step="@PointSizeStep"
+                                           @bind="EditingPointFeatureSize"
+                                           @bind:event="oninput" />
+                                    <div class="small text-muted">@EditingPointFeatureSize.ToString("0.0")</div>
+                                </div>
+                                <div class="point-feature-editor-section">
+                                    <label class="form-label">Style</label>
+                                    <div class="point-feature-editor-styles">
+                                        @{
+                                            var currentEditStyle = EditingPointFeatureStyle;
+                                            var editPlacementType = GetEditingPointFeaturePlacementType();
+                                        }
+                                        @foreach (var style in EditingPointFeatureStyles)
+                                        {
+                                            var isSelectedStyle = string.Equals(style, currentEditStyle, StringComparison.OrdinalIgnoreCase);
+                                            <button class="btn map-editor-style-button @(isSelectedStyle ? "btn-primary" : "btn-outline-primary")"
+                                                    @onclick="() => SetEditingPointFeatureStyle(style)">
+                                                @if (editPlacementType.HasValue
+                                                     && StylePreviewImagesByPlacement.TryGetValue(editPlacementType.Value, out var styleImages)
+                                                     && styleImages.TryGetValue(style, out var imgUrl))
+                                                {
+                                                    <img src="@imgUrl" alt="" />
+                                                }
+                                                <span>@style</span>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="point-feature-editor-section">
+                                    <button class="btn btn-outline-secondary w-100" @onclick="BeginRepositionAsync">
+                                        Move Position
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     }
                 </div>
+
+                <div class="map-editor-bottombar @(_isPointFeatureEditorOpen ? "map-editor-bottombar--inactive" : "")">
+                    <div class="map-editor-item-tabs" role="tablist" aria-label="Map item tabs">
+                        @foreach (var placement in PlacementDefinitions)
+                        {
+                            var isSelected = _placementType == placement.PlacementType;
+                            var isMenuOpen = _styleMenuOpenFor == placement.PlacementType;
+                            var currentStyle = GetStyleForPlacement(placement.PlacementType);
+                            var currentStyleImage = GetStyleImageUrl(placement.PlacementType, currentStyle);
+                            <div class="map-editor-item-wrapper">
+                                @if (isMenuOpen && !_isPointFeatureEditorOpen)
+                                {
+                                    <div class="map-editor-style-popup" role="listbox" aria-label="@($"{placement.Label} styles")">
+                                        @foreach (var style in GetStylesForPlacement(placement.PlacementType))
+                                        {
+                                            var isSelectedStyle = string.Equals(style, currentStyle, StringComparison.OrdinalIgnoreCase);
+                                            <button class="btn map-editor-style-button @(isSelectedStyle ? "btn-primary" : "btn-outline-primary")"
+                                                    role="option"
+                                                    aria-selected="@isSelectedStyle"
+                                                    aria-label="@($"{style} style")"
+                                                    title="@style"
+                                                    @onclick="() => SelectPlacementStyleAndCloseMenu(placement.PlacementType, style)">
+                                                <img src="@GetStyleImageUrl(placement.PlacementType, style)" alt="" />
+                                                <span>@style</span>
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                                <button class="btn map-editor-tab-button @(isSelected ? "btn-primary" : "btn-outline-primary")"
+                                        role="tab"
+                                        aria-selected="@isSelected"
+                                        aria-label="@placement.Label"
+                                        @onclick="() => HandlePlacementButtonClick(placement.PlacementType)">
+                                    <img src="@currentStyleImage" alt="" />
+                                    <span>@placement.Label</span>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+                @if (_styleMenuOpenFor.HasValue && !_isPointFeatureEditorOpen)
+                {
+                    <div class="map-editor-style-backdrop" @onclick="CloseStyleMenu"></div>
+                }
             </div>
-            @if (_styleMenuOpenFor.HasValue)
-            {
-                <div class="map-editor-style-backdrop" @onclick="CloseStyleMenu"></div>
-            }
         </section>
     </div>
 
@@ -847,6 +914,9 @@
     private bool _showGrid = true;
     private string _backgroundColor = "#b8d4e8";
     private bool _isSettingsPanelOpen;
+    private bool _isPointFeatureEditorOpen;
+    private bool _isRepositioning;
+    private MapPointDto? _repositionOriginalPosition;
     private bool HasUnsavedChanges => _lastSavedSnapshot is not null && DiffHasChanges(ComputeDiff(_lastSavedSnapshot));
     private bool CanUndo => _undoStack.Count > 0;
     private bool CanRedo => _redoStack.Count > 0;
@@ -1191,6 +1261,29 @@
                 return;
             }
 
+            // While the panel is open the canvas is locked — ignore clicks
+            if (_isPointFeatureEditorOpen)
+            {
+                return;
+            }
+
+            // In reposition mode a left-click confirms the new position
+            if (_isRepositioning && _editingPointFeature is not null)
+            {
+                if (TryGetMapPoint(args, out var reposX, out var reposY))
+                {
+                    UpdatePointFeaturePosition(_editingPointFeature, reposX, reposY);
+                    TrackEditedPointFeature(_editingPointFeature);
+                    _isRepositioning = false;
+                    _repositionOriginalPosition = null;
+                    _isPointFeatureEditorOpen = true;
+                    CenterViewOnPointInEditor(reposX, reposY);
+                }
+
+                await DrawAsync();
+                return;
+            }
+
             if (!TryGetMapPoint(args, out var mapX, out var mapY))
             {
                 return;
@@ -1326,9 +1419,7 @@
                 }
 
                 BeginUndoBatch(UndoBatchKind.Edit);
-                _isDraggingEditPointFeature = true;
-                _statusMessage = "Moving point feature...";
-                await DrawAsync();
+                await OpenPointFeatureEditorAsync();
                 return;
             }
 
@@ -1450,6 +1541,24 @@
 
     private async Task HandlePointerMove(MouseEventArgs args)
     {
+        // When the point feature editor panel is open, block all canvas interaction
+        if (_isPointFeatureEditorOpen)
+        {
+            return;
+        }
+
+        // In reposition mode the feature follows the cursor
+        if (_isRepositioning && _editingPointFeature is not null)
+        {
+            if (TryGetMapPoint(args, out var reposX, out var reposY))
+            {
+                UpdatePointFeaturePosition(_editingPointFeature, reposX, reposY);
+                await DrawAsync();
+            }
+
+            return;
+        }
+
         if (_isPanning && (_activeTool == MapToolType.Pointer || _activeTool == MapToolType.Point))
         {
             UpdatePan(args);
@@ -1715,6 +1824,12 @@
 
     private async Task HandleContextMenu(MouseEventArgs args)
     {
+        // Panel open or reposition mode — right-click does nothing on the canvas
+        if (_isPointFeatureEditorOpen || _isRepositioning)
+        {
+            return;
+        }
+
         if (_activeTool == MapToolType.Edit)
         {
             if (_editingTitleFeature is not null)
@@ -1926,6 +2041,12 @@
 
     private async Task HandleWheel(WheelEventArgs args)
     {
+        // Canvas is locked while the point feature editor panel is open
+        if (_isPointFeatureEditorOpen)
+        {
+            return;
+        }
+
         var zoomFactor = args.DeltaY < 0 ? 1.1f : 0.9f;
         var newZoom = Math.Clamp(_zoom * zoomFactor, MinZoom, MaxZoom);
         if (Math.Abs(newZoom - _zoom) < 0.001f)
@@ -2195,6 +2316,15 @@
             return;
         }
 
+        // Capture point-feature editor state so we can restore it after the save
+        // replaces the live lists with fresh server clones.
+        var wasPointEditorOpen = _isPointFeatureEditorOpen;
+        var editingPos = wasPointEditorOpen && _editingPointFeature is not null
+            ? GetPointFeaturePosition(_editingPointFeature)
+            : null;
+        var editingWasTree = _editingPointFeature?.Tree is not null;
+        var editingWasHouse = _editingPointFeature?.House is not null;
+
         _isSaving = true;
         _statusMessage = "Saving changes...";
 
@@ -2217,7 +2347,36 @@
             _lastSavedSnapshot = CaptureLiveSnapshot();
             CancelRelationshipEdit();
             _statusMessage = "Changes saved.";
-            ClearEditSelection(true);
+
+            // Attempt to reopen the editor on the same feature in the fresh lists.
+            // ClearStaged() already called ClearEditSelection, so editor state is cleared;
+            // we re-establish it here if we can find the feature by position.
+            if (wasPointEditorOpen && editingPos is not null)
+            {
+                TreeFeatureDto? matchTree = null;
+                HouseFeatureDto? matchHouse = null;
+
+                if (editingWasTree)
+                {
+                    matchTree = _liveTrees.FirstOrDefault(t =>
+                        MathF.Abs(t.X - editingPos.X) < 1f && MathF.Abs(t.Y - editingPos.Y) < 1f);
+                }
+                else if (editingWasHouse)
+                {
+                    matchHouse = _liveHouses.FirstOrDefault(h =>
+                        MathF.Abs(h.X - editingPos.X) < 1f && MathF.Abs(h.Y - editingPos.Y) < 1f);
+                }
+
+                if (matchTree is not null || matchHouse is not null)
+                {
+                    _editingPointFeature = new EditingPointFeature { Tree = matchTree, House = matchHouse };
+                    _editingPointOriginalPosition = GetPointFeaturePosition(_editingPointFeature);
+                    BeginUndoBatch(UndoBatchKind.Edit);
+                    _isPointFeatureEditorOpen = true;
+                    CenterViewOnPointInEditor(editingPos.X, editingPos.Y);
+                }
+            }
+
             await DrawAsync();
         }
         else if (response.StatusCode == HttpStatusCode.Unauthorized)
@@ -4410,6 +4569,9 @@
         _editingPointFeature = null;
         _editingPointOriginalPosition = null;
         _isDraggingEditPointFeature = false;
+        _isPointFeatureEditorOpen = false;
+        _isRepositioning = false;
+        _repositionOriginalPosition = null;
         CloseCharacterEditor();
         _editingTitleFeature = null;
         _editingTitleOriginalPosition = null;
@@ -4440,6 +4602,213 @@
         }
         TryReturnToIdle();
     }
+
+    // ── Point feature editor ─────────────────────────────────────────────────
+
+    // Fraction of the canvas width covered by the overlay panel (matches the CSS 40%).
+    private const float PointEditorPanelFraction = 0.4f;
+
+    private void CenterViewOnPoint(float mapX, float mapY)
+    {
+        _viewX = mapX - CanvasWidth / (2f * _zoom);
+        _viewY = mapY - CanvasHeight / (2f * _zoom);
+        ClampView();
+    }
+
+    // When the panel is visible it covers the right 40% of the canvas.
+    // Centre the feature in the remaining left 60% so it isn't hidden behind the panel.
+    private const float EditFocusZoom = 2.0f;
+    private void CenterViewOnPointInEditor(float mapX, float mapY)
+    {
+        // Snap to a comfortable editing zoom level.
+        _zoom = Math.Clamp(EditFocusZoom, MinZoom, MaxZoom);
+
+        // The panel overlays the right 40 % of the canvas.
+        // Visible strip: left 60 % → virtual pixels 0–600.
+        // We aim to place the feature at the centre of that strip (px 300),
+        // with a 40 px margin from the panel edge (max allowed: px 560).
+        const float visibleFraction = 1f - PointEditorPanelFraction; // 0.6
+        const float edgeMarginVx    = 40f;
+        var panelLeftVx    = CanvasWidth * visibleFraction;        // 600
+        var targetVx       = panelLeftVx / 2f;                     // 300
+        var maxAllowedVx   = panelLeftVx - edgeMarginVx;           // 560
+
+        // First attempt: centre at edit zoom.
+        _viewX = mapX - targetVx / _zoom;
+        _viewY = mapY - CanvasHeight / (2f * _zoom);
+        ClampView();
+
+        // Check whether clamping pushed the feature behind the panel.
+        // Virtual-pixel position of the feature: (mapX − _viewX) × zoom.
+        var featureVx = (mapX - _viewX) * _zoom;
+        if (featureVx <= maxAllowedVx)
+        {
+            return; // Feature is comfortably in the visible strip — done.
+        }
+
+        // Feature is behind the panel (right-edge case).
+        // Minimum zoom that keeps it in the visible strip when the view is at max pan:
+        //   (mapX − maxViewX) × zoom ≤ maxAllowedVx
+        //   (mapX − MapWidth + CanvasWidth/zoom) × zoom ≤ maxAllowedVx
+        //   → zoom ≥ (CanvasWidth − maxAllowedVx) / (MapWidth − mapX)
+        var distFromEdge = MapWidth - mapX;
+        if (distFromEdge <= 0.1f)
+        {
+            return; // Feature is at the very map boundary — nothing more we can do.
+        }
+
+        var neededZoom = (CanvasWidth - maxAllowedVx) / distFromEdge; // e.g. 440 / dist
+
+        // Zoom IN only (never zoom out) and never exceed MaxZoom.
+        _zoom = Math.Clamp(neededZoom, _zoom, MaxZoom);
+
+        // Re-centre with the new zoom and clamp.
+        _viewX = mapX - targetVx / _zoom;
+        _viewY = mapY - CanvasHeight / (2f * _zoom);
+        ClampView();
+    }
+
+    private async Task OpenPointFeatureEditorAsync()
+    {
+        if (_editingPointFeature is null)
+        {
+            return;
+        }
+
+        PushUndoState();
+        _isPointFeatureEditorOpen = true;
+        var pos = GetPointFeaturePosition(_editingPointFeature);
+        if (pos is not null)
+        {
+            CenterViewOnPointInEditor(pos.X, pos.Y);
+        }
+
+        _statusMessage = "Editing feature. Use the panel on the right.";
+        await DrawAsync();
+    }
+
+    private async Task DoneEditingPointFeatureAsync()
+    {
+        if (_editingPointFeature is not null)
+        {
+            TrackEditedPointFeature(_editingPointFeature);
+        }
+
+        _isPointFeatureEditorOpen = false;
+        ClearEditSelection(true);
+        _statusMessage = "Feature updated.";
+        await DrawAsync();
+    }
+
+    private async Task BeginRepositionAsync()
+    {
+        if (_editingPointFeature is null)
+        {
+            return;
+        }
+
+        _repositionOriginalPosition = GetPointFeaturePosition(_editingPointFeature);
+        _isRepositioning = true;
+        _isPointFeatureEditorOpen = false;
+        _statusMessage = "Click on the map to place the feature.";
+        await DrawAsync();
+    }
+
+    private async Task CancelRepositionAsync()
+    {
+        if (_editingPointFeature is not null && _repositionOriginalPosition is not null)
+        {
+            UpdatePointFeaturePosition(_editingPointFeature, _repositionOriginalPosition.X, _repositionOriginalPosition.Y);
+        }
+
+        _isRepositioning = false;
+        _repositionOriginalPosition = null;
+        _isPointFeatureEditorOpen = true;
+        var pos = _editingPointFeature is not null ? GetPointFeaturePosition(_editingPointFeature) : null;
+        if (pos is not null)
+        {
+            CenterViewOnPointInEditor(pos.X, pos.Y);
+        }
+
+        _statusMessage = "Reposition cancelled.";
+        await DrawAsync();
+    }
+
+    private float EditingPointFeatureSize
+    {
+        get
+        {
+            if (_editingPointFeature?.Tree is not null) return _editingPointFeature.Tree.Size;
+            if (_editingPointFeature?.House is not null) return _editingPointFeature.House.Size;
+            return 1f;
+        }
+        set
+        {
+            var normalized = Math.Clamp(value, PointSizeMin, PointSizeMax);
+            if (_editingPointFeature?.Tree is not null)
+            {
+                _editingPointFeature.Tree.Size = normalized;
+                _ = InvokeAsync(DrawAsync);
+            }
+            else if (_editingPointFeature?.House is not null)
+            {
+                _editingPointFeature.House.Size = normalized;
+                _ = InvokeAsync(DrawAsync);
+            }
+        }
+    }
+
+    private string EditingPointFeatureStyle
+    {
+        get
+        {
+            if (_editingPointFeature?.Tree is not null) return _editingPointFeature.Tree.TreeType ?? string.Empty;
+            if (_editingPointFeature?.House is not null) return _editingPointFeature.House.HouseType ?? string.Empty;
+            return string.Empty;
+        }
+    }
+
+    private void SetEditingPointFeatureStyle(string style)
+    {
+        if (_editingPointFeature?.Tree is not null)
+        {
+            _editingPointFeature.Tree.TreeType = style;
+            TrackEditedPointFeature(_editingPointFeature);
+            _ = InvokeAsync(DrawAsync);
+        }
+        else if (_editingPointFeature?.House is not null)
+        {
+            _editingPointFeature.House.HouseType = style;
+            TrackEditedPointFeature(_editingPointFeature);
+            _ = InvokeAsync(DrawAsync);
+        }
+    }
+
+    private IReadOnlyList<string> EditingPointFeatureStyles
+    {
+        get
+        {
+            if (_editingPointFeature?.Tree is not null) return TreeStyles;
+            if (_editingPointFeature?.House is not null) return HouseStyles;
+            return Array.Empty<string>();
+        }
+    }
+
+    private string GetEditingPointFeatureLabel()
+    {
+        if (_editingPointFeature?.Tree is not null) return "Tree";
+        if (_editingPointFeature?.House is not null) return "House";
+        return "Feature";
+    }
+
+    private PlacementType? GetEditingPointFeaturePlacementType()
+    {
+        if (_editingPointFeature?.Tree is not null) return PlacementType.Tree;
+        if (_editingPointFeature?.House is not null) return PlacementType.House;
+        return null;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
 
     private void ResetRelationshipForm()
     {
