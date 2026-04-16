@@ -2824,6 +2824,35 @@
             ClearEditSelection(true);
         }
 
+        if (_editingPointFeature is not null)
+        {
+            var epfLayer = _editingPointFeature.Tree?.LayerIndex
+                ?? _editingPointFeature.House?.LayerIndex
+                ?? _editingPointFeature.Character?.LayerIndex;
+            if (epfLayer == layerIndex)
+            {
+                ClearEditSelection(true);
+            }
+        }
+
+        foreach (var tree in _liveTrees.Where(t => t.LayerIndex == layerIndex && t.Id > 0).ToList())
+        {
+            RemoveTitlesForTargetFeature(tree.Id);
+        }
+        _liveTrees.RemoveAll(t => t.LayerIndex == layerIndex);
+
+        foreach (var house in _liveHouses.Where(h => h.LayerIndex == layerIndex && h.Id > 0).ToList())
+        {
+            RemoveTitlesForTargetFeature(house.Id);
+        }
+        _liveHouses.RemoveAll(h => h.LayerIndex == layerIndex);
+
+        foreach (var character in _liveCharacters.Where(c => c.LayerIndex == layerIndex).ToList())
+        {
+            RemoveStagedRelationshipChangesForTarget(character.Id);
+        }
+        _liveCharacters.RemoveAll(c => c.LayerIndex == layerIndex);
+
         foreach (var polygon in _liveWaterPolygons.Where(p => p.LayerIndex == layerIndex && p.Id > 0).ToList())
         {
             RemoveStagedRelationshipChangesForTarget(polygon.Id);
