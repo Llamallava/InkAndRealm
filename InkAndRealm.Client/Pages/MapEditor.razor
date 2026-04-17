@@ -15,101 +15,122 @@
 
 <PageTitle>Ink & Realm Map Editor</PageTitle>
 
+<SectionContent SectionName="top-bar-left">
+    <div class="map-ribbon">
+        <div class="map-ribbon-top-row">
+            <button class="map-ribbon-back" @onclick="GoHome" aria-label="Back" title="Back">
+                &#8592;
+            </button>
+            <div class="map-ribbon-tabs">
+                <button class="map-ribbon-tab">Home</button>
+                <button class="map-ribbon-tab">Insert</button>
+                <button class="map-ribbon-tab">Format</button>
+                <button class="map-ribbon-tab">View</button>
+            </div>
+        </div>
+        <div class="map-ribbon-tool-row">
+            <button class="map-ribbon-action-btn"
+                    disabled="@(!CanUndo)"
+                    @onclick="() => SelectTool(MapToolType.Undo)"
+                    title="Undo">
+                &#8630;
+            </button>
+            <button class="map-ribbon-action-btn"
+                    disabled="@(!CanRedo)"
+                    @onclick="() => SelectTool(MapToolType.Redo)"
+                    title="Redo">
+                &#8631;
+            </button>
+            <div class="map-ribbon-divider"></div>
+            @if (_activeTool == MapToolType.Brush)
+            {
+                <div class="map-ribbon-control">
+                    <span class="map-ribbon-control-label">Tightness</span>
+                    <input class="map-ribbon-slider" type="range" min="1" max="10" step="1" @bind="_brushTightness" />
+                </div>
+                <div class="map-ribbon-control">
+                    <span class="map-ribbon-control-label">Size</span>
+                    <input class="map-ribbon-slider" type="range" min="1" max="10" step="1" @bind="_brushSize" />
+                </div>
+                <div class="map-ribbon-control">
+                    <span class="map-ribbon-control-label">Density</span>
+                    <input class="map-ribbon-slider" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
+                </div>
+                @if (ShowChaoticEdgesToggle)
+                {
+                    <div class="map-ribbon-control-check">
+                        <input type="checkbox" id="land-chaos-ribbon" @bind="UseChaoticLandEdges" />
+                        <label for="land-chaos-ribbon">Chaotic Edges</label>
+                    </div>
+                }
+            }
+            else if (_activeTool == MapToolType.Polygon)
+            {
+                <div class="map-ribbon-control">
+                    <span class="map-ribbon-control-label">Density</span>
+                    <input class="map-ribbon-slider" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
+                </div>
+                @if (ShowChaoticEdgesToggle)
+                {
+                    <div class="map-ribbon-control-check">
+                        <input type="checkbox" id="land-chaos-ribbon-poly" @bind="UseChaoticLandEdges" />
+                        <label for="land-chaos-ribbon-poly">Chaotic Edges</label>
+                    </div>
+                }
+            }
+            else if (_activeTool == MapToolType.Point)
+            {
+                @if (ShowPointSize)
+                {
+                    <div class="map-ribbon-control">
+                        <span class="map-ribbon-control-label">Point (@($"{SelectedPointSize:0.0}x"))</span>
+                        <input class="map-ribbon-slider" type="range"
+                               min="@PointSizeMin" max="@PointSizeMax" step="@PointSizeStep"
+                               @bind="SelectedPointSize" @bind:event="oninput" />
+                    </div>
+                }
+                @if (ShowTitleSize)
+                {
+                    <div class="map-ribbon-control">
+                        <span class="map-ribbon-control-label">Title (@($"{SelectedTitleSize:0.0}x"))</span>
+                        <input class="map-ribbon-slider" type="range"
+                               min="@TitleSizeMin" max="@TitleSizeMax" step="@TitleSizeStep"
+                               @bind="SelectedTitleSize" @bind:event="oninput" />
+                    </div>
+                }
+            }
+            else if (_activeTool == MapToolType.Eraser)
+            {
+                <div class="map-ribbon-control">
+                    <span class="map-ribbon-control-label">Target</span>
+                    <select class="map-ribbon-select"
+                            value="@_eraserTarget"
+                            @onchange="e => SelectEraserTarget(Enum.Parse<EraserTarget>(e.Value!.ToString()!))">
+                        @foreach (var target in EraserTargetDefinitions)
+                        {
+                            <option value="@target.Target">@target.Label</option>
+                        }
+                    </select>
+                </div>
+            }
+        </div>
+    </div>
+</SectionContent>
+
 <div class="container-fluid map-editor-page">
     <div class="map-editor-layout">
         <aside class="map-editor-sidebar">
-            <div class="map-editor-sidebar-header">
-                <button class="btn btn-outline-secondary btn-sm map-editor-sidebar-back" @onclick="GoHome" aria-label="Back" title="Back">
-                    <span aria-hidden="true">&#8592;</span>
-                </button>
-                <div class="map-editor-sidebar-title">Tools</div>
-                <button class="btn btn-sm map-editor-sidebar-back @(_isSettingsPanelOpen ? "btn-primary" : "btn-outline-secondary")"
-                        @onclick="ToggleSettingsPanel" aria-label="Map Settings" title="Map Settings">
-                    <span aria-hidden="true">&#9881;</span>
-                </button>
-            </div>
             <div class="map-editor-tool-grid" role="group" aria-label="Tool selection">
-                @foreach (var tool in ToolDefinitions)
+                @foreach (var tool in ToolDefinitions.Where(t => t.Tool != MapToolType.Undo && t.Tool != MapToolType.Redo))
                 {
                     <button class="btn btn-sm map-editor-tool-button @(_activeTool == tool.Tool ? "btn-primary" : "btn-outline-primary")"
                             aria-label="@tool.Label"
-                            disabled="@(tool.Tool == MapToolType.Undo && !CanUndo || tool.Tool == MapToolType.Redo && !CanRedo)"
                             @onclick="() => SelectTool(tool.Tool)">
                         <span class="map-editor-tool-icon" aria-hidden="true">@GetToolIcon(tool.Tool)</span>
                         <span class="map-editor-tool-tooltip" role="tooltip">@tool.Label</span>
                     </button>
                 }
             </div>
-            <div class="map-editor-sidebar-section">
-                <div class="small text-muted">Active</div>
-                <div class="fw-semibold map-editor-active-tool-name">@ActiveToolDefinition.Label</div>
-            </div>
-            <div class="map-editor-sidebar-section">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="fw-semibold">Layers</div>
-                    <button class="btn btn-sm btn-outline-secondary" @onclick="AddAreaLayer">
-                        Add
-                    </button>
-                </div>
-                <div class="btn-group-vertical w-100 mt-2" role="group" aria-label="Area layers">
-                    @for (var i = 0; i < _areaLayers.Count; i += 1)
-                    {
-                        var layer = _areaLayers[i];
-                        <button class="btn btn-sm map-layer-button @(_activeAreaLayer == layer ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="() => SelectAreaLayer(layer)">
-                            <span>@GetLayerLabel(layer, i)</span>
-                            <span class="map-layer-delete"
-                                  role="button"
-                                  title="Delete layer"
-                                  aria-label="Delete layer"
-                                  @onclick="() => PromptDeleteLayerAsync(layer)"
-                                  @onclick:stopPropagation="true">
-                                &#128465;
-                            </span>
-                        </button>
-                    }
-                </div>
-            </div>
-            <div class="map-editor-sidebar-section map-editor-sidebar-controls">
-                @if (_activeTool == MapToolType.Eraser)
-                {
-                    <div class="map-editor-sidebar-control-block">
-                        <div class="small text-muted">Eraser</div>
-                        <div class="map-editor-compact-button-row" role="group" aria-label="Eraser target selection">
-                            @foreach (var target in EraserTargetDefinitions)
-                            {
-                                <button class="btn btn-sm @(_eraserTarget == target.Target ? "btn-primary" : "btn-outline-primary")"
-                                        @onclick="() => SelectEraserTarget(target.Target)">
-                                    @target.Label
-                                </button>
-                            }
-                        </div>
-                    </div>
-                }
-                <div class="map-editor-sidebar-actions">
-                    @if (_placementType == PlacementType.Land)
-                    {
-                        <button class="btn btn-outline-success btn-sm"
-                                disabled="@(!CanGenerateStarterLandMass)"
-                                @onclick="GenerateStarterLandMassAsync">
-                            Starter Land
-                        </button>
-                    }
-                    <button class="btn btn-outline-primary btn-sm"
-                            disabled="@(_isLoading || !IsLoggedIn || !_hasMap)"
-                            @onclick="OpenRelationshipTreeAsync">
-                        Character Tree
-                    </button>
-                </div>
-            </div>
-            @if (_isSelectingRelationshipTarget)
-            {
-                <div class="mt-3 mb-0">
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="CancelRelationshipTargetSelection">
-                        Cancel Target Selection
-                    </button>
-                </div>
-            }
         </aside>
 
         <section class="map-editor-main">
@@ -153,46 +174,323 @@
                                     Done
                                 </button>
                             </div>
-                            <div class="point-feature-editor-body">
-                                <div class="point-feature-editor-section">
-                                    <label class="form-label">Size</label>
-                                    <input class="form-range"
-                                           type="range"
-                                           min="@PointSizeMin"
-                                           max="@PointSizeMax"
-                                           step="@PointSizeStep"
-                                           @bind="EditingPointFeatureSize"
-                                           @bind:event="oninput" />
-                                    <div class="small text-muted">@EditingPointFeatureSize.ToString("0.0")</div>
-                                </div>
-                                <div class="point-feature-editor-section">
-                                    <label class="form-label">Style</label>
-                                    <div class="point-feature-editor-styles">
-                                        @{
-                                            var currentEditStyle = EditingPointFeatureStyle;
-                                            var editPlacementType = GetEditingPointFeaturePlacementType();
-                                        }
-                                        @foreach (var style in EditingPointFeatureStyles)
-                                        {
-                                            var isSelectedStyle = string.Equals(style, currentEditStyle, StringComparison.OrdinalIgnoreCase);
-                                            <button class="btn map-editor-style-button @(isSelectedStyle ? "btn-primary" : "btn-outline-primary")"
-                                                    @onclick="() => SetEditingPointFeatureStyle(style)">
-                                                @if (editPlacementType.HasValue
-                                                     && StylePreviewImagesByPlacement.TryGetValue(editPlacementType.Value, out var styleImages)
-                                                     && styleImages.TryGetValue(style, out var imgUrl))
-                                                {
-                                                    <img src="@imgUrl" alt="" />
-                                                }
-                                                <span>@style</span>
-                                            </button>
-                                        }
-                                    </div>
-                                </div>
-                                <div class="point-feature-editor-section">
-                                    <button class="btn btn-outline-secondary w-100" @onclick="BeginRepositionAsync">
-                                        Move Position
+                            @if (_editingPointFeature.Character is not null)
+                            {
+                                <div class="point-feature-editor-tab-bar">
+                                    <button class="point-feature-editor-tab @(_characterEditorShowingDetails ? "point-feature-editor-tab--active" : "")"
+                                            @onclick="() => _characterEditorShowingDetails = true">
+                                        Details
+                                    </button>
+                                    <button class="point-feature-editor-tab @(!_characterEditorShowingDetails ? "point-feature-editor-tab--active" : "")"
+                                            @onclick="() => _characterEditorShowingDetails = false">
+                                        Style
                                     </button>
                                 </div>
+                            }
+                            <div class="point-feature-editor-body">
+                                @if (_editingPointFeature.Character is not null && _characterEditorShowingDetails && _editingCharacter is not null)
+                                {
+                                    @* ── Character Details Tab ─────────────────────────────────── *@
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Name</label>
+                                        <input class="form-control"
+                                               maxlength="@CharacterFieldMaxLength"
+                                               @bind="EditingCharacterName"
+                                               @bind:event="oninput"
+                                               readonly="@IsCharacterEditorReadOnly" />
+                                    </div>
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Background</label>
+                                        <textarea class="form-control"
+                                                  rows="3"
+                                                  maxlength="@CharacterFieldMaxLength"
+                                                  @bind="EditingCharacterBackground"
+                                                  @bind:event="oninput"
+                                                  readonly="@IsCharacterEditorReadOnly"></textarea>
+                                    </div>
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Occupation</label>
+                                        <textarea class="form-control"
+                                                  rows="2"
+                                                  maxlength="@CharacterFieldMaxLength"
+                                                  @bind="EditingCharacterOccupation"
+                                                  @bind:event="oninput"
+                                                  readonly="@IsCharacterEditorReadOnly"></textarea>
+                                    </div>
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Personality</label>
+                                        <textarea class="form-control"
+                                                  rows="2"
+                                                  maxlength="@CharacterFieldMaxLength"
+                                                  @bind="EditingCharacterPersonality"
+                                                  @bind:event="oninput"
+                                                  readonly="@IsCharacterEditorReadOnly"></textarea>
+                                    </div>
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Relationships</label>
+                                        @foreach (var relationship in _editingCharacter!.Relationships?.Where(r => r.Id > 0) ?? Enumerable.Empty<CharacterRelationshipDto>())
+                                        {
+                                            <div class="mb-2">
+                                                <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType)</div>
+                                                <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
+                                                @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                                {
+                                                    <div class="text-muted small">@relationship.Description</div>
+                                                }
+                                                @if (IsRelationshipUpdateStaged(relationship.Id))
+                                                {
+                                                    <div class="text-muted small">Pending update (unsaved)</div>
+                                                }
+                                                @if (!IsCharacterEditorReadOnly)
+                                                {
+                                                    <div class="d-flex gap-2 mt-1">
+                                                        <button class="btn btn-outline-secondary btn-sm"
+                                                                type="button"
+                                                                @onclick="() => BeginRelationshipEdit(relationship)">
+                                                            Edit
+                                                        </button>
+                                                        <button class="btn btn-outline-danger btn-sm"
+                                                                type="button"
+                                                                @onclick="() => DeleteExistingRelationship(relationship)">
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                        @if (!(_editingCharacter!.Relationships?.Any(r => r.Id > 0) ?? false)
+                                             && GetPendingRelationshipsForCharacter(_editingCharacter!.Id).Count == 0)
+                                        {
+                                            <div class="small text-muted">No relationships yet.</div>
+                                        }
+                                        @if (GetPendingRelationshipsForCharacter(_editingCharacter!.Id).Count > 0)
+                                        {
+                                            <div class="small text-muted mt-2">Pending (unsaved)</div>
+                                            @foreach (var relationship in GetPendingRelationshipsForCharacter(_editingCharacter!.Id))
+                                            {
+                                                <div class="mb-2">
+                                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending")</div>
+                                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
+                                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                                    {
+                                                        <div class="text-muted small">@relationship.Description</div>
+                                                    }
+                                                    @if (!IsCharacterEditorReadOnly)
+                                                    {
+                                                        <button class="btn btn-outline-danger btn-sm mt-1"
+                                                                type="button"
+                                                                @onclick="() => RemovePendingRelationship(relationship)">
+                                                            Delete
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+                                        @if (GetPendingRelationshipUpdatesForCharacter(_editingCharacter!.Id).Count > 0)
+                                        {
+                                            <div class="small text-muted mt-2">Pending updates (unsaved)</div>
+                                            @foreach (var relationship in GetPendingRelationshipUpdatesForCharacter(_editingCharacter!.Id))
+                                            {
+                                                <div class="mb-2">
+                                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending Update")</div>
+                                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
+                                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                                    {
+                                                        <div class="text-muted small">@relationship.Description</div>
+                                                    }
+                                                    @if (!IsCharacterEditorReadOnly)
+                                                    {
+                                                        <button class="btn btn-outline-danger btn-sm mt-1"
+                                                                type="button"
+                                                                @onclick="() => DeletePendingRelationshipUpdate(relationship)">
+                                                            Delete
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                    @if (!IsCharacterEditorReadOnly)
+                                    {
+                                        @if (_editingRelationshipId is not null)
+                                        {
+                                            <div class="point-feature-editor-section">
+                                                <label class="form-label">Edit Relationship</label>
+                                                <div class="small text-muted mb-2">
+                                                    @GetRelationshipTargetLabel(_editingRelationshipTargetFeatureId, _editingRelationshipTargetFeatureType)
+                                                </div>
+                                                <input class="form-control mb-2"
+                                                       placeholder="Relationship types (comma separated)"
+                                                       @bind="_relationshipEditTypesInput"
+                                                       @bind:event="oninput" />
+                                                <textarea class="form-control mb-2"
+                                                          rows="2"
+                                                          placeholder="Description (optional)"
+                                                          @bind="_relationshipEditDescription"
+                                                          @bind:event="oninput"></textarea>
+                                                <div class="d-flex gap-2">
+                                                    <button class="btn btn-outline-primary btn-sm" type="button" @onclick="ApplyRelationshipEdit">
+                                                        Update Relationship
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="CancelRelationshipEdit">
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                        <div class="point-feature-editor-section">
+                                            <label class="form-label">Add Relationship</label>
+                                            @if (_selectedRelationshipTarget is null)
+                                            {
+                                                <button class="btn btn-outline-primary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
+                                                    Select Relationship Target
+                                                </button>
+                                                <div class="small text-muted mt-2">Pick a saved feature on the map before entering relationship details.</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="small text-muted mb-2">Target</div>
+                                                <div class="fw-semibold mb-2">@GetRelationshipTargetLabel(_selectedRelationshipTarget.TargetId, _selectedRelationshipTarget.IsCharacter ? "Character" : "Feature")</div>
+                                                <div class="d-flex gap-2 mb-2">
+                                                    <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
+                                                        Change Target
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="ClearSelectedRelationshipTarget">
+                                                        Clear Target
+                                                    </button>
+                                                </div>
+                                                <input class="form-control mb-2"
+                                                       placeholder="Relationship types (comma separated)"
+                                                       @bind="_relationshipTypesInput"
+                                                       @bind:event="oninput" />
+                                                <textarea class="form-control mb-2"
+                                                          rows="2"
+                                                          placeholder="Description (optional)"
+                                                          @bind="_relationshipDescription"
+                                                          @bind:event="oninput"></textarea>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input"
+                                                           type="checkbox"
+                                                           id="relationship-reciprocal-toggle"
+                                                           @bind="_relationshipCreateReciprocal" />
+                                                    <label class="form-check-label" for="relationship-reciprocal-toggle">
+                                                        Make reciprocal (character targets only)
+                                                    </label>
+                                                </div>
+                                                @if (_relationshipCreateReciprocal)
+                                                {
+                                                    <input class="form-control mb-2"
+                                                           placeholder="Reciprocal types (comma separated, optional)"
+                                                           @bind="_relationshipReciprocalTypesInput"
+                                                           @bind:event="oninput" />
+                                                    <textarea class="form-control mb-2"
+                                                              rows="2"
+                                                              placeholder="Reciprocal description (optional)"
+                                                              @bind="_relationshipReciprocalDescription"
+                                                              @bind:event="oninput"></textarea>
+                                                }
+                                                <button class="btn btn-outline-primary btn-sm" type="button" @onclick="AddSelectedRelationship">
+                                                    Add Relationship
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    @* ── Style Tab (common) ─────────────────────────────────────── *@
+                                    @if (_editingPointFeature.Character is not null && _editingCharacter is not null)
+                                    {
+                                        @* Character: show type select *@
+                                        <div class="point-feature-editor-section">
+                                            <label class="form-label">Type</label>
+                                            <select class="form-select form-select-sm"
+                                                    @bind="EditingCharacterType"
+                                                    disabled="@IsCharacterEditorReadOnly">
+                                                @foreach (var style in CharacterStyles)
+                                                {
+                                                    <option value="@style">@style</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        @* Tree / House: size + style *@
+                                        <div class="point-feature-editor-section">
+                                            <label class="form-label">Size</label>
+                                            <input class="form-range"
+                                                   type="range"
+                                                   min="@PointSizeMin"
+                                                   max="@PointSizeMax"
+                                                   step="@PointSizeStep"
+                                                   @bind="EditingPointFeatureSize"
+                                                   @bind:event="oninput" />
+                                            <div class="small text-muted">@EditingPointFeatureSize.ToString("0.0")</div>
+                                        </div>
+                                        <div class="point-feature-editor-section">
+                                            <label class="form-label">Style</label>
+                                            <div class="point-feature-editor-styles">
+                                                @{
+                                                    var currentEditStyle = EditingPointFeatureStyle;
+                                                    var editPlacementType = GetEditingPointFeaturePlacementType();
+                                                }
+                                                @foreach (var style in EditingPointFeatureStyles)
+                                                {
+                                                    var isSelectedStyle = string.Equals(style, currentEditStyle, StringComparison.OrdinalIgnoreCase);
+                                                    <button class="btn map-editor-style-button @(isSelectedStyle ? "btn-primary" : "btn-outline-primary")"
+                                                            @onclick="() => SetEditingPointFeatureStyle(style)">
+                                                        @if (editPlacementType.HasValue
+                                                             && StylePreviewImagesByPlacement.TryGetValue(editPlacementType.Value, out var styleImages)
+                                                             && styleImages.TryGetValue(style, out var imgUrl))
+                                                        {
+                                                            <img src="@imgUrl" alt="" />
+                                                        }
+                                                        <span>@style</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                    <div class="point-feature-editor-section">
+                                        <button class="btn btn-outline-secondary w-100" @onclick="BeginRepositionAsync">
+                                            Move Position
+                                        </button>
+                                    </div>
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Layer</label>
+                                        @{
+                                            var currentLayerIndex = _editingPointFeature.Tree?.LayerIndex
+                                                ?? _editingPointFeature.House?.LayerIndex
+                                                ?? _editingPointFeature.Character?.LayerIndex
+                                                ?? 0;
+                                            var currentLayer = _areaLayers.FirstOrDefault(l => l.LayerIndex == currentLayerIndex);
+                                        }
+                                        <div class="small text-muted mb-2">
+                                            On @(currentLayer is not null ? GetLayerLabel(currentLayer) : $"Layer {currentLayerIndex + 1}")
+                                        </div>
+                                        @if (_areaLayers.Count > 1)
+                                        {
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @for (var li = 0; li < _areaLayers.Count; li++)
+                                                {
+                                                    var layerBtn = _areaLayers[li];
+                                                    var liBtnIndex = li;
+                                                    var isOnLayer = layerBtn.LayerIndex == currentLayerIndex;
+                                                    <button class="btn btn-sm @(isOnLayer ? "btn-primary" : "btn-outline-secondary")"
+                                                            disabled="@isOnLayer"
+                                                            @onclick="() => MoveEditingPointFeatureToLayer(layerBtn)">
+                                                        @GetLayerLabel(layerBtn, liBtnIndex)
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="small text-muted">Add more layers to move this feature between them.</div>
+                                        }
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
@@ -268,80 +566,12 @@
                         <label class="form-check-label" for="grid-toggle">Grid Lines</label>
                     </div>
                 </div>
-
-                @if (_activeTool == MapToolType.Brush)
-                {
-                    <div class="map-settings-section-label">Brush</div>
-                    <div class="map-settings-control-block">
-                        <div class="map-settings-label">Tightness</div>
-                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushTightness" />
-                    </div>
-                    <div class="map-settings-control-block">
-                        <div class="map-settings-label">Size</div>
-                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_brushSize" />
-                    </div>
-                    <div class="map-settings-control-block">
-                        <div class="map-settings-label">Polygon Density</div>
-                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
-                    </div>
-                    @if (ShowChaoticEdgesToggle)
-                    {
-                        <div class="map-settings-control-block">
-                            <div class="form-check form-switch map-settings-switch">
-                                <input class="form-check-input" type="checkbox" id="land-chaos-panel" @bind="UseChaoticLandEdges" />
-                                <label class="form-check-label" for="land-chaos-panel">Chaotic Land Edges</label>
-                            </div>
-                        </div>
-                    }
-                }
-                else if (_activeTool == MapToolType.Polygon)
-                {
-                    <div class="map-settings-section-label">Polygon</div>
-                    <div class="map-settings-control-block">
-                        <div class="map-settings-label">Polygon Density</div>
-                        <input class="form-range" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
-                    </div>
-                    @if (ShowChaoticEdgesToggle)
-                    {
-                        <div class="map-settings-control-block">
-                            <div class="form-check form-switch map-settings-switch">
-                                <input class="form-check-input" type="checkbox" id="land-chaos-panel-poly" @bind="UseChaoticLandEdges" />
-                                <label class="form-check-label" for="land-chaos-panel-poly">Chaotic Land Edges</label>
-                            </div>
-                        </div>
-                    }
-                }
-                else if (_activeTool == MapToolType.Point)
-                {
-                    @if (ShowPointSize || ShowTitleSize)
-                    {
-                        <div class="map-settings-section-label">Point</div>
-                        @if (ShowPointSize)
-                        {
-                            <div class="map-settings-control-block">
-                                <div class="map-settings-label">Point Size (@($"{SelectedPointSize:0.0}x"))</div>
-                                <input class="form-range" type="range"
-                                       min="@PointSizeMin" max="@PointSizeMax" step="@PointSizeStep"
-                                       @bind="SelectedPointSize" @bind:event="oninput" />
-                            </div>
-                        }
-                        @if (ShowTitleSize)
-                        {
-                            <div class="map-settings-control-block">
-                                <div class="map-settings-label">Title Size (@($"{SelectedTitleSize:0.0}x"))</div>
-                                <input class="form-range" type="range"
-                                       min="@TitleSizeMin" max="@TitleSizeMax" step="@TitleSizeStep"
-                                       @bind="SelectedTitleSize" @bind:event="oninput" />
-                            </div>
-                        }
-                    }
-                }
             </div>
         </div>
     }
 </div>
 
-@if (_isCharacterEditorOpen && _editingCharacter is not null)
+@if (_isCharacterEditorOpen && _editingCharacter is not null && !_isPointFeatureEditorOpen)
 {
     <div class="character-editor-overlay">
         <div class="character-editor-card">
@@ -889,6 +1119,8 @@
     private CharacterFeatureDto? _editingCharacter;
     private bool _isCharacterEditorOpen;
     private bool _isCharacterEditorReadOnly;
+    private bool _characterEditorShowingDetails = true;
+    private bool _relationshipReturnPointEditorOpen;
     private string _relationshipTypesInput = string.Empty;
     private string _relationshipDescription = string.Empty;
     private bool _relationshipCreateReciprocal;
@@ -1277,6 +1509,10 @@
                     _isRepositioning = false;
                     _repositionOriginalPosition = null;
                     _isPointFeatureEditorOpen = true;
+                    if (_editingPointFeature.Character is not null)
+                    {
+                        _isCharacterEditorOpen = true;
+                    }
                     CenterViewOnPointInEditor(reposX, reposY);
                 }
 
@@ -1413,8 +1649,10 @@
                 if (pointFeature.Character is not null)
                 {
                     OpenCharacterEditor(pointFeature.Character, readOnly: false, resetRelationshipForm: true);
-                    _statusMessage = "Character selected. Edit details and close when done.";
-                    await DrawAsync();
+                    _characterEditorShowingDetails = true;
+                    _statusMessage = "Character selected. Edit details in the panel.";
+                    BeginUndoBatch(UndoBatchKind.Edit);
+                    await OpenPointFeatureEditorAsync();
                     return;
                 }
 
@@ -4739,6 +4977,7 @@
         _repositionOriginalPosition = GetPointFeaturePosition(_editingPointFeature);
         _isRepositioning = true;
         _isPointFeatureEditorOpen = false;
+        _isCharacterEditorOpen = false;
         _statusMessage = "Click on the map to place the feature.";
         await DrawAsync();
     }
@@ -4753,6 +4992,10 @@
         _isRepositioning = false;
         _repositionOriginalPosition = null;
         _isPointFeatureEditorOpen = true;
+        if (_editingPointFeature?.Character is not null)
+        {
+            _isCharacterEditorOpen = true;
+        }
         var pos = _editingPointFeature is not null ? GetPointFeaturePosition(_editingPointFeature) : null;
         if (pos is not null)
         {
@@ -4761,6 +5004,18 @@
 
         _statusMessage = "Reposition cancelled.";
         await DrawAsync();
+    }
+
+    private void MoveEditingPointFeatureToLayer(AreaLayerDto layer)
+    {
+        if (_editingPointFeature is null) return;
+        if (_editingPointFeature.Tree is not null)
+            _editingPointFeature.Tree.LayerIndex = layer.LayerIndex;
+        else if (_editingPointFeature.House is not null)
+            _editingPointFeature.House.LayerIndex = layer.LayerIndex;
+        else if (_editingPointFeature.Character is not null)
+            _editingPointFeature.Character.LayerIndex = layer.LayerIndex;
+        _statusMessage = $"Moved to {GetLayerLabel(layer)} (unsaved).";
     }
 
     private float EditingPointFeatureSize
@@ -4827,6 +5082,7 @@
     {
         if (_editingPointFeature?.Tree is not null) return "Tree";
         if (_editingPointFeature?.House is not null) return "House";
+        if (_editingPointFeature?.Character is not null) return "Character";
         return "Feature";
     }
 
@@ -5023,8 +5279,10 @@
         _relationshipReturnTool = _activeTool;
         _relationshipReturnPlacement = _placementType;
         _relationshipReturnReadOnly = _isCharacterEditorReadOnly;
+        _relationshipReturnPointEditorOpen = _isPointFeatureEditorOpen;
         _isSelectingRelationshipTarget = true;
         _isCharacterEditorOpen = false;
+        _isPointFeatureEditorOpen = false;
         _relationshipStatusMessage = "Click a target on the map.";
         _statusMessage = "Select a relationship target on the map. Click Cancel to stop.";
     }
@@ -5127,6 +5385,7 @@
     {
         _activeTool = _relationshipReturnTool;
         _placementType = _relationshipReturnPlacement;
+        _isPointFeatureEditorOpen = _relationshipReturnPointEditorOpen;
     }
 
     private AddCharacterRelationshipDto? BuildRelationshipRequest(int targetId, bool isCharacterTarget)

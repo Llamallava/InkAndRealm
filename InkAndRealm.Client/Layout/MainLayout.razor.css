@@ -15,10 +15,10 @@ main {
         linear-gradient(170deg, rgba(223, 187, 104, 0.16), rgba(42, 26, 15, 0.02)),
         linear-gradient(180deg, #4f331e 0%, #3a2414 100%);
     border-bottom: 1px solid #a7792f;
-    justify-content: flex-end;
-    height: 3.5rem;
+    justify-content: space-between;
+    min-height: 3.5rem;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     position: sticky;
     top: 0;
     z-index: 2;
@@ -47,6 +47,8 @@ main {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    padding-right: 0.5rem;
+    margin-left: auto;
 }
 
 .account-icon-btn {
@@ -99,8 +101,14 @@ main {
 }
 
 @media (min-width: 641px) {
-    .top-row, article {
+    .top-row {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    article {
         padding-left: 2rem !important;
         padding-right: 1.5rem !important;
     }
 }
+

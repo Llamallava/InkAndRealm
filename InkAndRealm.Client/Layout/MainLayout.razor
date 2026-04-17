@@ -5,6 +5,7 @@
 <div class="page">
     <main @onclick="CloseLoginPanel">
         <div class="top-row px-4">
+            <SectionOutlet SectionName="top-bar-left" />
             <div class="top-row-actions">
                 <button class="btn account-icon-btn" @onclick="ToggleLoginPanel" @onclick:stopPropagation title="@(UserState.CurrentUser is null ? "Account" : UserState.CurrentUser.Username)">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="22" height="22" aria-hidden="true">
