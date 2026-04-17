@@ -22,7 +22,7 @@
                 &#8592;
             </button>
             <div class="map-ribbon-tabs">
-                <button class="map-ribbon-tab">Home</button>
+                <button class="map-ribbon-tab @(_isMapSettingsModalOpen ? "map-ribbon-tab--active" : "")" @onclick="ToggleMapSettingsModal">Map Settings</button>
                 <button class="map-ribbon-tab">Insert</button>
                 <button class="map-ribbon-tab">Format</button>
                 <button class="map-ribbon-tab">View</button>
@@ -543,29 +543,76 @@
         </section>
     </div>
 
-    @if (_isSettingsPanelOpen)
+    @if (_isMapSettingsModalOpen)
     {
-        <div class="map-settings-panel">
-            <div class="map-settings-panel-header">
-                <span class="map-settings-panel-title">Settings</span>
-                <button class="btn btn-outline-secondary btn-sm map-editor-sidebar-back" @onclick="ToggleSettingsPanel" aria-label="Close settings">&times;</button>
+        <div class="map-settings-modal-backdrop" @onclick="ToggleMapSettingsModal"></div>
+        <div class="map-settings-modal">
+            <div class="map-settings-modal-header">
+                <span class="map-settings-modal-title">Map Settings</span>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ToggleMapSettingsModal" aria-label="Close">&times;</button>
             </div>
-            <div class="map-settings-panel-body">
-                <div class="map-settings-section-label">Map</div>
-                <div class="map-settings-control-block">
-                    <label class="map-settings-label" for="bg-color-picker">Background</label>
-                    <input id="bg-color-picker"
+            <div class="map-settings-modal-body">
+
+                <div class="map-settings-modal-section-label">Appearance</div>
+                <div class="map-settings-modal-row">
+                    <label class="map-settings-modal-label" for="ms-bg-color">Background Color</label>
+                    <input id="ms-bg-color"
                            type="color"
-                           class="map-settings-color-input"
+                           class="map-settings-modal-color"
                            @bind="BackgroundColor"
                            @bind:event="onchange" />
                 </div>
-                <div class="map-settings-control-block">
-                    <div class="form-check form-switch map-settings-switch">
-                        <input class="form-check-input" type="checkbox" id="grid-toggle" @bind="ShowGrid" />
-                        <label class="form-check-label" for="grid-toggle">Grid Lines</label>
+                <div class="map-settings-modal-row">
+                    <label class="map-settings-modal-label" for="ms-grid-toggle">Grid Lines</label>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="ms-grid-toggle" @bind="ShowGrid" />
                     </div>
                 </div>
+
+                <div class="map-settings-modal-section-label">Map Specs</div>
+                <div class="map-settings-modal-specs">
+                    <div class="map-settings-modal-spec-item">
+                        <span class="map-settings-modal-spec-label">Width</span>
+                        <span class="map-settings-modal-spec-value">@((int)_mapWidth) units</span>
+                    </div>
+                    <div class="map-settings-modal-spec-item">
+                        <span class="map-settings-modal-spec-label">Height</span>
+                        <span class="map-settings-modal-spec-value">@((int)_mapHeight) units</span>
+                    </div>
+                    <div class="map-settings-modal-spec-item">
+                        <span class="map-settings-modal-spec-label">Aspect Ratio</span>
+                        <span class="map-settings-modal-spec-value">@FormatAspectRatio(_mapWidth, _mapHeight)</span>
+                    </div>
+                </div>
+
+                <div class="map-settings-modal-section-label">Resize Map</div>
+                <div class="map-settings-modal-resize-note">
+                    Resizing does not move existing content. Min @((int)MinMapWidth)&times;@((int)MinMapHeight), max @((int)MaxMapWidth)&times;@((int)MaxMapHeight).
+                </div>
+                <div class="map-settings-modal-resize-inputs">
+                    <div class="map-settings-modal-resize-field">
+                        <label class="map-settings-modal-label" for="ms-width">Width</label>
+                        <input id="ms-width"
+                               class="form-control form-control-sm map-settings-modal-number"
+                               type="number"
+                               min="@((int)MinMapWidth)"
+                               max="@((int)MaxMapWidth)"
+                               step="100"
+                               @bind="_mapSettingsWidthInput" />
+                    </div>
+                    <div class="map-settings-modal-resize-field">
+                        <label class="map-settings-modal-label" for="ms-height">Height</label>
+                        <input id="ms-height"
+                               class="form-control form-control-sm map-settings-modal-number"
+                               type="number"
+                               min="@((int)MinMapHeight)"
+                               max="@((int)MaxMapHeight)"
+                               step="100"
+                               @bind="_mapSettingsHeightInput" />
+                    </div>
+                    <button class="btn btn-primary btn-sm map-settings-modal-apply-btn" @onclick="ApplyMapResize">Apply</button>
+                </div>
+
             </div>
         </div>
     }
@@ -993,8 +1040,14 @@
     private readonly List<AddCharacterRelationshipDto> _stagedRelationships = new();
     private readonly Dictionary<int, UpdateCharacterRelationshipDto> _updatedRelationships = new();
     private readonly Dictionary<int, (int SourceCharacterId, int TargetFeatureId)> _deletedRelationships = new();
-    private const float MapWidth = 2000f;
-    private const float MapHeight = 1200f;
+    private const float MinMapWidth = 800f;
+    private const float MaxMapWidth = 8000f;
+    private const float MinMapHeight = 600f;
+    private const float MaxMapHeight = 6000f;
+    private float _mapWidth = 2000f;
+    private float _mapHeight = 1200f;
+    private float MapWidth => _mapWidth;
+    private float MapHeight => _mapHeight;
     private const float MinZoom = 0.5f;
     private const float MaxZoom = 3f;
     private const float CanvasWidth = 1000f;
@@ -1145,7 +1198,9 @@
     private bool _useChaoticLandEdges = true;
     private bool _showGrid = true;
     private string _backgroundColor = "#b8d4e8";
-    private bool _isSettingsPanelOpen;
+    private bool _isMapSettingsModalOpen;
+    private int _mapSettingsWidthInput = 2000;
+    private int _mapSettingsHeightInput = 1200;
     private bool _isPointFeatureEditorOpen;
     private bool _isRepositioning;
     private MapPointDto? _repositionOriginalPosition;
@@ -1340,7 +1395,36 @@
             _ = InvokeAsync(DrawAsync);
         }
     }
-    private void ToggleSettingsPanel() => _isSettingsPanelOpen = !_isSettingsPanelOpen;
+    private static string FormatAspectRatio(float w, float h)
+    {
+        if (w <= 0 || h <= 0) return "—";
+        var gcd = Gcd((int)w, (int)h);
+        return $"{(int)w / gcd}:{(int)h / gcd}";
+    }
+
+    private static int Gcd(int a, int b) => b == 0 ? a : Gcd(b, a % b);
+
+    private void ToggleMapSettingsModal()
+    {
+        _isMapSettingsModalOpen = !_isMapSettingsModalOpen;
+        if (_isMapSettingsModalOpen)
+        {
+            _mapSettingsWidthInput = (int)_mapWidth;
+            _mapSettingsHeightInput = (int)_mapHeight;
+        }
+    }
+
+    private void ApplyMapResize()
+    {
+        var newWidth = Math.Clamp(_mapSettingsWidthInput, (int)MinMapWidth, (int)MaxMapWidth);
+        var newHeight = Math.Clamp(_mapSettingsHeightInput, (int)MinMapHeight, (int)MaxMapHeight);
+        _mapSettingsWidthInput = newWidth;
+        _mapSettingsHeightInput = newHeight;
+        _mapWidth = newWidth;
+        _mapHeight = newHeight;
+        ClampView();
+        _ = InvokeAsync(DrawAsync);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -2780,6 +2864,10 @@
         LoadAreaLayers(map);
         _backgroundColor = map?.BackgroundColor ?? "#b8d4e8";
         _showGrid = map?.ShowGrid ?? true;
+        _mapWidth = (map?.Width > 0) ? map.Width : 2000f;
+        _mapHeight = (map?.Height > 0) ? map.Height : 1200f;
+        _mapSettingsWidthInput = (int)_mapWidth;
+        _mapSettingsHeightInput = (int)_mapHeight;
         ClearStaged();
         ClearUndoHistory();
         _lastSavedSnapshot = CaptureLiveSnapshot();
@@ -4294,7 +4382,9 @@
         WaterPolygons = CloneList(_liveWaterPolygons),
         LandPolygons = CloneList(_liveLandPolygons),
         BackgroundColor = _backgroundColor,
-        ShowGrid = _showGrid
+        ShowGrid = _showGrid,
+        MapWidth = _mapWidth,
+        MapHeight = _mapHeight
     };
 
     private MapEditsRequest ComputeDiff(LiveMapSnapshot saved)
@@ -4432,6 +4522,8 @@
             MapId = MapId,
             BackgroundColor = _backgroundColor != saved.BackgroundColor ? _backgroundColor : null,
             ShowGrid = _showGrid != saved.ShowGrid ? _showGrid : null,
+            Width = _mapWidth != saved.MapWidth ? _mapWidth : null,
+            Height = _mapHeight != saved.MapHeight ? _mapHeight : null,
             AreaLayers = _areaLayers.OrderBy(l => l.LayerIndex).Select(l => new AreaLayerDto
             {
                 LayerKey = l.LayerKey,
@@ -4470,7 +4562,8 @@
         || diff.AddedRelationships.Count > 0 || diff.UpdatedRelationships.Count > 0 || diff.DeletedRelationshipIds.Count > 0
         || diff.AddedWaterPolygons.Count > 0 || diff.UpdatedWaterPolygons.Count > 0 || diff.DeletedWaterPolygonIds.Count > 0
         || diff.AddedLandPolygons.Count > 0 || diff.UpdatedLandPolygons.Count > 0 || diff.DeletedLandPolygonIds.Count > 0
-        || diff.BackgroundColor is not null || diff.ShowGrid.HasValue;
+        || diff.BackgroundColor is not null || diff.ShowGrid.HasValue
+        || diff.Width.HasValue || diff.Height.HasValue;
 
     private static bool AreEqualByJson<T>(T a, T b) =>
         JsonSerializer.Serialize(a) == JsonSerializer.Serialize(b);
@@ -7651,6 +7744,8 @@
         public List<AreaPolygonDto> LandPolygons { get; init; } = new();
         public string BackgroundColor { get; init; } = "#b8d4e8";
         public bool ShowGrid { get; init; } = true;
+        public float MapWidth { get; init; } = 2000f;
+        public float MapHeight { get; init; } = 1200f;
     }
 
     private sealed class UndoState

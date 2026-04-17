@@ -1059,6 +1059,178 @@ code {
     background: rgba(31, 19, 11, 0.3);
 }
 
+/* ── Map Ribbon Tab Active State ────────────────────────── */
+
+.map-ribbon-tab--active {
+    color: #f6ebd5;
+    background: rgba(223, 187, 104, 0.18);
+    box-shadow: inset 0 -2px 0 var(--inkr-gold-500);
+}
+
+/* ── Map Settings Modal ─────────────────────────────────── */
+
+.map-settings-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 60;
+}
+
+.map-settings-modal {
+    position: absolute;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 340px;
+    max-width: calc(100% - 2rem);
+    background:
+        linear-gradient(155deg, rgba(121, 83, 52, 0.22), rgba(31, 19, 11, 0.06)),
+        linear-gradient(180deg, var(--inkr-wood-650) 0%, var(--inkr-wood-700) 100%);
+    border: 1px solid var(--inkr-wood-600);
+    border-radius: 0.75rem;
+    box-shadow: 0 8px 32px rgba(11, 7, 4, 0.55);
+    z-index: 61;
+    color: var(--inkr-paper-100);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.map-settings-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem 0.6rem 1rem;
+    background: linear-gradient(180deg, rgba(31, 19, 11, 0.42), rgba(31, 19, 11, 0.06));
+    border-bottom: 1px solid var(--inkr-gold-800);
+    flex-shrink: 0;
+}
+
+.map-settings-modal-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--inkr-gold-500);
+}
+
+.map-settings-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem 1rem;
+    overflow-y: auto;
+}
+
+.map-settings-modal-section-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--inkr-gold-600);
+    padding-top: 0.35rem;
+    border-top: 1px solid rgba(211, 190, 151, 0.22);
+    margin-top: 0.1rem;
+}
+
+.map-settings-modal-section-label:first-child {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+}
+
+.map-settings-modal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.map-settings-modal-label {
+    font-size: 0.72rem;
+    color: var(--inkr-paper-300);
+    white-space: nowrap;
+}
+
+.map-settings-modal-color {
+    width: 3rem;
+    height: 1.75rem;
+    padding: 0.1rem 0.2rem;
+    border: 1px solid var(--inkr-wood-600);
+    border-radius: 0.35rem;
+    cursor: pointer;
+    background: rgba(31, 19, 11, 0.3);
+    flex-shrink: 0;
+}
+
+.map-settings-modal-specs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.map-settings-modal-spec-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.map-settings-modal-spec-label {
+    font-size: 0.68rem;
+    color: var(--inkr-paper-400);
+}
+
+.map-settings-modal-spec-value {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--inkr-paper-200);
+    font-variant-numeric: tabular-nums;
+}
+
+.map-settings-modal-resize-note {
+    font-size: 0.65rem;
+    color: var(--inkr-paper-400);
+    margin-top: -0.4rem;
+}
+
+.map-settings-modal-resize-inputs {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.map-settings-modal-resize-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1 1 80px;
+    min-width: 80px;
+}
+
+.map-settings-modal-number {
+    background: rgba(31, 19, 11, 0.4) !important;
+    border-color: var(--inkr-wood-600) !important;
+    color: var(--inkr-paper-100) !important;
+    text-align: center;
+}
+
+.map-settings-modal-number:focus {
+    background: rgba(31, 19, 11, 0.6) !important;
+    border-color: var(--inkr-gold-600) !important;
+    box-shadow: 0 0 0 0.15rem rgba(211, 176, 83, 0.25) !important;
+    color: var(--inkr-paper-100) !important;
+}
+
+.map-settings-modal-apply-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 /* Point feature editor — overlay panel */
 .map-editor-canvas-area {
     display: flex;

@@ -6,6 +6,8 @@ public sealed class MapDto
     public string Name { get; set; } = string.Empty;
     public string BackgroundColor { get; set; } = "#b8d4e8";
     public bool ShowGrid { get; set; } = true;
+    public float Width { get; set; } = 2000f;
+    public float Height { get; set; } = 1200f;
     public List<TreeFeatureDto> Trees { get; set; } = new();
     public List<HouseFeatureDto> Houses { get; set; } = new();
     public List<CharacterFeatureDto> Characters { get; set; } = new();
@@ -146,6 +148,8 @@ public sealed class MapEditsRequest
     public int MapId { get; set; }
     public string? BackgroundColor { get; set; }
     public bool? ShowGrid { get; set; }
+    public float? Width { get; set; }
+    public float? Height { get; set; }
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<TreeFeatureDto> AddedTrees { get; set; } = new();
     public List<HouseFeatureDto> AddedHouses { get; set; } = new();

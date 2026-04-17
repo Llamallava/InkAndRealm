@@ -325,7 +325,7 @@ window.inkAndRealmDemo = {
                 ctx.font = `${fontSize}px 'Segoe UI', sans-serif`;
                 ctx.lineWidth = 3;
                 ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-                ctx.fillStyle = title.isStaged ? "rgba(45, 58, 74, 0.8)" : "#2b3a4a";
+                ctx.fillStyle = "#2b3a4a";
                 ctx.strokeText(title.name, title.x, title.y);
                 ctx.fillText(title.name, title.x, title.y);
             });
@@ -438,7 +438,7 @@ window.inkAndRealmDemo = {
             const targetWidth = treeImage.naturalWidth * scale;
 
             ctx.save();
-            ctx.globalAlpha = isStaged ? 0.75 : 1;
+            ctx.globalAlpha = 1;
             ctx.imageSmoothingEnabled = true;
             ctx.drawImage(
                 treeImage,
@@ -459,17 +459,8 @@ window.inkAndRealmDemo = {
             Palm: { canopy: "#6f9f4a", trunk: "#7a5a3a", outline: null }
         };
 
-        const getTreePalette = (styleKey, isStaged) => {
-            const base = treeStylePalette[styleKey] || treeStylePalette.Oak;
-            if (!isStaged) {
-                return base;
-            }
-
-            return {
-                canopy: "#7bb661",
-                trunk: "#6b5436",
-                outline: "#2f5d39"
-            };
+        const getTreePalette = (styleKey) => {
+            return treeStylePalette[styleKey] || treeStylePalette.Oak;
         };
 
         const drawHouse = (x, y, baseColor, roofColor, outlineColor) => {
@@ -524,7 +515,7 @@ window.inkAndRealmDemo = {
         };
 
         const drawTreeAt = (x, y, styleKey, isStaged) => {
-            const palette = getTreePalette(styleKey, isStaged);
+            const palette = getTreePalette(styleKey);
             if (drawTilesetTree(x, y, isStaged)) {
                 return;
             }
@@ -537,18 +528,12 @@ window.inkAndRealmDemo = {
         };
 
         const drawHouseAt = (x, y, isStaged) => {
-            drawHouse(
-                x,
-                y,
-                isStaged ? "#e3c9a8" : "#d7b894",
-                isStaged ? "#9a6a42" : "#7f5a3b",
-                isStaged ? "#6a4a2d" : null
-            );
+            drawHouse(x, y, "#d7b894", "#7f5a3b", null);
         };
 
         const drawCharacterAt = (x, y, isStaged) => {
-            const stroke = isStaged ? "rgba(43, 58, 74, 0.6)" : "#2b3a4a";
-            const fill = isStaged ? "rgba(43, 58, 74, 0.15)" : "rgba(43, 58, 74, 0.05)";
+            const stroke = "#2b3a4a";
+            const fill = "rgba(43, 58, 74, 0.05)";
             const lineWidth = 2 / zoom;
             const headCenterY = y - 24;
             const torsoTopY = y - 16;

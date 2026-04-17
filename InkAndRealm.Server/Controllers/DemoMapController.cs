@@ -1011,6 +1011,23 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        const float minMapWidth = 800f;
+        const float maxMapWidth = 8000f;
+        const float minMapHeight = 600f;
+        const float maxMapHeight = 6000f;
+
+        if (request.Width.HasValue && request.Width.Value >= minMapWidth && request.Width.Value <= maxMapWidth && request.Width.Value != map.Width)
+        {
+            map.Width = request.Width.Value;
+            hasChanges = true;
+        }
+
+        if (request.Height.HasValue && request.Height.Value >= minMapHeight && request.Height.Value <= maxMapHeight && request.Height.Value != map.Height)
+        {
+            map.Height = request.Height.Value;
+            hasChanges = true;
+        }
+
         if (hasChanges)
         {
             await _context.SaveChangesAsync();
@@ -1361,6 +1378,8 @@ public sealed class DemoMapController : ControllerBase
             Name = map.Name,
             BackgroundColor = map.BackgroundColor,
             ShowGrid = map.ShowGrid,
+            Width = map.Width > 0 ? map.Width : 2000f,
+            Height = map.Height > 0 ? map.Height : 1200f,
             Trees = map.Features
                 .OfType<TreeFeatureEntity>()
                 .Select(tree =>
