@@ -52,6 +52,12 @@ window.inkAndRealmDemo = {
 
         const mapStyle = (renderState && renderState.mapStyle) ? renderState.mapStyle : "FullColor";
         const isParchment = mapStyle === "Parchment";
+
+        canvas.style.transition = "filter 0.4s ease";
+        canvas.style.filter = isParchment
+            ? "sepia(50%) saturate(70%) brightness(110%) contrast(108%)"
+            : "";
+
         const bgColor = isParchment ? "#d4bc8c"
             : (renderState && renderState.backgroundColor) ? renderState.backgroundColor : "#b8d4e8";
         const showGrid = !(renderState && renderState.showGrid === false);
