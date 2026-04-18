@@ -1408,7 +1408,7 @@ code {
     right: 0.35rem;
     bottom: 0.35rem;
     width: 40%;
-    z-index: 20;
+    z-index: 30;
     background:
         linear-gradient(155deg, rgba(121, 83, 52, 0.22), rgba(31, 19, 11, 0.06)),
         linear-gradient(180deg, var(--inkr-wood-650) 0%, var(--inkr-wood-700) 100%);
@@ -1771,6 +1771,125 @@ code {
 .map-ribbon-tab:hover {
     color: #f6ebd5;
     background: rgba(223, 187, 104, 0.1);
+}
+
+/* ── Export Dropdown ─────────────────────────────────── */
+.map-ribbon-tab-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+}
+
+.map-export-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 200;
+    width: 220px;
+    background:
+        linear-gradient(155deg, rgba(121, 83, 52, 0.22), rgba(31, 19, 11, 0.06)),
+        linear-gradient(180deg, var(--inkr-wood-650) 0%, var(--inkr-wood-700) 100%);
+    border: 1px solid var(--inkr-wood-600);
+    border-top: none;
+    border-radius: 0 0 0.6rem 0.6rem;
+    box-shadow: 0 8px 24px rgba(11, 7, 4, 0.5);
+    overflow: hidden;
+}
+
+.map-export-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.6rem 0.5rem 0.85rem;
+    background: linear-gradient(180deg, rgba(31, 19, 11, 0.42), rgba(31, 19, 11, 0.06));
+    border-bottom: 1px solid var(--inkr-gold-800);
+}
+
+.map-export-dropdown-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--inkr-gold-500);
+}
+
+.map-export-dropdown-close {
+    background: transparent;
+    border: none;
+    color: rgba(246, 235, 213, 0.6);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.2rem;
+}
+
+.map-export-dropdown-close:hover {
+    color: #f6ebd5;
+}
+
+.map-export-dropdown-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.75rem 0.85rem;
+}
+
+.map-export-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(246, 235, 213, 0.65);
+}
+
+.map-export-filename-row {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(167, 121, 47, 0.4);
+    border-radius: 0.4rem;
+    overflow: hidden;
+}
+
+.map-export-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #f6ebd5;
+    font-size: 0.82rem;
+    padding: 0.3rem 0.5rem;
+    outline: none;
+    min-width: 0;
+}
+
+.map-export-input::placeholder {
+    color: rgba(246, 235, 213, 0.35);
+}
+
+.map-export-ext {
+    font-size: 0.78rem;
+    color: rgba(246, 235, 213, 0.45);
+    padding: 0 0.5rem 0 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.map-export-btn {
+    width: 100%;
+    padding: 0.4rem;
+    background: rgba(223, 187, 104, 0.15);
+    border: 1px solid rgba(223, 187, 104, 0.35);
+    border-radius: 0.4rem;
+    color: var(--inkr-gold-500, #edce8b);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+.map-export-btn:hover {
+    background: rgba(223, 187, 104, 0.25);
+    border-color: rgba(223, 187, 104, 0.6);
 }
 
 /* ── Ribbon tool-row controls ── */

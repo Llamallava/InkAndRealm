@@ -26,6 +26,26 @@
                 <button class="map-ribbon-tab @(_isStyleSettingsModalOpen ? "map-ribbon-tab--active" : "")" @onclick="ToggleStyleSettingsModal">Style Settings</button>
                 <button class="map-ribbon-tab @(_isRelationshipTreeOpen ? "map-ribbon-tab--active" : "")" @onclick="OpenRelationshipTreeAsync" disabled="@_isPointFeatureEditorOpen">Character Tree</button>
                 <button class="map-ribbon-tab @(_isPostSettingsOpen ? "map-ribbon-tab--active" : "")" @onclick="TogglePostSettingsAsync">Post Settings</button>
+                <div class="map-ribbon-tab-wrapper">
+                    <button class="map-ribbon-tab @(_isExportMenuOpen ? "map-ribbon-tab--active" : "")" @onclick="ToggleExportMenu">Export</button>
+                    @if (_isExportMenuOpen)
+                    {
+                        <div class="map-export-dropdown">
+                            <div class="map-export-dropdown-header">
+                                <span class="map-export-dropdown-title">Export Map</span>
+                                <button class="map-export-dropdown-close" @onclick="ToggleExportMenu">&times;</button>
+                            </div>
+                            <div class="map-export-dropdown-body">
+                                <label class="map-export-label">Suggested name</label>
+                                <div class="map-export-filename-row">
+                                    <input class="map-export-input" type="text" @bind="_exportFileName" @bind:event="oninput" placeholder="my-map" />
+                                    <span class="map-export-ext">.png</span>
+                                </div>
+                                <button class="map-export-btn" @onclick="PerformExportAsync">Export PNG</button>
+                            </div>
+                        </div>
+                    }
+                </div>
             </div>
         </div>
         <div class="map-ribbon-tool-row">
@@ -1720,6 +1740,37 @@
         }
     }
 
+    private bool _isExportMenuOpen;
+    private string _exportFileName = "map";
+
+    private void ToggleExportMenu()
+    {
+        _isExportMenuOpen = !_isExportMenuOpen;
+    }
+
+    private async Task PerformExportAsync()
+    {
+        var fileName = string.IsNullOrWhiteSpace(_exportFileName) ? $"map-{MapId}" : _exportFileName.Trim();
+        var renderState = BuildRenderState();
+        renderState.ViewState = new MapViewStateDto
+        {
+            ViewX = 0,
+            ViewY = 0,
+            Zoom = 1,
+            MapWidth = MapWidth,
+            MapHeight = MapHeight
+        };
+        renderState.ActivePolygon = null;
+        renderState.EditPolygon = null;
+        renderState.EditPolygonPointIndex = null;
+        renderState.EditPolygonEdgeIndex = null;
+        renderState.EditPolygonCenterActive = false;
+        renderState.BrushPreview = null;
+        renderState.EditPointFeature = null;
+        await JS.InvokeVoidAsync("inkAndRealmDemo.exportFullMap", renderState, fileName);
+        _isExportMenuOpen = false;
+    }
+
     private async Task LoadPostSettingsDataAsync()
     {
         if (MapId <= 0 || !IsLoggedIn) return;
@@ -3353,6 +3404,7 @@
         _mapHeight = (map?.Height > 0) ? map.Height : 1200f;
         _mapSettingsWidthInput = (int)_mapWidth;
         _mapSettingsHeightInput = (int)_mapHeight;
+        _exportFileName = string.IsNullOrWhiteSpace(map?.Name) ? $"map-{MapId}" : map.Name;
         ClearStaged();
         ClearUndoHistory();
         _lastSavedSnapshot = CaptureLiveSnapshot();

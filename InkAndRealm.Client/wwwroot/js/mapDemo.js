@@ -1018,6 +1018,64 @@ window.inkAndRealmDemo = {
                 element.select();
             }
         }
+    },
+    exportFullMap: async (renderState, fileName) => {
+        const viewState = renderState && renderState.viewState ? renderState.viewState : {};
+        const mapWidth = (viewState.mapWidth && viewState.mapWidth > 0) ? viewState.mapWidth : 2000;
+        const mapHeight = (viewState.mapHeight && viewState.mapHeight > 0) ? viewState.mapHeight : 1200;
+
+        const tempId = "__ink_realm_export_canvas__";
+        const offscreen = document.createElement("canvas");
+        offscreen.id = tempId;
+        offscreen.width = mapWidth;
+        offscreen.height = mapHeight;
+        offscreen.style.position = "fixed";
+        offscreen.style.left = "-9999px";
+        offscreen.style.top = "-9999px";
+        document.body.appendChild(offscreen);
+
+        const exportState = Object.assign({}, renderState, {
+            viewState: { viewX: 0, viewY: 0, zoom: 1, mapWidth, mapHeight },
+            brushPreview: null,
+            activePolygon: null,
+            editPolygon: null,
+            editPointFeature: null
+        });
+
+        window.inkAndRealmDemo.drawMap(tempId, exportState);
+
+        const safeName = (fileName || "map").replace(/[/\\?%*:|"<>]/g, "_");
+
+        if (window.showSaveFilePicker) {
+            // Native Save As dialog (Chrome / Edge)
+            let fileHandle;
+            try {
+                fileHandle = await window.showSaveFilePicker({
+                    suggestedName: safeName + ".png",
+                    types: [{ description: "PNG Image", accept: { "image/png": [".png"] } }]
+                });
+            } catch (err) {
+                document.body.removeChild(offscreen);
+                if (err.name !== "AbortError") throw err;
+                return; // user cancelled
+            }
+
+            const blob = await new Promise(resolve => offscreen.toBlob(resolve, "image/png"));
+            document.body.removeChild(offscreen);
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+        } else {
+            // Fallback: auto-download (Firefox / Safari)
+            const dataUrl = offscreen.toDataURL("image/png");
+            document.body.removeChild(offscreen);
+            const link = document.createElement("a");
+            link.href = dataUrl;
+            link.download = safeName + ".png";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     }
 };
 
