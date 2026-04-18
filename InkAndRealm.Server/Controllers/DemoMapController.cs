@@ -1280,7 +1280,8 @@ public sealed class DemoMapController : ControllerBase
         var feature = new WaterFeatureEntity
         {
             WaterType = WaterType.Lake,
-            ZIndex = polygon?.LayerIndex ?? 0
+            ZIndex = polygon?.LayerIndex ?? 0,
+            UseCurves = polygon?.UseCurves ?? true
         };
 
         if (polygon?.Points is not null)
@@ -1339,6 +1340,7 @@ public sealed class DemoMapController : ControllerBase
                 Id = feature.Id,
                 FeatureType = "Water",
                 LayerIndex = feature.ZIndex,
+                UseCurves = feature.UseCurves,
                 Points = feature.Points
                     .OrderBy(point => point.SortOrder)
                     .Select(point => new MapPointDto

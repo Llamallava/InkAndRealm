@@ -452,6 +452,9 @@ namespace InkAndRealm.Server.Migrations
                 {
                     b.HasBaseType("InkAndRealm.Server.Data.FeatureEntity");
 
+                    b.Property<bool>("UseCurves")
+                        .HasColumnType("bit");
+
                     b.Property<string>("WaterType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

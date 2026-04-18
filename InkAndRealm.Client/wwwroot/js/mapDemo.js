@@ -681,7 +681,8 @@ window.inkAndRealmDemo = {
                     polygons.forEach(polygon => {
                         const color = getLayerColor(polygon.featureType);
                         if (polygon.featureType === "Water") {
-                            drawSmoothPolygon(layerCtx, polygon.points, color, 0.85, "#5a86a1");
+                            const drawWater = polygon.useCurves !== false ? drawSmoothPolygon : drawPolygon;
+                            drawWater(layerCtx, polygon.points, color, 0.85, "#5a86a1");
                         } else if (polygon.featureType === "Land") {
                             drawLandPolygon(layerCtx, polygon.points, color, 0.85, "#8a6a4d");
                         } else {
@@ -802,7 +803,8 @@ window.inkAndRealmDemo = {
 
                     if (polygon.points.length >= 3) {
                         if (polygon.featureType === "Water") {
-                            drawSmoothPolygon(previewCtx, polygon.points, "#7fb7d9", 0.25, "#5a86a1");
+                            const drawWater = polygon.useCurves !== false ? drawSmoothPolygon : drawPolygon;
+                            drawWater(previewCtx, polygon.points, "#7fb7d9", 0.25, "#5a86a1");
                         } else if (polygon.featureType === "Land") {
                             drawLandPolygon(previewCtx, polygon.points, "#d9c5a1", 0.2, "#8a6a4d");
                         }
@@ -849,7 +851,8 @@ window.inkAndRealmDemo = {
 
             if (preview.points.length >= 3) {
                 if (preview.featureType === "Water") {
-                    drawSmoothPolygon(ctx, preview.points, "#7fb7d9", 0.25, "#5a86a1");
+                    const drawWater = preview.useCurves !== false ? drawSmoothPolygon : drawPolygon;
+                    drawWater(ctx, preview.points, "#7fb7d9", 0.25, "#5a86a1");
                 } else if (preview.featureType === "Land") {
                     drawLandPolygon(ctx, preview.points, "#d9c5a1", 0.2, "#8a6a4d");
                 }
@@ -883,7 +886,8 @@ window.inkAndRealmDemo = {
 
             if (editPolygon.points.length >= 3) {
                 if (editPolygon.featureType === "Water") {
-                    drawSmoothPolygon(ctx, editPolygon.points, "#6faed3", 0.18, "#2f5d89");
+                    const drawWater = editPolygon.useCurves !== false ? drawSmoothPolygon : drawPolygon;
+                    drawWater(ctx, editPolygon.points, "#6faed3", 0.18, "#2f5d89");
                 } else if (editPolygon.featureType === "Land") {
                     drawLandPolygon(ctx, editPolygon.points, "#d9c5a1", 0.16, "#8a6a4d");
                 } else {

@@ -136,6 +136,14 @@
                     </div>
                 }
             }
+            @if (ShowWaterCurvesToggle)
+            {
+                <div class="map-ribbon-divider"></div>
+                <div class="map-ribbon-control-check">
+                    <input type="checkbox" id="water-curves-ribbon" @bind="UseWaterCurves" />
+                    <label for="water-curves-ribbon">Curves</label>
+                </div>
+            }
             @if (CanGenerateStarterLandMass)
             {
                 <div class="map-ribbon-divider"></div>
@@ -1458,6 +1466,7 @@
     private EraserTarget _eraserTarget = EraserTarget.All;
     private bool _useChaoticLandEdges = true;
     private int _landChaosIntensity = 5;
+    private bool _useWaterCurves = true;
     private bool _showGrid = true;
     private string _backgroundColor = "#b8d4e8";
     private bool _isMapSettingsModalOpen;
@@ -1602,6 +1611,7 @@
     private bool ShowPointSize => IsPointPlacement(_placementType) && _placementType != PlacementType.Character;
     private bool ShowTitleSize => _placementType == PlacementType.Title;
     private bool ShowChaoticEdgesToggle => _placementType == PlacementType.Land;
+    private bool ShowWaterCurvesToggle => _placementType == PlacementType.Water && _activeTool == MapToolType.Polygon;
     private bool CanGenerateStarterLandMass => _placementType == PlacementType.Land && !_isLoading && !_isSaving && _hasMap;
     private static string GetToolIcon(MapToolType tool)
     {
@@ -1651,6 +1661,20 @@
             }
 
             _useChaoticLandEdges = value;
+            _ = InvokeAsync(DrawAsync);
+        }
+    }
+    private bool UseWaterCurves
+    {
+        get => _useWaterCurves;
+        set
+        {
+            if (_useWaterCurves == value)
+            {
+                return;
+            }
+
+            _useWaterCurves = value;
             _ = InvokeAsync(DrawAsync);
         }
     }
@@ -2810,7 +2834,8 @@
             {
                 FeatureType = featureType,
                 LayerIndex = layer.LayerIndex,
-                Points = polygonPoints
+                Points = polygonPoints,
+                UseCurves = !IsWaterFeatureType(featureType) || _useWaterCurves
             };
 
             if (IsLandFeatureType(polygon.FeatureType))
@@ -8240,6 +8265,7 @@
                             ? _placementType.ToString()
                             : GetAreaPlacementFeatureType(),
                     LayerIndex = _activeAreaLayer?.LayerIndex ?? 0,
+                    UseCurves = _useWaterCurves,
                     Points = _activePolygonPoints
                         .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                         .ToList()

@@ -116,6 +116,7 @@ public sealed class LandFeatureEntity : AreaFeatureEntity
 public sealed class WaterFeatureEntity : AreaFeatureEntity
 {
     public WaterType WaterType { get; set; }
+    public bool UseCurves { get; set; } = true;
 }
 
 public sealed class BridgeFeatureEntity : AreaFeatureEntity

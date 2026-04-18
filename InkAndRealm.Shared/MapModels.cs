@@ -231,6 +231,7 @@ public sealed class AreaPolygonDto
     public string FeatureType { get; set; } = string.Empty;
     public int LayerIndex { get; set; }
     public List<MapPointDto> Points { get; set; } = new();
+    public bool UseCurves { get; set; } = true;
 }
 
 public sealed class MapPointDto
