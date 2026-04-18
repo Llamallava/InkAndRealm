@@ -37,6 +37,7 @@ public sealed class MapEntity
     public DateTime? PublishedUtc { get; set; }
     public string BackgroundColor { get; set; } = "#b8d4e8";
     public bool ShowGrid { get; set; } = true;
+    public string MapStyle { get; set; } = "FullColor";
     public MapShareEntity? Share { get; set; }
     public List<FeatureEntity> Features { get; set; } = new();
     public List<MapLayerEntity> Layers { get; set; } = new();

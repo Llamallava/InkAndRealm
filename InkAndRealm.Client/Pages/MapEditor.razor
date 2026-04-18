@@ -23,6 +23,7 @@
             </button>
             <div class="map-ribbon-tabs">
                 <button class="map-ribbon-tab @(_isMapSettingsModalOpen ? "map-ribbon-tab--active" : "")" @onclick="ToggleMapSettingsModal">Map Settings</button>
+                <button class="map-ribbon-tab @(_isStyleSettingsModalOpen ? "map-ribbon-tab--active" : "")" @onclick="ToggleStyleSettingsModal">Style Settings</button>
                 <button class="map-ribbon-tab">Insert</button>
                 <button class="map-ribbon-tab">Format</button>
                 <button class="map-ribbon-tab">View</button>
@@ -56,13 +57,6 @@
                     <span class="map-ribbon-control-label">Density</span>
                     <input class="map-ribbon-slider" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
                 </div>
-                @if (ShowChaoticEdgesToggle)
-                {
-                    <div class="map-ribbon-control-check">
-                        <input type="checkbox" id="land-chaos-ribbon" @bind="UseChaoticLandEdges" />
-                        <label for="land-chaos-ribbon">Chaotic Edges</label>
-                    </div>
-                }
             }
             else if (_activeTool == MapToolType.Polygon)
             {
@@ -70,13 +64,6 @@
                     <span class="map-ribbon-control-label">Density</span>
                     <input class="map-ribbon-slider" type="range" min="1" max="10" step="1" @bind="_polygonDensity" />
                 </div>
-                @if (ShowChaoticEdgesToggle)
-                {
-                    <div class="map-ribbon-control-check">
-                        <input type="checkbox" id="land-chaos-ribbon-poly" @bind="UseChaoticLandEdges" />
-                        <label for="land-chaos-ribbon-poly">Chaotic Edges</label>
-                    </div>
-                }
             }
             else if (_activeTool == MapToolType.Point)
             {
@@ -113,6 +100,31 @@
                     </select>
                 </div>
             }
+            @if (ShowChaoticEdgesToggle)
+            {
+                <div class="map-ribbon-divider"></div>
+                <div class="map-ribbon-control-check">
+                    <input type="checkbox" id="land-chaos-ribbon" @bind="UseChaoticLandEdges" />
+                    <label for="land-chaos-ribbon">Chaotic Edges</label>
+                </div>
+                @if (_useChaoticLandEdges)
+                {
+                    <div class="map-ribbon-control">
+                        <span class="map-ribbon-control-label">Intensity</span>
+                        <input class="map-ribbon-slider" type="range" min="1" max="10" step="1"
+                               @bind="LandChaosIntensity" @bind:event="oninput" />
+                    </div>
+                }
+            }
+            @if (CanGenerateStarterLandMass)
+            {
+                <div class="map-ribbon-divider"></div>
+                <button class="map-ribbon-action-btn map-ribbon-action-btn--text"
+                        @onclick="GenerateStarterLandMassAsync"
+                        title="Generate a starter land mass on the active layer">
+                    Starter Land Mass
+                </button>
+            }
         </div>
     </div>
 </SectionContent>
@@ -140,7 +152,7 @@
                         <canvas id="@CanvasId"
                                 width="1000"
                                 height="600"
-                                class="map-editor-canvas"
+                                class="map-editor-canvas @(_mapStyle == "Parchment" ? "map-canvas--parchment" : "")"
                                 style="touch-action:none;"
                                 @onmousedown="HandlePointerDown"
                                 @onmousemove="HandlePointerMove"
@@ -611,6 +623,42 @@
                                @bind="_mapSettingsHeightInput" />
                     </div>
                     <button class="btn btn-primary btn-sm map-settings-modal-apply-btn" @onclick="ApplyMapResize">Apply</button>
+                </div>
+
+            </div>
+        </div>
+    }
+
+    @if (_isStyleSettingsModalOpen)
+    {
+        <div class="map-settings-modal-backdrop" @onclick="ToggleStyleSettingsModal"></div>
+        <div class="map-settings-modal style-settings-modal">
+            <div class="map-settings-modal-header">
+                <span class="map-settings-modal-title">Style Settings</span>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ToggleStyleSettingsModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="map-settings-modal-body">
+
+                <div class="map-settings-modal-section-label">Map Style</div>
+                <div class="style-settings-radio-group">
+                    <label class="style-settings-radio-option @(_mapStyle == "FullColor" ? "style-settings-radio-option--active" : "")">
+                        <input type="radio"
+                               name="mapStyle"
+                               value="FullColor"
+                               checked="@(_mapStyle == "FullColor")"
+                               @onchange="SelectFullColorStyle" />
+                        <span class="style-settings-radio-label">Full Color</span>
+                        <span class="style-settings-radio-desc">Standard vivid colors</span>
+                    </label>
+                    <label class="style-settings-radio-option @(_mapStyle == "Parchment" ? "style-settings-radio-option--active" : "")">
+                        <input type="radio"
+                               name="mapStyle"
+                               value="Parchment"
+                               checked="@(_mapStyle == "Parchment")"
+                               @onchange="SelectParchmentStyle" />
+                        <span class="style-settings-radio-label">Parchment</span>
+                        <span class="style-settings-radio-desc">Classic aged-paper ink style</span>
+                    </label>
                 </div>
 
             </div>
@@ -1144,8 +1192,10 @@
     private const float PolygonMinSpacing = 18f;
     private const float PolygonMaxSpacing = 120f;
     private const int PolygonMaxPoints = 1600;
-    private const float LandChaosSegmentLength = 28f;
-    private const float LandChaosAmplitude = 7f;
+    private const float LandChaosSegmentLengthMin = 10f;
+    private const float LandChaosSegmentLengthMax = 42f;
+    private const float LandChaosAmplitudeMin = 3f;
+    private const float LandChaosAmplitudeMax = 22f;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
     private readonly List<MapPointDto> _activePolygonPoints = new();
@@ -1196,9 +1246,12 @@
     private bool _isDraggingTitleFeature;
     private EraserTarget _eraserTarget = EraserTarget.All;
     private bool _useChaoticLandEdges = true;
+    private int _landChaosIntensity = 5;
     private bool _showGrid = true;
     private string _backgroundColor = "#b8d4e8";
     private bool _isMapSettingsModalOpen;
+    private bool _isStyleSettingsModalOpen;
+    private string _mapStyle = "FullColor";
     private int _mapSettingsWidthInput = 2000;
     private int _mapSettingsHeightInput = 1200;
     private bool _isPointFeatureEditorOpen;
@@ -1377,6 +1430,24 @@
             _ = InvokeAsync(DrawAsync);
         }
     }
+    private int LandChaosIntensity
+    {
+        get => _landChaosIntensity;
+        set
+        {
+            if (_landChaosIntensity == value)
+            {
+                return;
+            }
+
+            _landChaosIntensity = value;
+            _ = InvokeAsync(DrawAsync);
+        }
+    }
+    private float LandChaosSegmentLength =>
+        LandChaosSegmentLengthMax - ((_landChaosIntensity - 1) / 9f) * (LandChaosSegmentLengthMax - LandChaosSegmentLengthMin);
+    private float LandChaosAmplitude =>
+        LandChaosAmplitudeMin + ((_landChaosIntensity - 1) / 9f) * (LandChaosAmplitudeMax - LandChaosAmplitudeMin);
     private bool ShowGrid
     {
         get => _showGrid;
@@ -1395,6 +1466,22 @@
             _ = InvokeAsync(DrawAsync);
         }
     }
+    private string MapStyleValue
+    {
+        get => _mapStyle;
+        set
+        {
+            _mapStyle = value;
+            _ = InvokeAsync(DrawAsync);
+        }
+    }
+    private void ToggleStyleSettingsModal()
+    {
+        _isStyleSettingsModalOpen = !_isStyleSettingsModalOpen;
+        if (_isMapSettingsModalOpen) _isMapSettingsModalOpen = false;
+    }
+    private void SelectFullColorStyle(ChangeEventArgs _) => MapStyleValue = "FullColor";
+    private void SelectParchmentStyle(ChangeEventArgs _) => MapStyleValue = "Parchment";
     private static string FormatAspectRatio(float w, float h)
     {
         if (w <= 0 || h <= 0) return "—";
@@ -1411,6 +1498,7 @@
         {
             _mapSettingsWidthInput = (int)_mapWidth;
             _mapSettingsHeightInput = (int)_mapHeight;
+            _isStyleSettingsModalOpen = false;
         }
     }
 
@@ -2268,7 +2356,7 @@
                 .ToList();
             if (_useChaoticLandEdges && IsLandFeatureType(featureType))
             {
-                polygonPoints = BuildChaoticLandEdgePoints(polygonPoints);
+                polygonPoints = BuildChaoticLandEdgePoints(polygonPoints, LandChaosSegmentLength, LandChaosAmplitude);
             }
 
             var polygon = new AreaPolygonDto
@@ -2535,7 +2623,7 @@
 
         if (_useChaoticLandEdges)
         {
-            points = BuildChaoticLandEdgePoints(points);
+            points = BuildChaoticLandEdgePoints(points, LandChaosSegmentLength, LandChaosAmplitude);
         }
 
         PushUndoState();
@@ -2864,6 +2952,7 @@
         LoadAreaLayers(map);
         _backgroundColor = map?.BackgroundColor ?? "#b8d4e8";
         _showGrid = map?.ShowGrid ?? true;
+        _mapStyle = map?.MapStyle ?? "FullColor";
         _mapWidth = (map?.Width > 0) ? map.Width : 2000f;
         _mapHeight = (map?.Height > 0) ? map.Height : 1200f;
         _mapSettingsWidthInput = (int)_mapWidth;
@@ -4383,6 +4472,7 @@
         LandPolygons = CloneList(_liveLandPolygons),
         BackgroundColor = _backgroundColor,
         ShowGrid = _showGrid,
+        MapStyle = _mapStyle,
         MapWidth = _mapWidth,
         MapHeight = _mapHeight
     };
@@ -4522,6 +4612,7 @@
             MapId = MapId,
             BackgroundColor = _backgroundColor != saved.BackgroundColor ? _backgroundColor : null,
             ShowGrid = _showGrid != saved.ShowGrid ? _showGrid : null,
+            MapStyle = _mapStyle != saved.MapStyle ? _mapStyle : null,
             Width = _mapWidth != saved.MapWidth ? _mapWidth : null,
             Height = _mapHeight != saved.MapHeight ? _mapHeight : null,
             AreaLayers = _areaLayers.OrderBy(l => l.LayerIndex).Select(l => new AreaLayerDto
@@ -4562,7 +4653,7 @@
         || diff.AddedRelationships.Count > 0 || diff.UpdatedRelationships.Count > 0 || diff.DeletedRelationshipIds.Count > 0
         || diff.AddedWaterPolygons.Count > 0 || diff.UpdatedWaterPolygons.Count > 0 || diff.DeletedWaterPolygonIds.Count > 0
         || diff.AddedLandPolygons.Count > 0 || diff.UpdatedLandPolygons.Count > 0 || diff.DeletedLandPolygonIds.Count > 0
-        || diff.BackgroundColor is not null || diff.ShowGrid.HasValue
+        || diff.BackgroundColor is not null || diff.ShowGrid.HasValue || diff.MapStyle is not null
         || diff.Width.HasValue || diff.Height.HasValue;
 
     private static bool AreEqualByJson<T>(T a, T b) =>
@@ -7309,7 +7400,7 @@
         return smoothed;
     }
 
-    private static List<MapPointDto> BuildChaoticLandEdgePoints(IReadOnlyList<MapPointDto> points)
+    private static List<MapPointDto> BuildChaoticLandEdgePoints(IReadOnlyList<MapPointDto> points, float segmentLength, float amplitude)
     {
         if (points is null || points.Count < 3)
         {
@@ -7332,7 +7423,7 @@
                 continue;
             }
 
-            var steps = Math.Max(1, (int)MathF.Floor(length / LandChaosSegmentLength));
+            var steps = Math.Max(1, (int)MathF.Floor(length / segmentLength));
             var nx = -dy / length;
             var ny = dx / length;
             chaoticPoints.Add(new MapPointDto { X = current.X, Y = current.Y });
@@ -7343,7 +7434,7 @@
                 var baseX = current.X + (dx * t);
                 var baseY = current.Y + (dy * t);
                 var noise = HashNoise01(seed + (i * 127.1f) + (step * 311.7f));
-                var offset = ((noise * 2f) - 1f) * LandChaosAmplitude;
+                var offset = ((noise * 2f) - 1f) * amplitude;
                 chaoticPoints.Add(new MapPointDto
                 {
                     X = baseX + (nx * offset),
@@ -7689,7 +7780,8 @@
                 MapHeight = MapHeight
             },
             ShowGrid = _showGrid,
-            BackgroundColor = _backgroundColor
+            BackgroundColor = _backgroundColor,
+            MapStyle = _mapStyle
         };
     }
 
@@ -7744,6 +7836,7 @@
         public List<AreaPolygonDto> LandPolygons { get; init; } = new();
         public string BackgroundColor { get; init; } = "#b8d4e8";
         public bool ShowGrid { get; init; } = true;
+        public string MapStyle { get; init; } = "FullColor";
         public float MapWidth { get; init; } = 2000f;
         public float MapHeight { get; init; } = 1200f;
     }

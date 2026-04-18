@@ -1231,6 +1231,62 @@ code {
     flex-shrink: 0;
 }
 
+/* ── Parchment Canvas Filter ────────────────────────────── */
+
+.map-canvas--parchment {
+    filter: sepia(50%) saturate(70%) brightness(110%) contrast(108%);
+    transition: filter 0.4s ease;
+}
+
+/* ── Style Settings Modal ───────────────────────────────── */
+
+.style-settings-modal {
+    width: 300px;
+}
+
+.style-settings-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.style-settings-radio-option {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid rgba(211, 190, 151, 0.2);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.15);
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.style-settings-radio-option:hover {
+    background: rgba(0, 0, 0, 0.25);
+    border-color: rgba(211, 190, 151, 0.4);
+}
+
+.style-settings-radio-option--active {
+    background: rgba(223, 187, 104, 0.12);
+    border-color: var(--inkr-gold-700);
+}
+
+.style-settings-radio-option input[type="radio"] {
+    display: none;
+}
+
+.style-settings-radio-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--inkr-paper-100);
+}
+
+.style-settings-radio-desc {
+    font-size: 0.65rem;
+    color: var(--inkr-paper-300);
+}
+
 /* Point feature editor — overlay panel */
 .map-editor-canvas-area {
     display: flex;
@@ -1491,6 +1547,13 @@ code {
     cursor: pointer;
     flex-shrink: 0;
     transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.map-ribbon-action-btn--text {
+    width: auto;
+    padding: 0 0.65rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
 }
 
 .map-ribbon-action-btn:hover:not(:disabled) {

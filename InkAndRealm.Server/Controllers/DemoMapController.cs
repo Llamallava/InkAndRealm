@@ -1011,6 +1011,12 @@ public sealed class DemoMapController : ControllerBase
             hasChanges = true;
         }
 
+        if (request.MapStyle is not null && request.MapStyle != map.MapStyle)
+        {
+            map.MapStyle = request.MapStyle;
+            hasChanges = true;
+        }
+
         const float minMapWidth = 800f;
         const float maxMapWidth = 8000f;
         const float minMapHeight = 600f;
@@ -1378,6 +1384,7 @@ public sealed class DemoMapController : ControllerBase
             Name = map.Name,
             BackgroundColor = map.BackgroundColor,
             ShowGrid = map.ShowGrid,
+            MapStyle = map.MapStyle,
             Width = map.Width > 0 ? map.Width : 2000f,
             Height = map.Height > 0 ? map.Height : 1200f,
             Trees = map.Features

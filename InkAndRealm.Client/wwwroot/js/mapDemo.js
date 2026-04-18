@@ -50,7 +50,10 @@ window.inkAndRealmDemo = {
 
         ctx.setTransform(zoom, 0, 0, zoom, -viewX * zoom, -viewY * zoom);
 
-        const bgColor = (renderState && renderState.backgroundColor) ? renderState.backgroundColor : "#b8d4e8";
+        const mapStyle = (renderState && renderState.mapStyle) ? renderState.mapStyle : "FullColor";
+        const isParchment = mapStyle === "Parchment";
+        const bgColor = isParchment ? "#d4bc8c"
+            : (renderState && renderState.backgroundColor) ? renderState.backgroundColor : "#b8d4e8";
         const showGrid = !(renderState && renderState.showGrid === false);
 
         ctx.fillStyle = bgColor;

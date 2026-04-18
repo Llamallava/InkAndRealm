@@ -6,6 +6,7 @@ public sealed class MapDto
     public string Name { get; set; } = string.Empty;
     public string BackgroundColor { get; set; } = "#b8d4e8";
     public bool ShowGrid { get; set; } = true;
+    public string MapStyle { get; set; } = "FullColor";
     public float Width { get; set; } = 2000f;
     public float Height { get; set; } = 1200f;
     public List<TreeFeatureDto> Trees { get; set; } = new();
@@ -148,6 +149,7 @@ public sealed class MapEditsRequest
     public int MapId { get; set; }
     public string? BackgroundColor { get; set; }
     public bool? ShowGrid { get; set; }
+    public string? MapStyle { get; set; }
     public float? Width { get; set; }
     public float? Height { get; set; }
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
@@ -239,6 +241,7 @@ public sealed class MapRenderStateDto
     public MapViewStateDto ViewState { get; set; } = new();
     public bool ShowGrid { get; set; } = true;
     public string BackgroundColor { get; set; } = "#b8d4e8";
+    public string MapStyle { get; set; } = "FullColor";
 }
 
 public sealed class BrushPreviewDto

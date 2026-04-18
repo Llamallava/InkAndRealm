@@ -141,6 +141,10 @@ namespace InkAndRealm.Server.Migrations
                     b.Property<bool>("ShowGrid")
                         .HasColumnType("bit");
 
+                    b.Property<string>("MapStyle")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
 

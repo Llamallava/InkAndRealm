@@ -103,7 +103,7 @@
                     <canvas id="@CanvasId"
                             width="1000"
                             height="600"
-                            class="map-editor-canvas @(_isPanning ? "map-viewer-grabbing" : "map-viewer-grab")"
+                            class="map-editor-canvas @(_isPanning ? "map-viewer-grabbing" : "map-viewer-grab") @(_map?.MapStyle == "Parchment" ? "map-canvas--parchment" : "")"
                             style="touch-action:none;"
                             @onmousedown="HandleMouseDown"
                             @onmousemove="HandleMouseMove"
@@ -616,7 +616,10 @@
                 Zoom = _zoom,
                 MapWidth = MapWidth,
                 MapHeight = MapHeight
-            }
+            },
+            BackgroundColor = map?.BackgroundColor ?? "#b8d4e8",
+            ShowGrid = map?.ShowGrid ?? true,
+            MapStyle = map?.MapStyle ?? "FullColor"
         };
     }
 
