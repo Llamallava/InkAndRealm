@@ -27,6 +27,7 @@
                 <button class="map-ribbon-tab">Insert</button>
                 <button class="map-ribbon-tab">Format</button>
                 <button class="map-ribbon-tab">View</button>
+                <button class="map-ribbon-tab @(_isRelationshipTreeOpen ? "map-ribbon-tab--active" : "")" @onclick="OpenRelationshipTreeAsync" disabled="@_isPointFeatureEditorOpen">Character Tree</button>
             </div>
         </div>
         <div class="map-ribbon-tool-row">
@@ -957,23 +958,8 @@
     <div class="relationship-tree-overlay">
         <div class="relationship-tree-card">
             <div class="relationship-tree-header">
-                <div>
-                    <div class="fw-semibold">Character Tree</div>
-                    <div class="small text-muted">Saved relationship data for this map.</div>
-                </div>
+                <div class="fw-semibold">Character Tree</div>
                 <div class="relationship-tree-header-actions">
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Character Tree zoom">
-                        <button class="btn btn-outline-secondary"
-                                type="button"
-                                @onclick="ZoomOutRelationshipTree">-</button>
-                        <button class="btn btn-outline-secondary"
-                                type="button"
-                                @onclick="ResetRelationshipTreeZoom">Reset</button>
-                        <button class="btn btn-outline-secondary"
-                                type="button"
-                                @onclick="ZoomInRelationshipTree">+</button>
-                    </div>
-                    <div class="small text-muted">@($"{_relationshipTreeZoom * 100:0}%")</div>
                     <button class="btn btn-outline-secondary btn-sm" @onclick="CloseRelationshipTree">
                         Close
                     </button>
@@ -1036,10 +1022,10 @@
                                     var labelText = GetRelationshipTreeEdgeLabel(edge.AToB);
                                     if (!string.IsNullOrWhiteSpace(labelText))
                                     {
-                                        <foreignObject x="@(labelPosition.X - 62f)"
-                                                       y="@(labelPosition.Y - 10f)"
-                                                       width="124"
-                                                       height="20">
+                                        <foreignObject x="@(labelPosition.X - 100f)"
+                                                       y="@(labelPosition.Y - 11f)"
+                                                       width="200"
+                                                       height="22">
                                             <div xmlns="http://www.w3.org/1999/xhtml"
                                                  class="relationship-tree-edge-label">@labelText</div>
                                         </foreignObject>
@@ -1052,10 +1038,10 @@
                                     var labelText = GetRelationshipTreeEdgeLabel(edge.BToA);
                                     if (!string.IsNullOrWhiteSpace(labelText))
                                     {
-                                        <foreignObject x="@(labelPosition.X - 62f)"
-                                                       y="@(labelPosition.Y - 10f)"
-                                                       width="124"
-                                                       height="20">
+                                        <foreignObject x="@(labelPosition.X - 100f)"
+                                                       y="@(labelPosition.Y - 11f)"
+                                                       width="200"
+                                                       height="22">
                                             <div xmlns="http://www.w3.org/1999/xhtml"
                                                  class="relationship-tree-edge-label">@labelText</div>
                                         </foreignObject>
@@ -1083,9 +1069,6 @@
                                 </g>
                             }
                         </svg>
-                    </div>
-                    <div class="small text-muted mt-2">
-                        Use mouse wheel over this graph to zoom. Click a character node to open Character Details in read-only mode.
                     </div>
                 }
             </div>
@@ -1137,6 +1120,7 @@
     private bool _hasMap;
     private string _statusMessage = string.Empty;
     private bool _isRelationshipTreeOpen;
+    private bool _returnToCharacterTree;
     private bool _isRelationshipTreeLoading;
     private string _relationshipTreeStatusMessage = string.Empty;
     private float _relationshipTreeZoom = 1f;
@@ -1218,6 +1202,7 @@
     private LiveMapSnapshot? _lastSavedSnapshot;
     private bool _autoSavePending;
     private System.Threading.Timer? _autoSaveTimer;
+    private IDisposable? _locationChangingRegistration;
     private AreaPolygonDto? _editingPolygon;
     private List<MapPointDto>? _editingOriginalPoints;
     private int _editingPointIndex = -1;
@@ -1527,6 +1512,7 @@
     protected override async Task OnInitializedAsync()
     {
         UserState.Changed += OnUserChanged;
+        _locationChangingRegistration = Navigation.RegisterLocationChangingHandler(OnLocationChanging);
         EnsureAreaLayers();
         await LoadMapAsync();
         _autoSaveTimer = new System.Threading.Timer(_ =>
@@ -4395,7 +4381,7 @@
         return $"{node.Label} [{node.FeatureType}]";
     }
 
-    private void SelectRelationshipTreeNode(RelationshipTreeNode node)
+    private async void SelectRelationshipTreeNode(RelationshipTreeNode node)
     {
         if (_relationshipTreeSuppressNodeClick)
         {
@@ -4408,10 +4394,31 @@
             return;
         }
 
-        var character = CloneDto(node.Character);
+        var liveCharacter = _liveCharacters.FirstOrDefault(c => c.Id == node.Character.Id);
+        if (liveCharacter is null)
+        {
+            return;
+        }
+
         CloseRelationshipTree();
-        OpenCharacterEditor(character, readOnly: true, resetRelationshipForm: true);
-        _statusMessage = "Viewing character details from Character Tree.";
+        ClearEditSelection(true);
+        _returnToCharacterTree = true;
+
+        _editingPointFeature = new EditingPointFeature
+        {
+            Tree = null,
+            House = null,
+            Character = liveCharacter,
+            IsStaged = liveCharacter.Id == 0
+        };
+        _editingPointOriginalPosition = GetPointFeaturePosition(_editingPointFeature);
+
+        OpenCharacterEditor(liveCharacter, readOnly: false, resetRelationshipForm: true);
+        _characterEditorShowingDetails = true;
+        BeginUndoBatch(UndoBatchKind.Edit);
+
+        _statusMessage = "Editing character from Character Tree. Press Done to return.";
+        await OpenPointFeatureEditorAsync();
     }
 
     private void OnUserChanged()
@@ -4431,9 +4438,17 @@
         Navigation.NavigateTo("/");
     }
 
+    private async ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        if (HasUnsavedChanges)
+            await SaveEditsAsync();
+    }
+
     public void Dispose()
     {
         UserState.Changed -= OnUserChanged;
+        _locationChangingRegistration?.Dispose();
+        _locationChangingRegistration = null;
         _autoSaveTimer?.Dispose();
         _autoSaveTimer = null;
         if (_undoShortcutRef is not null)
@@ -4672,7 +4687,7 @@
     private bool IsBlockingActionActive =>
         _isBrushing || _isErasing || _isDraggingEditPolygon || _isDraggingEditPoint ||
         _isDraggingEditPointFeature || _isDraggingTitleFeature || _isCharacterEditorOpen ||
-        _isRelationshipTreeOpen || _isSaving;
+        _isRelationshipTreeOpen || _isSaving || _isPointFeatureEditorOpen || _isRepositioning;
 
     private void TryReturnToIdle()
     {
@@ -5033,6 +5048,7 @@
         _isPointFeatureEditorOpen = false;
         _isRepositioning = false;
         _repositionOriginalPosition = null;
+        _returnToCharacterTree = false;
         CloseCharacterEditor();
         _editingTitleFeature = null;
         _editingTitleOriginalPosition = null;
@@ -5155,9 +5171,21 @@
             TrackEditedPointFeature(_editingPointFeature);
         }
 
+        var returnToTree = _returnToCharacterTree;
+        _returnToCharacterTree = false;
         _isPointFeatureEditorOpen = false;
         ClearEditSelection(true);
+
+        if (returnToTree)
+        {
+            _statusMessage = "Character updated.";
+            await DrawAsync();
+            await OpenRelationshipTreeAsync();
+            return;
+        }
+
         _statusMessage = "Feature updated.";
+        TryReturnToIdle();
         await DrawAsync();
     }
 
