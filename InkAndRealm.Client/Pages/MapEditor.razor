@@ -24,10 +24,8 @@
             <div class="map-ribbon-tabs">
                 <button class="map-ribbon-tab @(_isMapSettingsModalOpen ? "map-ribbon-tab--active" : "")" @onclick="ToggleMapSettingsModal">Map Settings</button>
                 <button class="map-ribbon-tab @(_isStyleSettingsModalOpen ? "map-ribbon-tab--active" : "")" @onclick="ToggleStyleSettingsModal">Style Settings</button>
-                <button class="map-ribbon-tab">Insert</button>
-                <button class="map-ribbon-tab">Format</button>
-                <button class="map-ribbon-tab">View</button>
                 <button class="map-ribbon-tab @(_isRelationshipTreeOpen ? "map-ribbon-tab--active" : "")" @onclick="OpenRelationshipTreeAsync" disabled="@_isPointFeatureEditorOpen">Character Tree</button>
+                <button class="map-ribbon-tab @(_isPostSettingsOpen ? "map-ribbon-tab--active" : "")" @onclick="TogglePostSettingsAsync">Post Settings</button>
             </div>
         </div>
         <div class="map-ribbon-tool-row">
@@ -724,6 +722,111 @@
             </div>
         </div>
     }
+
+    @if (_isPostSettingsOpen)
+    {
+        <div class="map-settings-modal-backdrop" @onclick="TogglePostSettingsAsync"></div>
+        <div class="map-settings-modal post-settings-modal">
+            <div class="map-settings-modal-header">
+                <span class="map-settings-modal-title">Post Settings</span>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="TogglePostSettingsAsync" aria-label="Close">&times;</button>
+            </div>
+            <div class="map-settings-modal-body">
+
+                @if (_postSettingsLoading)
+                {
+                    <div class="post-settings-loading">Loading...</div>
+                }
+                else
+                {
+                    <div class="map-settings-modal-section-label">Publish to Explore</div>
+                    <p class="post-section-desc">Make this map publicly visible to all users on the Explore page.</p>
+                    @if (_postSummary?.IsPublished == true)
+                    {
+                        <div class="publish-active-row">
+                            <span class="publish-active-badge">Published</span>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm mt-2"
+                                disabled="@_postPublishBusy"
+                                @onclick="PostUnpublishAsync">
+                            Remove from Explore
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-primary btn-sm"
+                                disabled="@_postPublishBusy"
+                                @onclick="PostPublishAsync">
+                            Publish
+                        </button>
+                    }
+
+                    <div class="map-settings-modal-section-label mt-3">Share Link</div>
+                    <p class="post-section-desc">Generate a code others can use to view this map.</p>
+                    @if (_postShare?.IsOpen == true && _postShare is not null)
+                    {
+                        <div class="share-code-row">
+                            <code class="share-code-display">@_postShare.ShareCode</code>
+                            <button class="btn btn-outline-secondary btn-sm"
+                                    title="Copy code"
+                                    @onclick="() => CopyPostShareCodeAsync(_postShare.ShareCode!)">
+                                Copy
+                            </button>
+                        </div>
+                        <div class="share-expiry">Expires @FormatPostUtc(_postShare.ExpiresUtc)</div>
+                        <button class="btn btn-outline-danger btn-sm mt-2"
+                                disabled="@_postShareBusy"
+                                @onclick="PostCloseShareAsync">
+                            Close Share
+                        </button>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_postShare?.ShareCode))
+                    {
+                        <div class="share-code-row">
+                            <code class="share-code-display share-code-closed">@_postShare!.ShareCode</code>
+                        </div>
+                        <div class="share-expiry text-muted">Share is closed.</div>
+                        <button class="btn btn-outline-success btn-sm mt-2"
+                                disabled="@_postShareBusy"
+                                @onclick="PostOpenShareAsync">
+                            Re-open Share
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-success btn-sm"
+                                disabled="@_postShareBusy"
+                                @onclick="PostOpenShareAsync">
+                            Generate Share Code
+                        </button>
+                    }
+
+                    @if (_postEngagement is not null)
+                    {
+                        <div class="map-settings-modal-section-label mt-3">Engagement</div>
+                        <div class="post-engagement-stats">
+                            <div class="post-engagement-stat">
+                                <span class="post-engagement-icon">&#128065;</span>
+                                <span class="post-engagement-value">@_postEngagement.ViewCount</span>
+                                <span class="post-engagement-label">Views</span>
+                            </div>
+                            <div class="post-engagement-stat">
+                                <span class="post-engagement-icon">&#9829;</span>
+                                <span class="post-engagement-value">@_postEngagement.LikeCount</span>
+                                <span class="post-engagement-label">Likes</span>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_postStatusMessage is not null)
+                    {
+                        <div class="post-status-msg mt-2">@_postStatusMessage</div>
+                    }
+                }
+
+            </div>
+        </div>
+    }
 </div>
 
 @if (_isCharacterEditorOpen && _editingCharacter is not null && !_isPointFeatureEditorOpen)
@@ -1339,6 +1442,14 @@
     private string _backgroundColor = "#b8d4e8";
     private bool _isMapSettingsModalOpen;
     private bool _isStyleSettingsModalOpen;
+    private bool _isPostSettingsOpen;
+    private bool _postSettingsLoading;
+    private MapSummaryDto? _postSummary;
+    private MapShareStatusDto? _postShare;
+    private MapEngagementDto? _postEngagement;
+    private bool _postShareBusy;
+    private bool _postPublishBusy;
+    private string? _postStatusMessage;
 
     // ── Native confirm/prompt dialogs ──────────────────────────
     private ConfirmDialogState _confirmDialog = new();
@@ -1572,6 +1683,7 @@
     {
         _isStyleSettingsModalOpen = !_isStyleSettingsModalOpen;
         if (_isMapSettingsModalOpen) _isMapSettingsModalOpen = false;
+        if (_isPostSettingsOpen) _isPostSettingsOpen = false;
     }
     private void SelectFullColorStyle(ChangeEventArgs _) => MapStyleValue = "FullColor";
     private void SelectParchmentStyle(ChangeEventArgs _) => MapStyleValue = "Parchment";
@@ -1592,8 +1704,198 @@
             _mapSettingsWidthInput = (int)_mapWidth;
             _mapSettingsHeightInput = (int)_mapHeight;
             _isStyleSettingsModalOpen = false;
+            _isPostSettingsOpen = false;
         }
     }
+
+    private async Task TogglePostSettingsAsync()
+    {
+        _isPostSettingsOpen = !_isPostSettingsOpen;
+        if (_isPostSettingsOpen)
+        {
+            _isMapSettingsModalOpen = false;
+            _isStyleSettingsModalOpen = false;
+            _postStatusMessage = null;
+            await LoadPostSettingsDataAsync();
+        }
+    }
+
+    private async Task LoadPostSettingsDataAsync()
+    {
+        if (MapId <= 0 || !IsLoggedIn) return;
+        _postSettingsLoading = true;
+        StateHasChanged();
+
+        var sessionToken = UserState.CurrentUser?.SessionToken;
+        var userId = UserState.CurrentUser?.UserId;
+
+        // Load map summary for IsPublished
+        string summaryUrl = !string.IsNullOrWhiteSpace(sessionToken)
+            ? $"api/demo-map?sessionToken={Uri.EscapeDataString(sessionToken)}"
+            : userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+
+        try
+        {
+            var maps = await Http.GetFromJsonAsync<List<MapSummaryDto>>(summaryUrl);
+            _postSummary = maps?.FirstOrDefault(m => m.Id == MapId);
+        }
+        catch { /* non-critical */ }
+
+        // Load share status
+        string shareUrl = !string.IsNullOrWhiteSpace(sessionToken)
+            ? $"api/demo-map/share?sessionToken={Uri.EscapeDataString(sessionToken)}"
+            : userId is null ? "api/demo-map/share" : $"api/demo-map/share?userId={userId.Value}";
+
+        try
+        {
+            var shares = await Http.GetFromJsonAsync<List<MapShareStatusDto>>(shareUrl);
+            _postShare = shares?.FirstOrDefault(s => s.MapId == MapId);
+        }
+        catch { /* non-critical */ }
+
+        // Load engagement (views + likes)
+        string engagementUrl = !string.IsNullOrWhiteSpace(sessionToken)
+            ? $"api/demo-map/engagement/{MapId}?sessionToken={Uri.EscapeDataString(sessionToken)}"
+            : userId is null ? $"api/demo-map/engagement/{MapId}" : $"api/demo-map/engagement/{MapId}?userId={userId.Value}";
+
+        try
+        {
+            _postEngagement = await Http.GetFromJsonAsync<MapEngagementDto>(engagementUrl);
+        }
+        catch { /* non-critical */ }
+
+        _postSettingsLoading = false;
+    }
+
+    private async Task PostPublishAsync()
+    {
+        if (MapId <= 0 || _postPublishBusy) return;
+        _postPublishBusy = true;
+        _postStatusMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/publish", new PublishMapRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = MapId
+        });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            _postSummary = await response.Content.ReadFromJsonAsync<MapSummaryDto>();
+        }
+        else
+        {
+            var msg = await response.Content.ReadAsStringAsync();
+            _postStatusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to publish map." : msg;
+        }
+
+        _postPublishBusy = false;
+    }
+
+    private async Task PostUnpublishAsync()
+    {
+        if (MapId <= 0 || _postPublishBusy) return;
+        _postPublishBusy = true;
+        _postStatusMessage = null;
+
+        var response = await Http.PostAsJsonAsync("api/demo-map/unpublish", new PublishMapRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = MapId
+        });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            _postSummary = await response.Content.ReadFromJsonAsync<MapSummaryDto>();
+        }
+        else
+        {
+            var msg = await response.Content.ReadAsStringAsync();
+            _postStatusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to unpublish map." : msg;
+        }
+
+        _postPublishBusy = false;
+    }
+
+    private async Task PostOpenShareAsync()
+    {
+        if (MapId <= 0 || _postShareBusy) return;
+        _postShareBusy = true;
+        _postStatusMessage = null;
+        await SetPostShareStateAsync(true);
+        _postShareBusy = false;
+    }
+
+    private async Task PostCloseShareAsync()
+    {
+        if (MapId <= 0 || _postShareBusy) return;
+        _postShareBusy = true;
+        _postStatusMessage = null;
+        await SetPostShareStateAsync(false);
+        _postShareBusy = false;
+    }
+
+    private async Task SetPostShareStateAsync(bool open)
+    {
+        var payload = new MapShareAccessRequest
+        {
+            UserId = UserState.CurrentUser?.UserId,
+            SessionToken = UserState.CurrentUser?.SessionToken,
+            MapId = MapId
+        };
+
+        var endpoint = open ? "api/demo-map/share/open" : "api/demo-map/share/close";
+        using var response = await Http.PostAsJsonAsync(endpoint, payload);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await UserState.SetUserAsync(null);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            _postShare = await response.Content.ReadFromJsonAsync<MapShareStatusDto>();
+        }
+        else
+        {
+            var failure = await response.Content.ReadAsStringAsync();
+            _postStatusMessage = string.IsNullOrWhiteSpace(failure) ? "Failed to update sharing." : failure;
+        }
+    }
+
+    private async Task CopyPostShareCodeAsync(string code)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", code);
+            _postStatusMessage = "Copied!";
+        }
+        catch
+        {
+            _postStatusMessage = code;
+        }
+    }
+
+    private static string FormatPostUtc(DateTime? utc) =>
+        utc.HasValue ? utc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "N/A";
 
     private void ApplyMapResize()
     {

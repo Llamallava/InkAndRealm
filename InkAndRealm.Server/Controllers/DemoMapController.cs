@@ -308,7 +308,9 @@ public sealed class DemoMapController : ControllerBase
                 Id = map.Id,
                 Name = map.Name,
                 AuthorName = map.User != null ? map.User.Username : "Unknown",
-                PublishedUtc = map.PublishedUtc!.Value
+                PublishedUtc = map.PublishedUtc!.Value,
+                ViewCount = map.ViewCount,
+                LikeCount = map.LikeCount
             })
             .ToListAsync();
 
@@ -329,6 +331,58 @@ public sealed class DemoMapController : ControllerBase
 
         var relationships = await LoadRelationshipsAsync(map);
         return Ok(ToDto(map, relationships));
+    }
+
+    [HttpPost("view")]
+    public async Task<ActionResult> RecordView([FromBody] LikeMapRequest request)
+    {
+        if (request is null || request.MapId <= 0)
+            return BadRequest("Map id is required.");
+
+        var map = await _context.Maps.FirstOrDefaultAsync(m => m.Id == request.MapId && m.IsPublished);
+        if (map is null)
+            return NotFound("Map not found.");
+
+        map.ViewCount++;
+        await _context.SaveChangesAsync();
+        return Ok();
+    }
+
+    [HttpPost("like")]
+    public async Task<ActionResult<MapEngagementDto>> LikeMap([FromBody] LikeMapRequest request)
+    {
+        if (request is null || request.MapId <= 0)
+            return BadRequest("Map id is required.");
+
+        var map = await _context.Maps.FirstOrDefaultAsync(m => m.Id == request.MapId && m.IsPublished);
+        if (map is null)
+            return NotFound("Map not found.");
+
+        map.LikeCount++;
+        await _context.SaveChangesAsync();
+
+        return Ok(new MapEngagementDto { MapId = map.Id, ViewCount = map.ViewCount, LikeCount = map.LikeCount });
+    }
+
+    [HttpGet("engagement/{mapId:int}")]
+    public async Task<ActionResult<MapEngagementDto>> GetEngagement([FromRoute] int mapId, [FromQuery] int? userId, [FromQuery] string? sessionToken)
+    {
+        if (userId is null && string.IsNullOrWhiteSpace(sessionToken))
+            return Unauthorized("Log in to view engagement stats.");
+
+        var user = await ResolveUserAsync(sessionToken, userId);
+        if (user is null)
+            return Unauthorized("Invalid user.");
+
+        var map = await _context.Maps
+            .Where(m => m.Id == mapId && m.UserId == user.Id)
+            .Select(m => new MapEngagementDto { MapId = m.Id, ViewCount = m.ViewCount, LikeCount = m.LikeCount })
+            .FirstOrDefaultAsync();
+
+        if (map is null)
+            return NotFound("Map not found.");
+
+        return Ok(map);
     }
 
     [HttpPost("publish")]

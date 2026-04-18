@@ -64,6 +64,49 @@
     text-overflow: ellipsis;
 }
 
+/* Engagement row: right-aligns stats in the footer */
+.explore-engagement {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.explore-stat {
+    font-size: 0.73rem;
+    color: var(--bs-secondary-color, #6c757d);
+    white-space: nowrap;
+}
+
+.explore-like-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.73rem;
+    background: transparent;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    cursor: pointer;
+    color: var(--bs-secondary-color, #6c757d);
+    line-height: 1.4;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    white-space: nowrap;
+}
+
+.explore-like-btn:hover {
+    background: rgba(220, 53, 69, 0.07);
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.explore-like-btn--liked {
+    color: #dc3545;
+    border-color: #dc3545;
+    background: rgba(220, 53, 69, 0.07);
+}
+
 /* Map code modal */
 .code-modal-backdrop {
     position: fixed;

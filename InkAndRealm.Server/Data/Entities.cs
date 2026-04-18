@@ -35,6 +35,8 @@ public sealed class MapEntity
     public float Height { get; set; }
     public bool IsPublished { get; set; }
     public DateTime? PublishedUtc { get; set; }
+    public int ViewCount { get; set; }
+    public int LikeCount { get; set; }
     public string BackgroundColor { get; set; } = "#b8d4e8";
     public bool ShowGrid { get; set; } = true;
     public string MapStyle { get; set; } = "FullColor";

@@ -63,11 +63,6 @@
                             <div class="map-card-title-row">
                                 <span class="map-card-name">@map.Name</span>
                                 <div class="map-card-actions">
-                                    <button class="post-btn"
-                                            @onclick="() => OpenPost(map)"
-                                            @onclick:stopPropagation="true">
-                                        Post
-                                    </button>
                                     <div class="map-menu-wrapper">
                                         <button class="map-menu-btn"
                                                 title="Map options"
@@ -149,93 +144,6 @@
     </div>
 }
 
-@if (_postMap is not null)
-{
-    var postShare = GetShare(_postMap.Id);
-    var postShareOpen = postShare?.IsOpen == true;
-    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
-    <div class="modal-custom post-modal">
-        <div class="modal-custom-header">
-            <span>Post</span>
-            <button class="modal-close-btn" @onclick="CloseModals">&times;</button>
-        </div>
-        <div class="modal-custom-body">
-            <div class="post-section">
-                <div class="post-section-label">Publish to Explore</div>
-                <p class="post-section-desc">
-                    Make this map publicly visible to all users on the Explore page.
-                </p>
-                @if (_postMap.IsPublished)
-                {
-                    <div class="publish-active-row">
-                        <span class="publish-active-badge">Published</span>
-                    </div>
-                    <button class="btn btn-outline-secondary btn-sm mt-2"
-                            disabled="@_postPublishBusy"
-                            @onclick="PostUnpublishAsync">
-                        Remove from Explore
-                    </button>
-                }
-                else
-                {
-                    <button class="btn btn-outline-primary btn-sm"
-                            disabled="@_postPublishBusy"
-                            @onclick="PostPublishAsync">
-                        Publish
-                    </button>
-                }
-            </div>
-            <div class="post-section">
-                <div class="post-section-label">Share Link</div>
-                <p class="post-section-desc">
-                    Generate a code others can use to view this map.
-                </p>
-                @if (postShareOpen && postShare is not null)
-                {
-                    <div class="share-code-row">
-                        <code class="share-code-display">@postShare.ShareCode</code>
-                        <button class="btn btn-outline-secondary btn-sm"
-                                title="Copy code"
-                                @onclick="() => CopyShareCodeAsync(postShare.ShareCode!)">
-                            Copy
-                        </button>
-                    </div>
-                    <div class="share-expiry">Expires @FormatUtc(postShare.ExpiresUtc)</div>
-                    <button class="btn btn-outline-danger btn-sm mt-2"
-                            disabled="@_postShareBusy"
-                            @onclick="PostCloseShareAsync">
-                        Close Share
-                    </button>
-                }
-                else if (!string.IsNullOrWhiteSpace(postShare?.ShareCode))
-                {
-                    <div class="share-code-row">
-                        <code class="share-code-display share-code-closed">@postShare!.ShareCode</code>
-                    </div>
-                    <div class="share-expiry text-muted">Share is closed.</div>
-                    <button class="btn btn-outline-success btn-sm mt-2"
-                            disabled="@_postShareBusy"
-                            @onclick="PostOpenShareAsync">
-                        Re-open Share
-                    </button>
-                }
-                else
-                {
-                    <button class="btn btn-outline-success btn-sm"
-                            disabled="@_postShareBusy"
-                            @onclick="PostOpenShareAsync">
-                        Generate Share Code
-                    </button>
-                }
-                @if (_postStatusMessage is not null)
-                {
-                    <div class="post-status-msg mt-2">@_postStatusMessage</div>
-                }
-            </div>
-        </div>
-    </div>
-}
-
 @code {
     private const float ThumbnailWidth = 500f;
     private const float ThumbnailHeight = 300f;
@@ -249,18 +157,11 @@
     private string _statusMessage = string.Empty;
     private string _newMapName = string.Empty;
     private List<MapSummaryDto> _maps = new();
-    private readonly Dictionary<int, MapShareStatusDto> _sharesByMapId = new();
-    private readonly HashSet<int> _pendingShareUpdates = new();
-
     private int? _openMenuMapId;
     private MapSummaryDto? _renameMap;
     private string _renameValue = string.Empty;
     private MapSummaryDto? _deleteMap;
     private string _deleteConfirmValue = string.Empty;
-    private MapSummaryDto? _postMap;
-    private bool _postShareBusy;
-    private bool _postPublishBusy;
-    private string? _postStatusMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -399,7 +300,6 @@
             _maps = maps ?? new List<MapSummaryDto>();
             if (_maps.Count > 0)
                 _isRenderingThumbnails = true;
-            await LoadShareStatusesAsync();
             _isLoading = false;
             return;
         }
@@ -413,31 +313,8 @@
 
         var message = await response.Content.ReadAsStringAsync();
         _maps = new List<MapSummaryDto>();
-        _sharesByMapId.Clear();
         _statusMessage = string.IsNullOrWhiteSpace(message) ? "Failed to load maps." : message;
         _isLoading = false;
-    }
-
-    private async Task LoadShareStatusesAsync()
-    {
-        _sharesByMapId.Clear();
-        if (_maps.Count == 0) return;
-
-        using var response = await Http.GetAsync(GetSharesUrl());
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            await UserState.SetUserAsync(null);
-            Navigation.NavigateTo("/");
-            return;
-        }
-
-        if (!response.IsSuccessStatusCode) return;
-
-        var shares = await response.Content.ReadFromJsonAsync<List<MapShareStatusDto>>();
-        if (shares is null) return;
-
-        foreach (var share in shares)
-            _sharesByMapId[share.MapId] = share;
     }
 
     private void OpenMap(int mapId) => Navigation.NavigateTo($"/map-demo/{mapId}");
@@ -467,127 +344,8 @@
     {
         _renameMap = null;
         _deleteMap = null;
-        _postMap = null;
         _renameValue = string.Empty;
         _deleteConfirmValue = string.Empty;
-        _postStatusMessage = null;
-        _postShareBusy = false;
-        _postPublishBusy = false;
-    }
-
-    private void OpenPost(MapSummaryDto map)
-    {
-        CloseModals();
-        _postMap = map;
-    }
-
-    private async Task PostPublishAsync()
-    {
-        if (_postMap is null || _postPublishBusy) return;
-        _postPublishBusy = true;
-        _postStatusMessage = null;
-
-        var response = await Http.PostAsJsonAsync("api/demo-map/publish", new PublishMapRequest
-        {
-            UserId = UserState.CurrentUser?.UserId,
-            SessionToken = UserState.CurrentUser?.SessionToken,
-            MapId = _postMap.Id
-        });
-
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            await UserState.SetUserAsync(null);
-            Navigation.NavigateTo("/");
-            return;
-        }
-
-        if (response.IsSuccessStatusCode)
-        {
-            var updated = await response.Content.ReadFromJsonAsync<MapSummaryDto>();
-            if (updated is not null)
-            {
-                var idx = _maps.FindIndex(m => m.Id == _postMap.Id);
-                if (idx >= 0) _maps[idx] = updated;
-                _postMap = updated;
-            }
-        }
-        else
-        {
-            var msg = await response.Content.ReadAsStringAsync();
-            _postStatusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to publish map." : msg;
-        }
-
-        _postPublishBusy = false;
-    }
-
-    private async Task PostUnpublishAsync()
-    {
-        if (_postMap is null || _postPublishBusy) return;
-        _postPublishBusy = true;
-        _postStatusMessage = null;
-
-        var response = await Http.PostAsJsonAsync("api/demo-map/unpublish", new PublishMapRequest
-        {
-            UserId = UserState.CurrentUser?.UserId,
-            SessionToken = UserState.CurrentUser?.SessionToken,
-            MapId = _postMap.Id
-        });
-
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            await UserState.SetUserAsync(null);
-            Navigation.NavigateTo("/");
-            return;
-        }
-
-        if (response.IsSuccessStatusCode)
-        {
-            var updated = await response.Content.ReadFromJsonAsync<MapSummaryDto>();
-            if (updated is not null)
-            {
-                var idx = _maps.FindIndex(m => m.Id == _postMap.Id);
-                if (idx >= 0) _maps[idx] = updated;
-                _postMap = updated;
-            }
-        }
-        else
-        {
-            var msg = await response.Content.ReadAsStringAsync();
-            _postStatusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to unpublish map." : msg;
-        }
-
-        _postPublishBusy = false;
-    }
-
-    private async Task PostOpenShareAsync()
-    {
-        if (_postMap is null || _postShareBusy) return;
-        _postShareBusy = true;
-        _postStatusMessage = null;
-        await SetShareStateAsync(_postMap.Id, true);
-        _postShareBusy = false;
-    }
-
-    private async Task PostCloseShareAsync()
-    {
-        if (_postMap is null || _postShareBusy) return;
-        _postShareBusy = true;
-        _postStatusMessage = null;
-        await SetShareStateAsync(_postMap.Id, false);
-        _postShareBusy = false;
-    }
-
-    private async Task CopyShareCodeAsync(string code)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", code);
-            _postStatusMessage = "Copied!";
-        }
-        catch
-        {
-            _postStatusMessage = code;
-        }
     }
 
     private async Task OnRenameKeyDown(KeyboardEventArgs e)
@@ -671,7 +429,6 @@
         if (response.IsSuccessStatusCode)
         {
             _maps.RemoveAll(m => m.Id == mapId);
-            _sharesByMapId.Remove(mapId);
         }
         else
         {
@@ -679,53 +436,6 @@
             _statusMessage = string.IsNullOrWhiteSpace(msg) ? "Failed to delete map." : msg;
         }
     }
-
-    private async Task SetShareStateAsync(int mapId, bool open)
-    {
-        if (mapId <= 0 || _pendingShareUpdates.Contains(mapId)) return;
-
-        _pendingShareUpdates.Add(mapId);
-        try
-        {
-            var payload = new MapShareAccessRequest
-            {
-                UserId = UserState.CurrentUser?.UserId,
-                SessionToken = UserState.CurrentUser?.SessionToken,
-                MapId = mapId
-            };
-
-            var endpoint = open ? "api/demo-map/share/open" : "api/demo-map/share/close";
-            using var response = await Http.PostAsJsonAsync(endpoint, payload);
-
-            if (response.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                await UserState.SetUserAsync(null);
-                Navigation.NavigateTo("/");
-                return;
-            }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var failure = await response.Content.ReadAsStringAsync();
-                _postStatusMessage = string.IsNullOrWhiteSpace(failure) ? "Failed to update sharing." : failure;
-                return;
-            }
-
-            var updated = await response.Content.ReadFromJsonAsync<MapShareStatusDto>();
-            if (updated is not null)
-                _sharesByMapId[mapId] = updated;
-        }
-        finally
-        {
-            _pendingShareUpdates.Remove(mapId);
-        }
-    }
-
-    private MapShareStatusDto? GetShare(int mapId) =>
-        _sharesByMapId.TryGetValue(mapId, out var share) ? share : null;
-
-    private string FormatUtc(DateTime? utc) =>
-        utc.HasValue ? utc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "N/A";
 
     private string GetMapsUrl()
     {
@@ -735,16 +445,6 @@
 
         var userId = UserState.CurrentUser?.UserId;
         return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
-    }
-
-    private string GetSharesUrl()
-    {
-        var sessionToken = UserState.CurrentUser?.SessionToken;
-        if (!string.IsNullOrWhiteSpace(sessionToken))
-            return $"api/demo-map/share?sessionToken={Uri.EscapeDataString(sessionToken)}";
-
-        var userId = UserState.CurrentUser?.UserId;
-        return userId is null ? "api/demo-map/share" : $"api/demo-map/share?userId={userId.Value}";
     }
 
     private string GetMapUrl(int mapId)

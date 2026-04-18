@@ -52,6 +52,8 @@
         <div class="row row-cols-1 row-cols-md-3 row-cols-xl-4 g-3">
             @foreach (var map in _maps)
             {
+                var liked = _likedMapIds.Contains(map.Id);
+                var liveLikes = _liveLikeCounts.TryGetValue(map.Id, out var ll) ? ll : map.LikeCount;
                 <div class="col">
                     <div class="card explore-card">
                         <div class="explore-card-title-row">
@@ -63,6 +65,15 @@
                         <div class="explore-card-footer">
                             <span class="explore-author-label">by</span>
                             <span class="explore-author-name">@map.AuthorName</span>
+                            <div class="explore-engagement">
+                                <span class="explore-stat" title="Views">&#128065; @map.ViewCount</span>
+                                <button class="explore-like-btn @(liked ? "explore-like-btn--liked" : "")"
+                                        title="@(liked ? "Liked" : "Like")"
+                                        @onclick="() => ToggleLikeAsync(map.Id)"
+                                        @onclick:stopPropagation="true">
+                                    @(liked ? "&#9829;" : "&#9825;") @liveLikes
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -75,10 +86,13 @@
     private const float ThumbnailWidth = 500f;
     private const float MapWidth = 2000f;
     private const float MapHeight = 1200f;
+    private const string LikedMapsKey = "ink_liked_maps";
 
     private bool _isLoading = true;
     private bool _thumbnailsRendered;
     private List<PublishedMapSummaryDto> _maps = new();
+    private HashSet<int> _likedMapIds = new();
+    private Dictionary<int, int> _liveLikeCounts = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -96,11 +110,72 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            await LoadLikedMapIdsAsync();
+            StateHasChanged();
+        }
+
         if (!_thumbnailsRendered && _maps.Count > 0 && !_isLoading)
         {
             _thumbnailsRendered = true;
             await RenderThumbnailsAsync();
         }
+    }
+
+    private async Task LoadLikedMapIdsAsync()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string?>("localStorage.getItem", LikedMapsKey);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var ids = System.Text.Json.JsonSerializer.Deserialize<List<int>>(json);
+                if (ids is not null)
+                    _likedMapIds = new HashSet<int>(ids);
+            }
+        }
+        catch { /* non-critical */ }
+    }
+
+    private async Task SaveLikedMapIdsAsync()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_likedMapIds.ToList());
+            await JS.InvokeVoidAsync("localStorage.setItem", LikedMapsKey, json);
+        }
+        catch { /* non-critical */ }
+    }
+
+    private async Task ToggleLikeAsync(int mapId)
+    {
+        if (_likedMapIds.Contains(mapId)) return; // already liked, no unlike
+
+        _likedMapIds.Add(mapId);
+        var currentCount = _liveLikeCounts.TryGetValue(mapId, out var c) ? c : (_maps.FirstOrDefault(m => m.Id == mapId)?.LikeCount ?? 0);
+        _liveLikeCounts[mapId] = currentCount + 1;
+
+        await SaveLikedMapIdsAsync();
+
+        try
+        {
+            var result = await Http.PostAsJsonAsync("api/demo-map/like", new LikeMapRequest { MapId = mapId });
+            if (result.IsSuccessStatusCode)
+            {
+                var engagement = await result.Content.ReadFromJsonAsync<MapEngagementDto>();
+                if (engagement is not null)
+                    _liveLikeCounts[mapId] = engagement.LikeCount;
+            }
+        }
+        catch { /* non-critical — optimistic update already applied */ }
+    }
+
+    private async Task ViewMap(int mapId)
+    {
+        try { await Http.PostAsJsonAsync("api/demo-map/view", new LikeMapRequest { MapId = mapId }); }
+        catch { /* non-critical */ }
+        Navigation.NavigateTo($"/map-viewer?published={mapId}");
     }
 
     private async Task RenderThumbnailsAsync()
@@ -164,7 +239,6 @@
         };
     }
 
-    private void ViewMap(int mapId) => Navigation.NavigateTo($"/map-viewer?published={mapId}");
     private void GoHome() => Navigation.NavigateTo("/");
 
     // Map code modal

@@ -1886,3 +1886,94 @@ code {
     background: #3a2414;
     color: #f6ebd5;
 }
+
+/* ── Post Settings (shared across MapEditor + MyMaps) ───── */
+
+.post-section-desc {
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 0.6rem;
+}
+
+.share-code-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.share-code-display {
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    background: var(--bs-secondary-bg, #f8f9fa);
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.share-code-closed {
+    opacity: 0.45;
+}
+
+.share-expiry {
+    font-size: 0.78rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.post-status-msg {
+    font-size: 0.82rem;
+    color: var(--bs-success, #198754);
+}
+
+.publish-active-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.1rem;
+}
+
+.publish-active-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: var(--bs-success, #198754);
+    color: #fff;
+    letter-spacing: 0.03em;
+}
+
+.post-settings-loading {
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color, #6c757d);
+    padding: 0.5rem 0;
+}
+
+.post-settings-modal {
+    width: 340px;
+}
+
+/* Engagement stats block inside Post Settings */
+.post-engagement-stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.4rem;
+}
+
+.post-engagement-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+}
+
+.post-engagement-icon {
+    font-size: 0.9rem;
+}
+
+.post-engagement-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.post-engagement-label {
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color, #6c757d);
+}

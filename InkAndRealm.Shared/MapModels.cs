@@ -30,6 +30,20 @@ public sealed class PublishedMapSummaryDto
     public string Name { get; set; } = string.Empty;
     public string AuthorName { get; set; } = string.Empty;
     public DateTime PublishedUtc { get; set; }
+    public int ViewCount { get; set; }
+    public int LikeCount { get; set; }
+}
+
+public sealed class MapEngagementDto
+{
+    public int MapId { get; set; }
+    public int ViewCount { get; set; }
+    public int LikeCount { get; set; }
+}
+
+public sealed class LikeMapRequest
+{
+    public int MapId { get; set; }
 }
 
 public sealed class PublishMapRequest

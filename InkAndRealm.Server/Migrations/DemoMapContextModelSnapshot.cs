@@ -138,6 +138,12 @@ namespace InkAndRealm.Server.Migrations
                     b.Property<DateTime?>("PublishedUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LikeCount")
+                        .HasColumnType("int");
+
                     b.Property<bool>("ShowGrid")
                         .HasColumnType("bit");
 
