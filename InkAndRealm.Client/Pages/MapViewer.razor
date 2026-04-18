@@ -500,7 +500,7 @@
     private float GetHitRadius()
     {
         var scale = (GetCanvasScaleX() + GetCanvasScaleY()) / 2f;
-        return (10f * scale) / _zoom;
+        return (20f * scale) / _zoom;
     }
 
     private CharacterFeatureDto? FindCharacterAtPoint(float mapX, float mapY, float threshold)
@@ -515,8 +515,10 @@
         var bestDist = float.MaxValue;
         foreach (var character in _map.Characters)
         {
+            // Character is drawn from Y (feet) to Y-24 (head top); shift check to visual center
+            const float characterCenterOffsetY = 12f;
             var dx = character.X - mapX;
-            var dy = character.Y - mapY;
+            var dy = (character.Y - characterCenterOffsetY) - mapY;
             var dist = (dx * dx) + (dy * dy);
             if (dist < thresholdSq && dist < bestDist)
             {

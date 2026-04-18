@@ -180,7 +180,6 @@
                             <div class="point-feature-editor-header">
                                 <div>
                                     <div class="fw-semibold">Edit @GetEditingPointFeatureLabel()</div>
-                                    <div class="small text-muted">Changes are applied live.</div>
                                 </div>
                                 <button class="btn btn-primary btn-sm" @onclick="DoneEditingPointFeatureAsync">
                                     Done
@@ -413,17 +412,28 @@
                                     @* ── Style Tab (common) ─────────────────────────────────────── *@
                                     @if (_editingPointFeature.Character is not null && _editingCharacter is not null)
                                     {
-                                        @* Character: show type select *@
+                                        @* Character: show type buttons *@
                                         <div class="point-feature-editor-section">
                                             <label class="form-label">Type</label>
-                                            <select class="form-select form-select-sm"
-                                                    @bind="EditingCharacterType"
-                                                    disabled="@IsCharacterEditorReadOnly">
+                                            <div class="point-feature-editor-styles">
+                                                @{
+                                                    var currentCharStyle = EditingCharacterType;
+                                                }
                                                 @foreach (var style in CharacterStyles)
                                                 {
-                                                    <option value="@style">@style</option>
+                                                    var isSelectedCharStyle = string.Equals(style, currentCharStyle, StringComparison.OrdinalIgnoreCase);
+                                                    <button class="btn map-editor-style-button @(isSelectedCharStyle ? "btn-primary" : "btn-outline-primary")"
+                                                            disabled="@IsCharacterEditorReadOnly"
+                                                            @onclick="() => EditingCharacterType = style">
+                                                        @if (StylePreviewImagesByPlacement.TryGetValue(PlacementType.Character, out var charStyleImages)
+                                                             && charStyleImages.TryGetValue(style, out var charImgUrl))
+                                                        {
+                                                            <img src="@charImgUrl" alt="" />
+                                                        }
+                                                        <span>@style</span>
+                                                    </button>
                                                 }
-                                            </select>
+                                            </div>
                                         </div>
                                     }
                                     else
@@ -6683,10 +6693,14 @@
                 return;
             }
 
+            // Tileset tree renders 48 map units tall, anchor at bottom — check against visual center
+            const float treeCenterOffsetY = 24f;
+            const float treeHitRadius = 26f;
             var dx = tree.X - mapX;
-            var dy = tree.Y - mapY;
+            var dy = (tree.Y - treeCenterOffsetY * tree.Size) - mapY;
             var distance = (dx * dx) + (dy * dy);
-            if (distance > thresholdSquared || distance >= bestDistance)
+            var scaledRadius = treeHitRadius * tree.Size;
+            if (distance > scaledRadius * scaledRadius || distance >= bestDistance)
             {
                 return;
             }
@@ -6708,10 +6722,14 @@
                 return;
             }
 
+            // Tileset house renders 96 map units tall, anchor at bottom — check against visual center
+            const float houseCenterOffsetY = 48f;
+            const float houseHitRadius = 52f;
             var dx = house.X - mapX;
-            var dy = house.Y - mapY;
+            var dy = (house.Y - houseCenterOffsetY * house.Size) - mapY;
             var distance = (dx * dx) + (dy * dy);
-            if (distance > thresholdSquared || distance >= bestDistance)
+            var scaledRadius = houseHitRadius * house.Size;
+            if (distance > scaledRadius * scaledRadius || distance >= bestDistance)
             {
                 return;
             }
@@ -6733,8 +6751,10 @@
                 return;
             }
 
+            // Character is drawn from Y (feet) to Y-24 (head top); shift check to visual center
+            const float characterCenterOffsetY = 12f;
             var dx = character.X - mapX;
-            var dy = character.Y - mapY;
+            var dy = (character.Y - characterCenterOffsetY) - mapY;
             var distance = (dx * dx) + (dy * dy);
             if (distance > thresholdSquared || distance >= bestDistance)
             {
@@ -7090,7 +7110,7 @@
     private float GetEditHitRadius()
     {
         var scale = (GetCanvasScaleX() + GetCanvasScaleY()) / 2f;
-        return (10f * scale) / _zoom;
+        return (20f * scale) / _zoom;
     }
 
     private float GetBrushSpacing()
@@ -7726,7 +7746,7 @@
                         .Select(point => new MapPointDto { X = point.X, Y = point.Y })
                         .ToList()
                 },
-            EditPointFeature = _editingPointFeature is null
+            EditPointFeature = _editingPointFeature is null || _isPointFeatureEditorOpen
                 ? null
                 : _editingPointFeature.Tree is not null
                     ? new MapPointFeatureDto

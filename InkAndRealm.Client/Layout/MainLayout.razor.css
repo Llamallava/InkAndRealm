@@ -2,12 +2,16 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
 }
 
 main {
     flex: 1;
-    min-height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .top-row {
@@ -98,6 +102,12 @@ main {
     .top-row ::deep a, .top-row ::deep .btn-link {
         margin-left: 0;
     }
+}
+
+article {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 @media (min-width: 641px) {

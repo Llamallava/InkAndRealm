@@ -46,42 +46,52 @@
     }
     else
     {
-        <div class="row row-cols-1 row-cols-md-3 row-cols-xl-4 g-3">
-            @foreach (var map in _maps)
-            {
-                <div class="col">
-                    <div class="card map-card">
-                        <div class="map-card-title-row">
-                            <span class="map-card-name">@map.Name</span>
-                            <div class="map-card-actions">
-                                <button class="post-btn"
-                                        @onclick="() => OpenPost(map)"
-                                        @onclick:stopPropagation="true">
-                                    Post
-                                </button>
-                                <div class="map-menu-wrapper">
-                                    <button class="map-menu-btn"
-                                            title="Map options"
-                                            @onclick="(e) => ToggleMenu(map.Id, e)"
+        @if (_isRenderingThumbnails)
+        {
+            <div class="d-flex justify-content-center py-5">
+                <div class="spinner-border text-secondary" role="status">
+                    <span class="visually-hidden">Loading previews…</span>
+                </div>
+            </div>
+        }
+        <div style="@(_isRenderingThumbnails ? "display:none" : "")">
+            <div class="row row-cols-1 row-cols-md-3 row-cols-xl-4 g-3">
+                @foreach (var map in _maps)
+                {
+                    <div class="col" @key="map.Id">
+                        <div class="card map-card">
+                            <div class="map-card-title-row">
+                                <span class="map-card-name">@map.Name</span>
+                                <div class="map-card-actions">
+                                    <button class="post-btn"
+                                            @onclick="() => OpenPost(map)"
                                             @onclick:stopPropagation="true">
-                                        &#8942;
+                                        Post
                                     </button>
-                                    @if (_openMenuMapId == map.Id)
-                                    {
-                                        <div class="map-dropdown-menu" @onclick:stopPropagation="true">
-                                            <button class="map-dropdown-item" @onclick="() => StartRename(map)">Rename</button>
-                                            <button class="map-dropdown-item map-dropdown-item-danger" @onclick="() => StartDelete(map)">Delete</button>
-                                        </div>
-                                    }
+                                    <div class="map-menu-wrapper">
+                                        <button class="map-menu-btn"
+                                                title="Map options"
+                                                @onclick="(e) => ToggleMenu(map.Id, e)"
+                                                @onclick:stopPropagation="true">
+                                            &#8942;
+                                        </button>
+                                        @if (_openMenuMapId == map.Id)
+                                        {
+                                            <div class="map-dropdown-menu" @onclick:stopPropagation="true">
+                                                <button class="map-dropdown-item" @onclick="() => StartRename(map)">Rename</button>
+                                                <button class="map-dropdown-item map-dropdown-item-danger" @onclick="() => StartDelete(map)">Delete</button>
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="map-card-clickable" @onclick="() => OpenMap(map.Id)" title="Open @map.Name">
-                            <canvas id="thumb-@map.Id" class="map-thumbnail-canvas" width="500" height="300"></canvas>
+                            <div class="map-card-clickable" @onclick="() => OpenMap(map.Id)" title="Open @map.Name">
+                                <canvas id="thumb-@map.Id" class="map-thumbnail-canvas" width="500" height="300"></canvas>
+                            </div>
                         </div>
                     </div>
-                </div>
-            }
+                }
+            </div>
         </div>
     }
 </div>
@@ -235,6 +245,7 @@
     private bool _isCreating;
     private bool _isLoading;
     private bool _thumbnailsRendered;
+    private bool _isRenderingThumbnails;
     private string _statusMessage = string.Empty;
     private string _newMapName = string.Empty;
     private List<MapSummaryDto> _maps = new();
@@ -270,6 +281,8 @@
         {
             _thumbnailsRendered = true;
             await RenderThumbnailsAsync();
+            _isRenderingThumbnails = false;
+            StateHasChanged();
         }
     }
 
@@ -321,7 +334,7 @@
             AreaLayers = map.AreaLayers,
             AreaPolygons = map.AreaPolygons,
             BackgroundColor = map.BackgroundColor,
-            ShowGrid = map.ShowGrid,
+            ShowGrid = false,
             MapStyle = map.MapStyle,
             ViewState = new MapViewStateDto
             {
@@ -376,6 +389,7 @@
     {
         _isLoading = true;
         _thumbnailsRendered = false;
+        _isRenderingThumbnails = false;
         _statusMessage = string.Empty;
 
         using var response = await Http.GetAsync(GetMapsUrl());
@@ -383,6 +397,8 @@
         {
             var maps = await response.Content.ReadFromJsonAsync<List<MapSummaryDto>>();
             _maps = maps ?? new List<MapSummaryDto>();
+            if (_maps.Count > 0)
+                _isRenderingThumbnails = true;
             await LoadShareStatusesAsync();
             _isLoading = false;
             return;
