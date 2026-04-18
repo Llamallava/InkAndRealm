@@ -510,7 +510,55 @@
                                         }
                                         else
                                         {
-                                            <div class="small text-muted">Add more layers to move this feature between them.</div>
+                                            <div class="small text-muted">No layers available</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Layers Panel ──────────────────────────────────────────── *@
+                    @if (_hasMap)
+                    {
+                        <div class="layer-panel">
+                            <div class="layer-panel-header">
+                                <span class="layer-panel-title">Layers</span>
+                                <button class="layer-panel-add-btn" @onclick="AddAreaLayer" title="Add layer">+</button>
+                            </div>
+                            <div class="layer-panel-body">
+                                @for (var li = 0; li < _areaLayers.Count; li++)
+                                {
+                                    var layer = _areaLayers[li];
+                                    var isActive = _activeAreaLayer?.LayerIndex == layer.LayerIndex;
+                                    var isRenaming = _renamingLayer?.LayerIndex == layer.LayerIndex;
+                                    <div class="layer-panel-item @(isActive ? "layer-panel-item--active" : "")"
+                                         @onclick="() => SelectAreaLayer(layer)">
+                                        @if (isRenaming)
+                                        {
+                                            <input class="layer-panel-rename-input"
+                                                   value="@_renamingLayerName"
+                                                   @oninput="e => _renamingLayerName = e.Value?.ToString() ?? string.Empty"
+                                                   @onblur="CommitRenameLayer"
+                                                   @onkeydown="HandleLayerRenameKeyDown"
+                                                   @onclick:stopPropagation="true" />
+                                        }
+                                        else
+                                        {
+                                            <span class="layer-panel-item-name">@GetLayerLabel(layer)</span>
+                                            <div class="layer-panel-item-actions">
+                                                <button class="layer-panel-action-btn layer-panel-rename-btn"
+                                                        title="Rename"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="() => StartRenameLayer(layer)">✎</button>
+                                                @if (_areaLayers.Count > 1)
+                                                {
+                                                    <button class="layer-panel-action-btn layer-panel-delete-btn"
+                                                            title="Delete layer"
+                                                            @onclick:stopPropagation="true"
+                                                            @onclick="() => PromptDeleteLayerAsync(layer)">✕</button>
+                                                }
+                                            </div>
                                         }
                                     </div>
                                 }
@@ -1192,6 +1240,8 @@
     private const float LandChaosAmplitudeMax = 22f;
     private readonly List<AreaLayerDto> _areaLayers = new();
     private AreaLayerDto? _activeAreaLayer;
+    private AreaLayerDto? _renamingLayer;
+    private string _renamingLayerName = string.Empty;
     private readonly List<MapPointDto> _activePolygonPoints = new();
     private List<TreeFeatureDto> _liveTrees = new();
     private List<HouseFeatureDto> _liveHouses = new();
@@ -3205,6 +3255,34 @@
         _statusMessage = $"{GetLayerLabel(layer)} selected.";
     }
 
+    private void StartRenameLayer(AreaLayerDto layer)
+    {
+        _renamingLayer = layer;
+        _renamingLayerName = string.IsNullOrWhiteSpace(layer.Name) ? GetLayerLabel(layer) : layer.Name;
+    }
+
+    private void CommitRenameLayer()
+    {
+        if (_renamingLayer is null) return;
+        _renamingLayer.Name = string.IsNullOrWhiteSpace(_renamingLayerName) ? null : _renamingLayerName.Trim();
+        _renamingLayer = null;
+        _renamingLayerName = string.Empty;
+    }
+
+    private void CancelRenameLayer()
+    {
+        _renamingLayer = null;
+        _renamingLayerName = string.Empty;
+    }
+
+    private void HandleLayerRenameKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            CommitRenameLayer();
+        else if (args.Key == "Escape")
+            CancelRenameLayer();
+    }
+
     private async Task PromptDeleteLayerAsync(AreaLayerDto layer)
     {
         var label = GetLayerLabel(layer);
@@ -3294,6 +3372,8 @@
 
     private string GetLayerLabel(AreaLayerDto layer, int fallbackIndex = 0)
     {
+        if (!string.IsNullOrWhiteSpace(layer.Name))
+            return layer.Name;
         var index = layer.LayerIndex >= 0 ? layer.LayerIndex : fallbackIndex;
         return $"Layer {index + 1}";
     }

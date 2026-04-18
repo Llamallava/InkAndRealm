@@ -208,6 +208,7 @@ public sealed class AreaLayerDto
     public string LayerKey { get; set; } = string.Empty;
     public int LayerIndex { get; set; }
     public string FeatureType { get; set; } = string.Empty;
+    public string? Name { get; set; }
 }
 
 public sealed class AreaPolygonDto
