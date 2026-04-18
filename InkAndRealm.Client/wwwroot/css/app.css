@@ -1302,6 +1302,90 @@ code {
     color: var(--inkr-paper-300);
 }
 
+/* ── Native Confirm / Prompt Dialogs ────────────────────────── */
+
+.native-dialog {
+    width: 320px;
+}
+
+.native-dialog-message {
+    font-size: 0.78rem;
+    color: var(--inkr-paper-200);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.native-dialog-input {
+    width: 100%;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.78rem;
+    background: rgba(31, 19, 11, 0.4);
+    border: 1px solid var(--inkr-wood-600);
+    border-radius: 0.35rem;
+    color: var(--inkr-paper-100);
+    outline: none;
+    box-sizing: border-box;
+}
+
+.native-dialog-input:focus {
+    border-color: var(--inkr-gold-600);
+    box-shadow: 0 0 0 0.15rem rgba(211, 176, 83, 0.25);
+}
+
+.native-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.native-dialog-btn {
+    padding: 0.3rem 0.9rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 0.4rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.native-dialog-btn--cancel {
+    background: rgba(31, 19, 11, 0.35);
+    border-color: var(--inkr-wood-600);
+    color: var(--inkr-paper-300);
+}
+
+.native-dialog-btn--cancel:hover {
+    background: rgba(31, 19, 11, 0.55);
+    border-color: var(--inkr-wood-500);
+    color: var(--inkr-paper-100);
+}
+
+.native-dialog-btn--confirm {
+    background: rgba(211, 176, 83, 0.18);
+    border-color: var(--inkr-gold-700);
+    color: var(--inkr-gold-400);
+}
+
+.native-dialog-btn--confirm:hover {
+    background: rgba(211, 176, 83, 0.28);
+    border-color: var(--inkr-gold-600);
+    color: var(--inkr-gold-300);
+}
+
+.native-dialog-btn--danger {
+    background: rgba(160, 50, 40, 0.25);
+    border-color: rgba(200, 70, 55, 0.6);
+    color: #e8998e;
+}
+
+.native-dialog-btn--danger:hover {
+    background: rgba(160, 50, 40, 0.45);
+    border-color: rgba(200, 70, 55, 0.9);
+    color: #f0b5ac;
+}
+
 /* Point feature editor — overlay panel */
 .map-editor-canvas-area {
     display: flex;

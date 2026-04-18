@@ -1010,6 +1010,14 @@ window.inkAndRealmDemo = {
             window.removeEventListener("keydown", handler);
             window.__inkAndRealmUndoHandlers.delete(key);
         }
+    },
+    focusElement: (element) => {
+        if (element) {
+            element.focus();
+            if (typeof element.select === 'function') {
+                element.select();
+            }
+        }
     }
 };
 

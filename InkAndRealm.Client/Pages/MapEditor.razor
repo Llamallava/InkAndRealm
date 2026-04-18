@@ -77,15 +77,6 @@
                                @bind="SelectedPointSize" @bind:event="oninput" />
                     </div>
                 }
-                @if (ShowTitleSize)
-                {
-                    <div class="map-ribbon-control">
-                        <span class="map-ribbon-control-label">Title (@($"{SelectedTitleSize:0.0}x"))</span>
-                        <input class="map-ribbon-slider" type="range"
-                               min="@TitleSizeMin" max="@TitleSizeMax" step="@TitleSizeStep"
-                               @bind="SelectedTitleSize" @bind:event="oninput" />
-                    </div>
-                }
             }
             else if (_activeTool == MapToolType.Eraser)
             {
@@ -99,6 +90,16 @@
                             <option value="@target.Target">@target.Label</option>
                         }
                     </select>
+                </div>
+            }
+            @if (ShowTitleSize)
+            {
+                <div class="map-ribbon-divider"></div>
+                <div class="map-ribbon-control">
+                    <span class="map-ribbon-control-label">Title (@($"{SelectedTitleSize:0.0}x"))</span>
+                    <input class="map-ribbon-slider" type="range"
+                           min="@TitleSizeMin" max="@TitleSizeMax" step="@TitleSizeStep"
+                           @bind="SelectedTitleSize" @bind:event="oninput" />
                 </div>
             }
             @if (ShowChaoticEdgesToggle)
@@ -1124,6 +1125,48 @@
     </div>
 }
 
+@* ── Confirm Dialog (e.g. Delete Layer) ─────────────────────── *@
+@if (_confirmDialog.IsOpen)
+{
+    <div class="map-settings-modal-backdrop" @onclick="ConfirmDialogCancel"></div>
+    <div class="map-settings-modal native-dialog">
+        <div class="map-settings-modal-header">
+            <span class="map-settings-modal-title">@_confirmDialog.Title</span>
+        </div>
+        <div class="map-settings-modal-body">
+            <p class="native-dialog-message">@_confirmDialog.Message</p>
+            <div class="native-dialog-actions">
+                <button class="native-dialog-btn native-dialog-btn--cancel" @onclick="ConfirmDialogCancel">Cancel</button>
+                <button class="native-dialog-btn native-dialog-btn--danger" @onclick="ConfirmDialogConfirm">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Prompt Dialog (Title Name) ──────────────────────────────── *@
+@if (_promptDialog.IsOpen)
+{
+    <div class="map-settings-modal-backdrop" @onclick="PromptDialogCancel"></div>
+    <div class="map-settings-modal native-dialog">
+        <div class="map-settings-modal-header">
+            <span class="map-settings-modal-title">@_promptDialog.Title</span>
+        </div>
+        <div class="map-settings-modal-body">
+            <input class="native-dialog-input"
+                   type="text"
+                   value="@_promptDialog.Value"
+                   @oninput="e => _promptDialog.Value = e.Value?.ToString() ?? string.Empty"
+                   @onkeydown="PromptDialogKeyDown"
+                   @ref="_promptDialogInputRef"
+                   placeholder="Enter name…" />
+            <div class="native-dialog-actions">
+                <button class="native-dialog-btn native-dialog-btn--cancel" @onclick="PromptDialogCancel">Cancel</button>
+                <button class="native-dialog-btn native-dialog-btn--confirm" @onclick="PromptDialogConfirm">OK</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private const string CanvasId = "map-demo-canvas";
     private readonly List<AddCharacterRelationshipDto> _stagedRelationships = new();
@@ -1296,6 +1339,11 @@
     private string _backgroundColor = "#b8d4e8";
     private bool _isMapSettingsModalOpen;
     private bool _isStyleSettingsModalOpen;
+
+    // ── Native confirm/prompt dialogs ──────────────────────────
+    private ConfirmDialogState _confirmDialog = new();
+    private PromptDialogState _promptDialog = new();
+    private ElementReference _promptDialogInputRef;
     private string _mapStyle = "FullColor";
     private int _mapSettingsWidthInput = 2000;
     private int _mapSettingsHeightInput = 1200;
@@ -3092,6 +3140,11 @@
             return;
         }
 
+        if (_activePolygonPoints.Count > 0)
+        {
+            _activePolygonPoints.Clear();
+            _ = InvokeAsync(DrawAsync);
+        }
         _activeTool = tool;
         if (_isBrushing)
         {
@@ -3286,13 +3339,11 @@
     private async Task PromptDeleteLayerAsync(AreaLayerDto layer)
     {
         var label = GetLayerLabel(layer);
-        var confirmed = await JS.InvokeAsync<bool>(
-            "confirm",
-            $"Delete {label}? Deleting the layer removes everything on that layer. Continue?");
+        var confirmed = await ShowConfirmDialogAsync(
+            "Delete Layer",
+            $"Delete {label}? Everything on this layer will be removed.");
         if (!confirmed)
-        {
             return;
-        }
 
         PushUndoState();
         DeleteAreaLayer(layer);
@@ -7362,22 +7413,18 @@
 
     private async Task<string?> PromptTitleNameAsync(string initialName)
     {
-        var result = await JS.InvokeAsync<string?>("prompt", "Title name:", initialName);
+        var result = await ShowPromptDialogAsync("Title Name", initialName);
         if (result is null)
-        {
             return null;
-        }
 
         return NormalizeTitleName(result);
     }
 
     private async Task<string?> PromptTitleRenameAsync(TitleFeatureDto title)
     {
-        var result = await JS.InvokeAsync<string?>("prompt", "Edit title name:", title.Name);
+        var result = await ShowPromptDialogAsync("Edit Title Name", title.Name);
         if (result is null)
-        {
             return null;
-        }
 
         return NormalizeTitleName(result);
     }
@@ -8031,6 +8078,87 @@
     private sealed record FeatureStyleDefinition(PlacementType PlacementType, string MenuLabel, IReadOnlyList<string> Styles);
     private sealed record RelationshipTargetSelection(int TargetId, bool IsCharacter);
     private sealed record CanvasClientSize(float Width, float Height);
+
+    // ── Dialog state classes ──────────────────────────────────
+    private sealed class ConfirmDialogState
+    {
+        public bool IsOpen { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public TaskCompletionSource<bool>? Tcs { get; set; }
+    }
+
+    private sealed class PromptDialogState
+    {
+        public bool IsOpen { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+        public TaskCompletionSource<string?>? Tcs { get; set; }
+    }
+
+    // ── Dialog helpers ────────────────────────────────────────
+    private Task<bool> ShowConfirmDialogAsync(string title, string message)
+    {
+        _confirmDialog.Title = title;
+        _confirmDialog.Message = message;
+        _confirmDialog.Tcs = new TaskCompletionSource<bool>();
+        _confirmDialog.IsOpen = true;
+        StateHasChanged();
+        return _confirmDialog.Tcs.Task;
+    }
+
+    private void ConfirmDialogConfirm()
+    {
+        var tcs = _confirmDialog.Tcs;
+        _confirmDialog.IsOpen = false;
+        _confirmDialog.Tcs = null;
+        tcs?.TrySetResult(true);
+    }
+
+    private void ConfirmDialogCancel()
+    {
+        var tcs = _confirmDialog.Tcs;
+        _confirmDialog.IsOpen = false;
+        _confirmDialog.Tcs = null;
+        tcs?.TrySetResult(false);
+    }
+
+    private async Task<string?> ShowPromptDialogAsync(string title, string initialValue)
+    {
+        _promptDialog.Title = title;
+        _promptDialog.Value = initialValue;
+        _promptDialog.Tcs = new TaskCompletionSource<string?>();
+        _promptDialog.IsOpen = true;
+        StateHasChanged();
+        await Task.Yield(); // let Blazor render before we focus
+        try { await JS.InvokeVoidAsync("inkAndRealmDemo.focusElement", _promptDialogInputRef); } catch { }
+        return await _promptDialog.Tcs.Task;
+    }
+
+    private void PromptDialogConfirm()
+    {
+        var tcs = _promptDialog.Tcs;
+        var value = _promptDialog.Value;
+        _promptDialog.IsOpen = false;
+        _promptDialog.Tcs = null;
+        tcs?.TrySetResult(value);
+    }
+
+    private void PromptDialogCancel()
+    {
+        var tcs = _promptDialog.Tcs;
+        _promptDialog.IsOpen = false;
+        _promptDialog.Tcs = null;
+        tcs?.TrySetResult(null);
+    }
+
+    private void PromptDialogKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            PromptDialogConfirm();
+        else if (e.Key == "Escape")
+            PromptDialogCancel();
+    }
 }
 
 
