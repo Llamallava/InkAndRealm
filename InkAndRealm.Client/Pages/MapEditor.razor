@@ -613,10 +613,8 @@
                                                     role="option"
                                                     aria-selected="@isSelectedStyle"
                                                     aria-label="@($"{style} style")"
-                                                    title="@style"
                                                     @onclick="() => SelectPlacementStyleAndCloseMenu(placement.PlacementType, style)">
                                                 <img src="@GetStyleImageUrl(placement.PlacementType, style)" alt="" />
-                                                <span>@style</span>
                                             </button>
                                         }
                                     </div>
@@ -1373,7 +1371,7 @@
         { PlacementType.House, "Cottage" },
         { PlacementType.Character, "Commoner" },
         { PlacementType.Water, "Water" },
-        { PlacementType.Land, "Land" },
+        { PlacementType.Land, "Plains" },
         { PlacementType.Title, "Title" }
     };
     private MapToolType _activeTool = MapToolType.Point;
@@ -1518,7 +1516,9 @@
     };
     private static readonly IReadOnlyList<string> LandStyles = new List<string>
     {
-        "Land"
+        "Plains",
+        "Forest",
+        "Desert"
     };
     private static readonly IReadOnlyList<string> TitleStyles = new List<string>
     {
@@ -1559,7 +1559,9 @@
             },
             [PlacementType.Land] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Land"] = "/assets/Summer%20Set/land_1.png"
+                ["Plains"] = "/assets/Summer%20Set/land_6.png",
+                ["Forest"] = "/assets/Summer%20Set/road_5.png",
+                ["Desert"] = "/assets/Summer%20Set/road_18.png"
             },
             [PlacementType.Water] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -2835,7 +2837,8 @@
                 FeatureType = featureType,
                 LayerIndex = layer.LayerIndex,
                 Points = polygonPoints,
-                UseCurves = !IsWaterFeatureType(featureType) || _useWaterCurves
+                UseCurves = !IsWaterFeatureType(featureType) || _useWaterCurves,
+                Style = IsLandFeatureType(featureType) ? GetStyleForPlacement(PlacementType.Land) : null
             };
 
             if (IsLandFeatureType(polygon.FeatureType))
@@ -3104,7 +3107,8 @@
         {
             FeatureType = "Land",
             LayerIndex = layer.LayerIndex,
-            Points = points
+            Points = points,
+            Style = GetStyleForPlacement(PlacementType.Land)
         });
 
         _statusMessage = $"Starter land mass placed on {GetLayerLabel(layer)} (unsaved).";

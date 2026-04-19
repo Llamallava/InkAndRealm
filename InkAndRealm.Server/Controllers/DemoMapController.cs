@@ -485,15 +485,21 @@ public sealed class DemoMapController : ControllerBase
             return Unauthorized("Invalid user.");
 
         var map = await _context.Maps
-            .Include(m => m.Share)
-            .Include(m => m.Features)
-            .ThenInclude(f => f.Points)
             .FirstOrDefaultAsync(m => m.Id == request.MapId && m.UserId == user.Id);
         if (map is null)
             return NotFound("Map not found.");
 
         if (!string.Equals(map.Name, request.ConfirmName?.Trim(), StringComparison.OrdinalIgnoreCase))
             return BadRequest("Map name does not match.");
+
+        // TargetFeatureId uses DeleteBehavior.Restrict, so remove those relationships
+        // before the map cascade-deletes its features.
+        var featureIdQuery = _context.Features
+            .Where(f => f.MapId == map.Id)
+            .Select(f => f.Id);
+        await _context.FeatureRelationships
+            .Where(r => featureIdQuery.Contains(r.TargetFeatureId))
+            .ExecuteDeleteAsync();
 
         _context.Maps.Remove(map);
         await _context.SaveChangesAsync();
@@ -1017,6 +1023,7 @@ public sealed class DemoMapController : ControllerBase
                 }
 
                 feature.ZIndex = polygon.LayerIndex;
+                feature.LandType = ParseLandStyle(polygon.Style);
                 feature.Points.Clear();
                 if (polygon.Points is not null)
                 {
@@ -1301,11 +1308,19 @@ public sealed class DemoMapController : ControllerBase
         return feature;
     }
 
+    private static LandType ParseLandStyle(string? style) =>
+        style switch
+        {
+            "Forest" => LandType.Forest,
+            "Desert" => LandType.Desert,
+            _ => LandType.Plains
+        };
+
     private static LandFeatureEntity CreateLandFeature(AreaPolygonDto polygon)
     {
         var feature = new LandFeatureEntity
         {
-            LandType = LandType.Plains,
+            LandType = ParseLandStyle(polygon?.Style),
             ElevationType = ElevationType.Low,
             ZIndex = polygon?.LayerIndex ?? 0
         };
@@ -1359,6 +1374,7 @@ public sealed class DemoMapController : ControllerBase
                 Id = feature.Id,
                 FeatureType = "Land",
                 LayerIndex = feature.ZIndex,
+                Style = Enum.GetName(feature.LandType),
                 Points = feature.Points
                     .OrderBy(point => point.SortOrder)
                     .Select(point => new MapPointDto

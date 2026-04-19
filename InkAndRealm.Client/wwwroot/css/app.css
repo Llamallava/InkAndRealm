@@ -376,8 +376,8 @@ article:has(.map-editor-page) {
     bottom: calc(100% + 0.5rem);
     left: 50%;
     transform: translateX(-50%);
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 0.3rem;
     padding: 0.5rem;
     background: #ffffff;
@@ -385,8 +385,6 @@ article:has(.map-editor-page) {
     border: 1px solid #d9dee5;
     box-shadow: 0 4px 20px rgba(15, 23, 42, 0.15);
     z-index: 200;
-    width: max-content;
-    max-width: 280px;
 }
 
 .map-editor-style-backdrop {
@@ -396,27 +394,19 @@ article:has(.map-editor-page) {
 }
 
 .map-editor-style-button {
-    display: grid;
-    gap: 0.1rem;
-    justify-items: center;
+    display: flex;
+    justify-content: center;
     align-items: center;
-    min-height: 3.05rem;
-    padding: 0.15rem 0.2rem;
-    min-width: 58px;
+    padding: 0.25rem;
+    min-width: 52px;
+    min-height: 52px;
 }
 
 .map-editor-style-button img {
-    width: 1.2rem;
-    height: 1.2rem;
+    width: 2rem;
+    height: 2rem;
     object-fit: contain;
     image-rendering: pixelated;
-}
-
-.map-editor-style-button span {
-    font-size: 0.58rem;
-    line-height: 1;
-    text-align: center;
-    word-break: break-word;
 }
 
 .map-editor-icon-button {

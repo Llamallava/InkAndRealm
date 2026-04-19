@@ -1,27 +1,39 @@
-const treeImage = new Image();
-let treeImageReady = false;
+const treeImages = {
+    Oak:   new Image(),
+    Pine:  new Image(),
+    Birch: new Image(),
+    Palm:  new Image()
+};
+const treeImageReady = { Oak: false, Pine: false, Birch: false, Palm: false };
+treeImages.Oak.onload   = () => { treeImageReady.Oak   = true; };
+treeImages.Pine.onload  = () => { treeImageReady.Pine  = true; };
+treeImages.Birch.onload = () => { treeImageReady.Birch = true; };
+treeImages.Palm.onload  = () => { treeImageReady.Palm  = true; };
+treeImages.Oak.src   = "/assets/Summer%20Set/tree_1.png";
+treeImages.Pine.src  = "/assets/Summer%20Set/tree_4.png";
+treeImages.Birch.src = "/assets/Summer%20Set/tree_7.png";
+treeImages.Palm.src  = "/assets/Summer%20Set/tree_14.png";
+
 const buildingImage = new Image();
 let buildingImageReady = false;
-
-treeImage.onload = () => {
-    treeImageReady = true;
-};
-
-treeImage.onerror = () => {
-    treeImageReady = false;
-};
-
-treeImage.src = "/assets/Summer%20Set/tree_1.png";
-
-buildingImage.onload = () => {
-    buildingImageReady = true;
-};
-
-buildingImage.onerror = () => {
-    buildingImageReady = false;
-};
-
+buildingImage.onload = () => { buildingImageReady = true; };
+buildingImage.onerror = () => { buildingImageReady = false; };
 buildingImage.src = "/assets/Summer%20Set/building_2.png";
+
+const landPlainsTex = new Image();
+let landPlainsTexReady = false;
+landPlainsTex.onload = () => { landPlainsTexReady = true; };
+landPlainsTex.src = "/assets/Summer%20Set/land_6.png";
+
+const landForestTex = new Image();
+let landForestTexReady = false;
+landForestTex.onload = () => { landForestTexReady = true; };
+landForestTex.src = "/assets/Summer%20Set/road_5.png";
+
+const landDesertTex = new Image();
+let landDesertTexReady = false;
+landDesertTex.onload = () => { landDesertTexReady = true; };
+landDesertTex.src = "/assets/Summer%20Set/road_18.png";
 
 window.inkAndRealmDemo = {
     drawMap: (canvasId, renderState) => {
@@ -199,8 +211,41 @@ window.inkAndRealmDemo = {
             targetCtx.restore();
         };
 
-        const drawLandPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null) => {
-            drawPolygon(targetCtx, points, color, alpha, strokeColor);
+        const drawLandPolygon = (targetCtx, points, color, alpha = 1, strokeColor = null, style = null) => {
+            if (!Array.isArray(points) || points.length < 3) {
+                return;
+            }
+
+            let texImg = null;
+            if (style === "Plains" && landPlainsTexReady) texImg = landPlainsTex;
+            else if (style === "Forest" && landForestTexReady) texImg = landForestTex;
+            else if (style === "Desert" && landDesertTexReady) texImg = landDesertTex;
+
+            targetCtx.save();
+            targetCtx.globalAlpha = alpha;
+
+            targetCtx.beginPath();
+            targetCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i += 1) {
+                targetCtx.lineTo(points[i].x, points[i].y);
+            }
+            targetCtx.closePath();
+
+            if (texImg) {
+                const pattern = targetCtx.createPattern(texImg, "repeat");
+                targetCtx.fillStyle = pattern || color;
+            } else {
+                targetCtx.fillStyle = color;
+            }
+            targetCtx.fill();
+
+            if (strokeColor) {
+                targetCtx.strokeStyle = strokeColor;
+                targetCtx.lineWidth = 1 / zoom;
+                targetCtx.stroke();
+            }
+
+            targetCtx.restore();
         };
 
         const drawPolygonHandles = (targetCtx, points, selectedIndex = null) => {
@@ -437,20 +482,22 @@ window.inkAndRealmDemo = {
             }
         };
 
-        const drawTilesetTree = (x, y, isStaged) => {
-            if (!treeImageReady) {
+        const drawTilesetTree = (x, y, styleKey, isStaged) => {
+            const key = (styleKey && treeImages[styleKey]) ? styleKey : "Oak";
+            if (!treeImageReady[key]) {
                 return false;
             }
 
+            const img = treeImages[key];
             const targetHeight = 48;
-            const scale = targetHeight / treeImage.naturalHeight;
-            const targetWidth = treeImage.naturalWidth * scale;
+            const scale = targetHeight / img.naturalHeight;
+            const targetWidth = img.naturalWidth * scale;
 
             ctx.save();
             ctx.globalAlpha = 1;
             ctx.imageSmoothingEnabled = true;
             ctx.drawImage(
-                treeImage,
+                img,
                 x - targetWidth * 0.5,
                 y - targetHeight,
                 targetWidth,
@@ -525,7 +572,7 @@ window.inkAndRealmDemo = {
 
         const drawTreeAt = (x, y, styleKey, isStaged) => {
             const palette = getTreePalette(styleKey);
-            if (drawTilesetTree(x, y, isStaged)) {
+            if (drawTilesetTree(x, y, styleKey, isStaged)) {
                 return;
             }
 
@@ -684,7 +731,7 @@ window.inkAndRealmDemo = {
                             const drawWater = polygon.useCurves !== false ? drawSmoothPolygon : drawPolygon;
                             drawWater(layerCtx, polygon.points, color, 0.85, "#5a86a1");
                         } else if (polygon.featureType === "Land") {
-                            drawLandPolygon(layerCtx, polygon.points, color, 0.85, "#8a6a4d");
+                            drawLandPolygon(layerCtx, polygon.points, color, 0.85, "#8a6a4d", polygon.style);
                         } else {
                             drawPolygon(layerCtx, polygon.points, color, 0.85, "#7b6b4a");
                         }
