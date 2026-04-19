@@ -1,0 +1,42 @@
+InkAndRealm - Code Walkthrough Checklist
+=========================================
+Files covered in our explanation sessions, in order.
+
+[x] InkAndRealm.Shared/MapModels.cs
+      - All DTOs and request/response types
+      - Map features: Trees, Houses, Characters, Titles, AreaPolygons
+      - MapEditsRequest batch save pattern
+      - Client-only render state types (MapRenderStateDto, MapViewStateDto, etc.)
+
+[x] InkAndRealm.Shared/AuthModels.cs
+      - RegisterRequest, LoginRequest, AuthResponse
+
+[x] InkAndRealm.Server/Data/Entities.cs
+      - Full DB schema
+      - TPH inheritance: FeatureEntity -> PointFeatureEntity / AreaFeatureEntity
+      - FeaturePointEntity (coordinates stored as child rows)
+      - Session token auth pattern
+      - MapShareEntity (pointer only, no data duplication)
+
+[x] InkAndRealm.Server/Data/AppDbContext.cs  (renamed from DemoMapContext)
+      - EF Core DbContext configuration
+      - TPH discriminator setup
+      - All relationship/cascade rules
+      - Enum-to-string conversions
+
+[ ] InkAndRealm.Server/Program.cs
+[ ] InkAndRealm.Server/Controllers/AuthController.cs
+[ ] InkAndRealm.Server/Controllers/DemoMapController.cs
+[ ] InkAndRealm.Client/Program.cs
+[ ] InkAndRealm.Client/State/UserState.cs
+[ ] InkAndRealm.Client/App.razor
+[ ] InkAndRealm.Client/Layout/MainLayout.razor
+[ ] InkAndRealm.Client/Layout/NavMenu.razor
+[ ] InkAndRealm.Client/Pages/Home.razor
+[ ] InkAndRealm.Client/Pages/Login.razor
+[ ] InkAndRealm.Client/Pages/MyMaps.razor
+[ ] InkAndRealm.Client/Pages/MapEditor.razor
+[ ] InkAndRealm.Client/Pages/MapViewer.razor
+[ ] InkAndRealm.Client/Pages/Explore.razor
+[ ] InkAndRealm.Client/Pages/NotFound.razor
+[ ] InkAndRealm.Client/Components/AccountPanel.razor

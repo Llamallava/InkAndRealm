@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace InkAndRealm.Server.Migrations
 {
-    [DbContext(typeof(DemoMapContext))]
+    [DbContext(typeof(AppDbContext))]
     [Migration("20260128160000_AddMapLayers")]
     partial class AddMapLayers
     {

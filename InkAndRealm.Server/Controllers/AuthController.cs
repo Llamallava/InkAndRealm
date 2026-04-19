@@ -11,9 +11,9 @@ namespace InkAndRealm.Server.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private const int SessionDays = 14;
-    private readonly DemoMapContext _context;
+    private readonly AppDbContext _context;
 
-    public AuthController(DemoMapContext context)
+    public AuthController(AppDbContext context)
     {
         _context = context;
     }

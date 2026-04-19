@@ -16,7 +16,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("Missing connection string: DefaultConnection.");
 }
 
-builder.Services.AddDbContext<DemoMapContext>(options =>
+builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddCors(options =>
 {
@@ -32,7 +32,7 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<DemoMapContext>();
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     context.Database.Migrate();
 }
 

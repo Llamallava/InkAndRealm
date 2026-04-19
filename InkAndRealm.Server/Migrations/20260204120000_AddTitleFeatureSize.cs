@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace InkAndRealm.Server.Migrations
 {
-    [DbContext(typeof(DemoMapContext))]
+    [DbContext(typeof(AppDbContext))]
     [Migration("20260204120000_AddTitleFeatureSize")]
     public partial class AddTitleFeatureSize : Migration
     {

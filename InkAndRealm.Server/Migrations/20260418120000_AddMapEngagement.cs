@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace InkAndRealm.Server.Migrations
 {
-    [DbContext(typeof(DemoMapContext))]
+    [DbContext(typeof(AppDbContext))]
     [Migration("20260418120000_AddMapEngagement")]
     public partial class AddMapEngagement : Migration
     {

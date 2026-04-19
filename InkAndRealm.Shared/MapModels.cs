@@ -1,5 +1,11 @@
 namespace InkAndRealm.Shared;
 
+//This file contains the data transfer objects (DTOs) used for map-related 
+//operations. These DTOs are used to transfer data between the client and server over HTTP, 
+//and to represent the structure of maps, features, and related requests and responses.
+
+//This is the map itself. 
+//The client sends this to the server when saving, and the server sends this to the client when loading.
 public sealed class MapDto
 {
     public int Id { get; set; }
@@ -17,6 +23,7 @@ public sealed class MapDto
     public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
 }
 
+//This is a summary of a map, used for listing maps without loading all the details.
 public sealed class MapSummaryDto
 {
     public int Id { get; set; }
@@ -24,6 +31,7 @@ public sealed class MapSummaryDto
     public bool IsPublished { get; set; }
 }
 
+//This is a summary of a published map, used for listing published maps with additional info.
 public sealed class PublishedMapSummaryDto
 {
     public int Id { get; set; }
@@ -156,6 +164,8 @@ public sealed class AddHouseRequest
     public HouseFeatureDto House { get; set; } = new();
 }
 
+//Characters are added with a separate request that includes relationships
+//since relationships can be complex and involve multiple characters.
 public sealed class MapEditsRequest
 {
     public int? UserId { get; set; }
@@ -241,6 +251,7 @@ public sealed class MapPointDto
     public float Y { get; set; }
 }
 
+//This is the data sent to the client to render the map. It includes all the features and the view state.
 public sealed class MapRenderStateDto
 {
     public List<MapPointFeatureDto> PointFeatures { get; set; } = new();

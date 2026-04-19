@@ -20,9 +20,9 @@ public sealed class DemoMapController : ControllerBase
     private const int ShareLifetimeDays = 7;
     private const int ShareCodeLength = 12;
     private static readonly char[] ShareCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
-    private readonly DemoMapContext _context;
+    private readonly AppDbContext _context;
 
-    public DemoMapController(DemoMapContext context)
+    public DemoMapController(AppDbContext context)
     {
         _context = context;
     }

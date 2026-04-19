@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InkAndRealm.Server.Data;
 
-public sealed class DemoMapContext : DbContext
+public sealed class AppDbContext : DbContext
 {
-    public DemoMapContext(DbContextOptions<DemoMapContext> options)
+    public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
     }
