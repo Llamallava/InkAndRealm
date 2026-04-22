@@ -34,13 +34,23 @@ Files covered in our explanation sessions, in order.
 [x] InkAndRealm.Server/Controllers/MapController.cs  (renamed from DemoMapController, route api/demo-map -> api/map)
       - All map CRUD, share, publish, explore, engagement endpoints
       - ApplyEdits batch save, ToDto mapping, centroid calculation, relationship serialization
-[ ] InkAndRealm.Client/Program.cs
-[ ] InkAndRealm.Client/State/UserState.cs
-[ ] InkAndRealm.Client/App.razor
-[ ] InkAndRealm.Client/Layout/MainLayout.razor
-[ ] InkAndRealm.Client/Layout/NavMenu.razor
-[ ] InkAndRealm.Client/Pages/Home.razor
-[ ] InkAndRealm.Client/Pages/Login.razor
+[x] InkAndRealm.Client/Program.cs
+      - HttpClient base address, UserState registration, WASM host setup
+
+[x] InkAndRealm.Client/State/UserState.cs
+      - Global auth state, localStorage persistence, offline-safe session restore
+
+[x] InkAndRealm.Client/App.razor
+      - Router setup, NotFound fallback, DefaultLayout wiring
+
+[x] InkAndRealm.Client/Layout/MainLayout.razor
+      - App shell, account button, login panel, SectionOutlet, UserState.InitializeAsync
+
+[DEL] InkAndRealm.Client/Layout/NavMenu.razor  (deleted — never rendered, template leftover)
+[x] InkAndRealm.Client/Pages/Home.razor
+      - Landing page: Create/Explore buttons, inline login modal
+
+[DEL] InkAndRealm.Client/Pages/Login.razor  (deleted — orphaned, nothing navigated to /login)
 [ ] InkAndRealm.Client/Pages/MyMaps.razor
 [ ] InkAndRealm.Client/Pages/MapEditor.razor
 [ ] InkAndRealm.Client/Pages/MapViewer.razor
