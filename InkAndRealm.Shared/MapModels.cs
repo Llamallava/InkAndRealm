@@ -21,6 +21,7 @@ public sealed class MapDto
     public List<TitleFeatureDto> Titles { get; set; } = new();
     public List<AreaLayerDto> AreaLayers { get; set; } = new();
     public List<AreaPolygonDto> AreaPolygons { get; set; } = new();
+    public List<TreeNodePositionDto> TreeNodePositions { get; set; } = new();
 }
 
 //This is a summary of a map, used for listing maps without loading all the details.
@@ -218,6 +219,23 @@ public sealed class UpdateCharacterRelationshipDto
     public int TargetFeatureId { get; set; }
     public List<string> RelationshipTypes { get; set; } = new();
     public string Description { get; set; } = string.Empty;
+}
+
+public sealed class TreeNodePositionDto
+{
+    public int FeatureId { get; set; }
+    public string FeatureType { get; set; } = string.Empty;
+    public float X { get; set; }
+    public float Y { get; set; }
+}
+
+public sealed class SaveTreeNodePositionsRequest
+{
+    public int? UserId { get; set; }
+    public string? SessionToken { get; set; }
+    public int MapId { get; set; }
+    public bool ClearAll { get; set; }
+    public List<TreeNodePositionDto> Positions { get; set; } = new();
 }
 
 public sealed class CreateMapRequest

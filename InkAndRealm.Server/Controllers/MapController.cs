@@ -81,7 +81,8 @@ public sealed class MapController : ControllerBase
         }
 
         var relationships = await LoadRelationshipsAsync(map);
-        return Ok(ToDto(map, relationships));
+        var treePositions = await LoadTreeNodePositionsAsync(map.Id);
+        return Ok(ToDto(map, relationships, treePositions));
     }
 
     [HttpGet("shared")]
@@ -1104,6 +1105,81 @@ public sealed class MapController : ControllerBase
         return Ok(ToDto(map, relationships));
     }
 
+    [HttpPost("tree-positions")]
+    public async Task<ActionResult> SaveTreeNodePositions([FromBody] SaveTreeNodePositionsRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest("Request is required.");
+        }
+
+        if (request.UserId is null && string.IsNullOrWhiteSpace(request.SessionToken))
+        {
+            return Unauthorized("Log in to save tree positions.");
+        }
+
+        if (request.MapId <= 0)
+        {
+            return BadRequest("Map id is required.");
+        }
+
+        var user = await ResolveUserAsync(request.SessionToken, request.UserId);
+        if (user is null)
+        {
+            return Unauthorized("Invalid user.");
+        }
+
+        var mapExists = await _context.Maps
+            .AnyAsync(m => m.Id == request.MapId && m.UserId == user.Id);
+
+        if (!mapExists)
+        {
+            return NotFound("Map not found.");
+        }
+
+        if (request.ClearAll)
+        {
+            var existing = await _context.TreeNodePositions
+                .Where(p => p.MapId == request.MapId)
+                .ToListAsync();
+            _context.TreeNodePositions.RemoveRange(existing);
+        }
+
+        if (request.Positions is not null && request.Positions.Count > 0)
+        {
+            var incoming = request.Positions
+                .Where(p => !string.IsNullOrWhiteSpace(p.FeatureType) && p.FeatureId > 0)
+                .ToList();
+
+            if (!request.ClearAll && incoming.Count > 0)
+            {
+                var featureIds = incoming.Select(p => p.FeatureId).ToList();
+                var featureTypes = incoming.Select(p => p.FeatureType).Distinct().ToList();
+                var existing = await _context.TreeNodePositions
+                    .Where(p => p.MapId == request.MapId
+                        && featureIds.Contains(p.FeatureId)
+                        && featureTypes.Contains(p.FeatureType))
+                    .ToListAsync();
+                _context.TreeNodePositions.RemoveRange(existing);
+            }
+
+            foreach (var pos in incoming)
+            {
+                _context.TreeNodePositions.Add(new TreeNodePositionEntity
+                {
+                    MapId = request.MapId,
+                    FeatureId = pos.FeatureId,
+                    FeatureType = pos.FeatureType,
+                    X = pos.X,
+                    Y = pos.Y
+                });
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok();
+    }
+
     [HttpPost("tree")]
     public async Task<ActionResult<MapDto>> AddTree([FromBody] AddTreeRequest request)
     {
@@ -1342,7 +1418,10 @@ public sealed class MapController : ControllerBase
         return feature;
     }
 
-    private static MapDto ToDto(MapEntity map, IReadOnlyList<FeatureRelationshipEntity>? relationships)
+    private static MapDto ToDto(
+        MapEntity map,
+        IReadOnlyList<FeatureRelationshipEntity>? relationships,
+        IReadOnlyList<TreeNodePositionEntity>? treeNodePositions = null)
     {
         var featureLookup = map.Features
             .Where(feature => feature.Id > 0)
@@ -1543,7 +1622,18 @@ public sealed class MapController : ControllerBase
                 .ToList(),
             Titles = titles,
             AreaLayers = persistedLayers,
-            AreaPolygons = areaPolygons
+            AreaPolygons = areaPolygons,
+            TreeNodePositions = treeNodePositions is null
+                ? new List<TreeNodePositionDto>()
+                : treeNodePositions
+                    .Select(p => new TreeNodePositionDto
+                    {
+                        FeatureId = p.FeatureId,
+                        FeatureType = p.FeatureType,
+                        X = p.X,
+                        Y = p.Y
+                    })
+                    .ToList()
         };
     }
 
@@ -1717,6 +1807,13 @@ public sealed class MapController : ControllerBase
             .ToListAsync();
 
         return relationships;
+    }
+
+    private async Task<List<TreeNodePositionEntity>> LoadTreeNodePositionsAsync(int mapId)
+    {
+        return await _context.TreeNodePositions
+            .Where(p => p.MapId == mapId)
+            .ToListAsync();
     }
 
     private async Task<bool> ApplyAddedRelationshipsAsync(

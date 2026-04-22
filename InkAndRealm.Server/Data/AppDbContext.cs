@@ -18,6 +18,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<FeaturePointEntity> FeaturePoints => Set<FeaturePointEntity>();
     public DbSet<TownStructureEntity> TownStructures => Set<TownStructureEntity>();
     public DbSet<FeatureRelationshipEntity> FeatureRelationships => Set<FeatureRelationshipEntity>();
+    public DbSet<TreeNodePositionEntity> TreeNodePositions => Set<TreeNodePositionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +130,12 @@ public sealed class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(relationship => relationship.TargetFeatureId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TreeNodePositionEntity>()
+            .HasOne(position => position.Map)
+            .WithMany()
+            .HasForeignKey(position => position.MapId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         base.OnModelCreating(modelBuilder);
     }

@@ -232,6 +232,38 @@ namespace InkAndRealm.Server.Migrations
                     b.ToTable("MapShares");
                 });
 
+            modelBuilder.Entity("InkAndRealm.Server.Data.TreeNodePositionEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MapId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FeatureId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FeatureType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<float>("X")
+                        .HasColumnType("real");
+
+                    b.Property<float>("Y")
+                        .HasColumnType("real");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MapId", "FeatureId", "FeatureType")
+                        .IsUnique();
+
+                    b.ToTable("TreeNodePositions");
+                });
+
             modelBuilder.Entity("InkAndRealm.Server.Data.SessionEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -501,6 +533,17 @@ namespace InkAndRealm.Server.Migrations
                     b.Navigation("SourceCharacter");
 
                     b.Navigation("TargetFeature");
+                });
+
+            modelBuilder.Entity("InkAndRealm.Server.Data.TreeNodePositionEntity", b =>
+                {
+                    b.HasOne("InkAndRealm.Server.Data.MapEntity", "Map")
+                        .WithMany()
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Map");
                 });
 
             modelBuilder.Entity("InkAndRealm.Server.Data.MapEntity", b =>

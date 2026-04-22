@@ -172,6 +172,18 @@ public sealed class FeaturePointEntity
     public int SortOrder { get; set; }
 }
 
+[Index(nameof(MapId), nameof(FeatureId), nameof(FeatureType), IsUnique = true)]
+public sealed class TreeNodePositionEntity
+{
+    public int Id { get; set; }
+    public int MapId { get; set; }
+    public MapEntity? Map { get; set; }
+    public int FeatureId { get; set; }
+    public string FeatureType { get; set; } = string.Empty;
+    public float X { get; set; }
+    public float Y { get; set; }
+}
+
 public enum TreeType
 {
     Oak,
