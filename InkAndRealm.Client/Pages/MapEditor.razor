@@ -1316,6 +1316,10 @@
 
 @code {
     private const string CanvasId = "map-demo-canvas";
+    // ── Relationship staging ────────────────────────────────────────────────────────
+    // Adds/updates/deletes are buffered in these three collections until the next save.
+    // StageRelationship() also mirrors pending adds into _liveCharacters so ComputeDiff
+    // can pick them up without a separate pass.
     private readonly List<AddCharacterRelationshipDto> _stagedRelationships = new();
     private readonly Dictionary<int, UpdateCharacterRelationshipDto> _updatedRelationships = new();
     private readonly Dictionary<int, (int SourceCharacterId, int TargetFeatureId)> _deletedRelationships = new();
@@ -1341,6 +1345,7 @@
     private float _lastX;
     private float _lastY;
     private bool _hasLastPlacement;
+    // ── Viewport — all in map-world coordinates, not screen/CSS pixels ─────────────
     private float _viewX;
     private float _viewY;
     private float _zoom = 1f;
@@ -1349,6 +1354,8 @@
     private float _panStartY;
     private float _panOriginX;
     private float _panOriginY;
+    // mousedown starts a candidate; a move > PanDragThreshold promotes it to a pan,
+    // while a mouseup without moving commits it as a click.
     private bool _isPanCandidate;
     private float _panCandidateStartX;
     private float _panCandidateStartY;
@@ -1358,6 +1365,8 @@
     private bool _hasMap;
     private string _statusMessage = string.Empty;
     private bool _isRelationshipTreeOpen;
+    // Set when navigating to a character editor from the Character Tree; causes DoneEditing to
+    // reopen the tree instead of returning to the normal editor state.
     private bool _returnToCharacterTree;
     private bool _isRelationshipTreeLoading;
     private string _relationshipTreeStatusMessage = string.Empty;
@@ -1381,6 +1390,10 @@
     private bool _nodeDragMoved;
     private bool _isSavingTreePositions;
     private bool _isRecalculatePromptOpen;
+    // ── Undo/redo ────────────────────────────────────────────────────────────────────
+    // Characters are NOT stored in UndoState — their field edits are detected at save
+    // time by ComputeDiff. Undo only covers spatial/layer/polygon changes.
+    // A "batch" collapses an entire brush stroke or eraser drag into one undo step.
     private readonly List<UndoState> _undoStack = new();
     private readonly List<UndoState> _redoStack = new();
     private UndoBatchKind _undoBatchKind = UndoBatchKind.None;
@@ -1447,7 +1460,10 @@
     private List<TitleFeatureDto> _liveTitles = new();
     private List<AreaPolygonDto> _liveWaterPolygons = new();
     private List<AreaPolygonDto> _liveLandPolygons = new();
+    // Baseline captured after each save; ComputeDiff diffs live state against this.
+    // Separate from UndoState — UndoState snapshots don't track character fields.
     private LiveMapSnapshot? _lastSavedSnapshot;
+    // Fires every 15 s; skipped when IsBlockingActionActive — deferred until TryReturnToIdle().
     private bool _autoSavePending;
     private System.Threading.Timer? _autoSaveTimer;
     private IDisposable? _locationChangingRegistration;
@@ -3013,6 +3029,8 @@
         ClampView();
     }
 
+    // Converts canvas CSS pixel position to map-world coordinates, accounting for the
+    // gap between the element's CSS render size and its internal pixel resolution.
     private (float X, float Y) ScreenToMap(float screenX, float screenY)
     {
         var scaleX = GetCanvasScaleX();
@@ -3608,6 +3626,8 @@
         _statusMessage = $"Eraser set to {GetEraserTargetLabel(target)}.";
     }
 
+    // Guarantees at least one layer always exists and an active layer is selected.
+    // Called before any polygon/eraser operation that requires a layer context.
     private void EnsureAreaLayers()
     {
         if (_areaLayers.Count == 0)
@@ -4525,6 +4545,10 @@
         return true;
     }
 
+    // Force-directed layout: character nodes run a Verlet-like simulation with repulsion,
+    // relationship springs, geographic proximity springs, and a centering pull.
+    // Pinned nodes (those with stored positions) don't move but still exert forces on free nodes.
+    // Non-character feature nodes are then placed near their related characters.
     private static List<RelationshipTreeNode> LayoutRelationshipTreeNodes(
         IReadOnlyList<RelationshipTreeNode> nodes,
         IReadOnlyList<RelationshipTreeDirectedEdge> edges,
@@ -4967,6 +4991,7 @@
         return Math.Clamp(y, 72f, RelationshipTreeCanvasHeight - 72f);
     }
 
+    // Same technique as HashNoise01 but with different magic constants for independence.
     private static float RelationshipTreeNoise01(float value)
     {
         var raw = MathF.Sin(value * 12.9898f) * 43758.5453f;
@@ -5380,6 +5405,8 @@
         || diff.BackgroundColor is not null || diff.ShowGrid.HasValue || diff.MapStyle is not null
         || diff.Width.HasValue || diff.Height.HasValue;
 
+    // Full serialization catches nested changes (e.g. relationship list mutations) without
+    // per-field comparison code. Acceptable cost since saves are infrequent.
     private static bool AreEqualByJson<T>(T a, T b) =>
         JsonSerializer.Serialize(a) == JsonSerializer.Serialize(b);
 
@@ -5388,6 +5415,7 @@
         _isDraggingEditPointFeature || _isDraggingTitleFeature || _isCharacterEditorOpen ||
         _isRelationshipTreeOpen || _isSaving || _isPointFeatureEditorOpen || _isRepositioning;
 
+    // Called after any operation that may have unblocked auto-save. Flushes any pending save.
     private void TryReturnToIdle()
     {
         if (IsBlockingActionActive) return;
@@ -5406,6 +5434,8 @@
         StateHasChanged();
     }
 
+    // The first PushUndoState inside a batch records a snapshot; subsequent pushes
+    // are no-ops. EndUndoBatch(false) pops the snapshot if the op produced no changes.
     private void BeginUndoBatch(UndoBatchKind kind)
     {
         _undoBatchKind = kind;
@@ -5440,6 +5470,7 @@
             return;
         }
 
+        // Any new user action invalidates the redo history.
         if (!_isRedoing && _redoStack.Count > 0)
         {
             _redoStack.Clear();
@@ -5696,6 +5727,8 @@
         return _canvasClientHeight > 0 ? (CanvasHeight / _canvasClientHeight) : 1f;
     }
 
+    // keepChanges=false physically reverts polygon vertices / feature position to their
+    // pre-edit originals. keepChanges=true leaves mutations in place (right-click confirm).
     private void ClearEditSelection(bool keepChanges)
     {
         if (!keepChanges && _editingPolygon is not null && _editingOriginalPoints is not null)
@@ -6917,6 +6950,8 @@
         return FindPolygonAtPoint(mapX, mapY, restrictToActiveLayer, null);
     }
 
+    // Prefers the topmost (highest LayerIndex) polygon when multiple overlap; within the
+    // same layer, the later entry in the list wins (last-placed = top).
     private AreaPolygonDto? FindPolygonAtPoint(float mapX, float mapY, bool restrictToActiveLayer, string? featureTypeFilter)
     {
         var activeLayerIndex = restrictToActiveLayer ? _activeAreaLayer?.LayerIndex : null;
@@ -7258,6 +7293,8 @@
         return MathF.Max(16f, GetEditHitRadius() * 1.5f);
     }
 
+    // featureTypeFilter ("Land" or "Water") restricts which pool is searched.
+    // Null = search both. FindPolygonAtPoint respects _activeAreaLayer when restrictToActiveLayer=true.
     private bool TryErasePolygonAtPoint(float mapX, float mapY, string? featureTypeFilter = null)
     {
         var polygon = FindPolygonAtPoint(mapX, mapY, true, featureTypeFilter);
@@ -7266,6 +7303,7 @@
             return false;
         }
 
+        // Deselect before removing so ClearEditSelection doesn't try to reference a dead object.
         if (_editingPolygon == polygon)
         {
             ClearEditSelection(true);
@@ -7285,6 +7323,10 @@
         return true;
     }
 
+    // restrictToActiveLayer=true here — eraser only hits features on the selected layer.
+    // Trees and houses also cascade: any titles that point to them (TargetFeatureId) are removed
+    // so orphaned labels don't persist after the host feature is gone.
+    // Characters skip title cleanup because they don't support attached titles.
     private bool TryErasePointFeatureAtPoint(float mapX, float mapY, EraserTarget target, out string? status)
     {
         status = null;
@@ -7295,6 +7337,7 @@
             return false;
         }
 
+        // Deselect before removing; same reason as TryErasePolygonAtPoint.
         if (_editingPointFeature is not null
             && ((_editingPointFeature.Tree is not null && _editingPointFeature.Tree == feature.Tree)
                 || (_editingPointFeature.House is not null && _editingPointFeature.House == feature.House)
@@ -7306,6 +7349,7 @@
         if (feature.Tree is not null)
         {
             _liveTrees.Remove(feature.Tree);
+            // Id == 0 means the feature was never saved; no server-side titles to clean up.
             if (feature.Tree.Id > 0)
             {
                 RemoveTitlesForTargetFeature(feature.Tree.Id);
@@ -7331,6 +7375,7 @@
         {
             _liveCharacters.Remove(feature.Character);
             RemoveStagedRelationshipChangesForTarget(feature.Character.Id);
+            // Close the character editor panel if it was open for this character.
             if (_editingCharacter == feature.Character)
             {
                 CloseCharacterEditor();
@@ -7342,6 +7387,8 @@
         return false;
     }
 
+    // Tests against the title's rendered position (anchor-following for attached titles,
+    // or centroid for area titles) rather than stored X/Y — same as FindTitleFeatureAtPoint.
     private bool TryEraseTitleAtPoint(float mapX, float mapY, out string? status)
     {
         status = null;
@@ -7361,6 +7408,9 @@
         return true;
     }
 
+    // Called when a tree or house is erased. Titles with TargetFeatureId pointing to that
+    // feature would float at (0,0) after the host is gone, so we remove them preemptively.
+    // Guard on featureId > 0: unsaved features (Id == 0) can't have server-linked titles.
     private void RemoveTitlesForTargetFeature(int featureId)
     {
         if (featureId <= 0)
@@ -7377,6 +7427,13 @@
         }
     }
 
+    // Dispatcher: routes an erase click to the right sub-eraser based on _eraserTarget.
+    //
+    // Specific targets (Tree/House/Character/Land/Water) short-circuit immediately and
+    // don't fall through to the other types.
+    //
+    // EraserTarget.All uses priority order: title → point feature → polygon.
+    // This avoids accidentally erasing a polygon when the user clicks on a feature sitting on top.
     private bool TryEraseAtPoint(float mapX, float mapY, out string? status, bool showEmptyStatus)
     {
         status = null;
@@ -7435,6 +7492,7 @@
             return erased;
         }
 
+        // EraserTarget.All: title first so a label sitting over a tree erases the label, not the tree.
         erased = TryEraseTitleAtPoint(mapX, mapY, out status);
         if (!erased)
         {
@@ -7462,11 +7520,24 @@
         return erased;
     }
 
+    // Convenience overload: searches all feature types, all layers, includes characters.
     private EditingPointFeature? FindPointFeatureAtPoint(float mapX, float mapY, float threshold)
     {
         return FindPointFeatureAtPoint(mapX, mapY, threshold, EraserTarget.All, false, true);
     }
 
+    // Returns the nearest point feature within range of the click.
+    //
+    // Hit testing here is NOT a simple radius from the stored X/Y anchor. Sprites render
+    // with their anchor at the foot of the sprite, so clicking on the visible body of a
+    // large tree would miss if we tested against the anchor alone. Each feature type shifts
+    // the test point up to the visual center and uses a hit radius that scales with Size,
+    // so a 2x tree is proportionally easier to click than a 0.5x one.
+    //
+    // Characters don't scale, so they use the fixed threshold rather than a scaled radius.
+    //
+    // Among all candidates that pass their radius test, the one with the smallest squared
+    // distance wins ("nearest" selection — avoids ambiguity when features overlap).
     private EditingPointFeature? FindPointFeatureAtPoint(
         float mapX,
         float mapY,
@@ -7475,6 +7546,7 @@
         bool restrictToActiveLayer,
         bool includeCharacters = true)
     {
+        // Polygon types are not point features — bail early so callers don't need to check.
         if (target == EraserTarget.Water)
         {
             return null;
@@ -7491,6 +7563,7 @@
         var considerTrees = target == EraserTarget.All || target == EraserTarget.Tree;
         var considerHouses = target == EraserTarget.All || target == EraserTarget.House;
         var considerCharacters = includeCharacters && (target == EraserTarget.All || target == EraserTarget.Character);
+        // null = search all layers; set when the eraser is active (respects active layer selection).
         var activeLayerIndex = restrictToActiveLayer ? _activeAreaLayer?.LayerIndex : null;
 
         void ConsiderTree(TreeFeatureDto tree, bool isStaged)
@@ -7500,7 +7573,9 @@
                 return;
             }
 
-            // Tileset tree renders 48 map units tall, anchor at bottom — check against visual center
+            // Tree sprite is 48 map-units tall, anchored at the bottom (feet = stored Y).
+            // Shift the test point up by half the height so clicks land on the trunk/canopy.
+            // Hit radius also scales with Size so larger trees aren't harder to click.
             const float treeCenterOffsetY = 24f;
             const float treeHitRadius = 26f;
             var dx = tree.X - mapX;
@@ -7529,7 +7604,8 @@
                 return;
             }
 
-            // Tileset house renders 96 map units tall, anchor at bottom — check against visual center
+            // House sprite is 96 map-units tall, anchored at the bottom (same convention as trees).
+            // Offset and radius are larger proportionally to the taller sprite.
             const float houseCenterOffsetY = 48f;
             const float houseHitRadius = 52f;
             var dx = house.X - mapX;
@@ -7558,7 +7634,9 @@
                 return;
             }
 
-            // Character is drawn from Y (feet) to Y-24 (head top); shift check to visual center
+            // Character sprite is 24 map-units tall (feet at Y, head at Y-24).
+            // Test against the midpoint (Y-12). Characters have no Size scaling, so we use
+            // the caller-supplied threshold rather than a scaled radius.
             const float characterCenterOffsetY = 12f;
             var dx = character.X - mapX;
             var dy = (character.Y - characterCenterOffsetY) - mapY;
@@ -7605,6 +7683,9 @@
         return best;
     }
 
+    // Uses GetTitlePosition for hit testing so the click target matches the rendered label —
+    // attached titles follow their host feature's live position, not the stored X/Y.
+    // Nearest-candidate selection, same pattern as FindPointFeatureAtPoint.
     private EditingTitleFeature? FindTitleFeatureAtPoint(float mapX, float mapY, float threshold)
     {
         var thresholdSquared = threshold * threshold;
@@ -7648,6 +7729,11 @@
         };
     }
 
+    // Used when editing a free-placement title polygon (not an attached title).
+    // Two-pass hit test: vertex pass first, then edge pass. A vertex hit takes priority
+    // over an edge hit at the same distance because pointIndex != -1 means "drag vertex"
+    // while edgeIndex != -1 means "insert vertex on edge".
+    // Titles with TargetFeatureId are attached and have no editable polygon, so they're skipped.
     private EditingTitleFeature? FindTitlePolygonAtPoint(
         float mapX,
         float mapY,
@@ -7665,6 +7751,7 @@
 
         void ConsiderTitle(TitleFeatureDto title, bool isStaged)
         {
+            // Attached titles follow their host; no polygon to click on.
             if (title.TargetFeatureId.HasValue)
             {
                 return;
@@ -7675,6 +7762,7 @@
                 return;
             }
 
+            // Pass 1 — vertices. A vertex match beats any later edge match at equal distance.
             for (var i = 0; i < title.Points.Count; i += 1)
             {
                 var point = title.Points[i];
@@ -7694,6 +7782,7 @@
                 }
             }
 
+            // Pass 2 — edges. Projects the click onto each segment; nearest projected point wins.
             for (var i = 0; i < title.Points.Count; i += 1)
             {
                 var j = (i + 1) % title.Points.Count;
@@ -7730,6 +7819,9 @@
         return best;
     }
 
+    // Returns the raw anchor position (feet, bottom of sprite) — not the visual center used by
+    // FindPointFeatureAtPoint. Callers use this for drag-placement and duplication origin, where
+    // the anchor is the authoritative position, not the click offset.
     private static MapPointDto? GetPointFeaturePosition(EditingPointFeature feature)
     {
         if (feature.Tree is not null)
@@ -7763,6 +7855,8 @@
         return (dx * dx) + (dy * dy) <= (threshold * threshold);
     }
 
+    // Captures origin + all point positions at drag start so we can apply a consistent
+    // offset during the drag without accumulating floating-point drift.
     private void BeginPolygonDrag(float mapX, float mapY)
     {
         if (_editingPolygon is null)
@@ -7788,6 +7882,8 @@
             .ToList();
     }
 
+    // Anchor-aware: when a title is attached to a feature via TargetFeatureId it follows
+    // that feature's live position rather than its stored X/Y. Area titles use polygon centroid.
     private MapPointDto GetTitlePosition(TitleFeatureDto title)
     {
         if (title.TargetFeatureId.HasValue)
@@ -7914,6 +8010,8 @@
         return new MapPointDto { X = start.X + (t * dx), Y = start.Y + (t * dy) };
     }
 
+    // Scales by CSS pixel ratio and zoom so the hit zone feels constant in screen pixels
+    // regardless of canvas scaling or zoom level.
     private float GetEditHitRadius()
     {
         var scale = (GetCanvasScaleX() + GetCanvasScaleY()) / 2f;
@@ -7998,6 +8096,8 @@
         }
     }
 
+    // allowTargetSearch=true: tries to snap to a nearby tree/house and attach the title to it.
+    // allowTargetSearch=false (polygon path): places a free-floating area title at the centroid.
     private async Task<bool> PlaceTitleAtPointAsync(
         float mapX,
         float mapY,
@@ -8077,6 +8177,8 @@
         return NormalizeTitleName(result);
     }
 
+    // Grid-samples the bounding box at the current polygon density spacing, adds jitter,
+    // then point-in-polygon tests each candidate before placing. Capped at PolygonMaxPoints.
     private int PlacePolygonPointFeatures(IReadOnlyList<MapPointDto> points)
     {
         if (points is null || points.Count < 3)
@@ -8145,6 +8247,8 @@
         return placed;
     }
 
+    // Generates a roughly circular, organically shaped polygon centered on the current
+    // viewport. Uses sine-wave radial perturbation + jitter, then smooths via SmoothClosedPolygon.
     private List<MapPointDto> BuildStarterLandMassPoints()
     {
         const float mapEdgePadding = 24f;
@@ -8196,6 +8300,7 @@
         return SmoothClosedPolygon(points);
     }
 
+    // Single-pass Chaikin-style corner cutting: each edge → two points at 25% and 75%.
     private static List<MapPointDto> SmoothClosedPolygon(IReadOnlyList<MapPointDto> points)
     {
         if (points is null || points.Count < 3)
@@ -8223,6 +8328,8 @@
         return smoothed;
     }
 
+    // Subdivides each polygon edge into segments and perturbs mid-points perpendicularly
+    // with deterministic pseudo-random noise (HashNoise01). Produces the rough coastline look.
     private static List<MapPointDto> BuildChaoticLandEdgePoints(IReadOnlyList<MapPointDto> points, float segmentLength, float amplitude)
     {
         if (points is null || points.Count < 3)
@@ -8269,6 +8376,7 @@
         return chaoticPoints;
     }
 
+    // Deterministic [0,1] pseudo-random via sin(x)*large-constant fractional part.
     private static float HashNoise01(float value)
     {
         var raw = MathF.Sin(value) * 10000f;
@@ -8392,6 +8500,8 @@
         await DrawAsync();
     }
 
+    // Ray-casting: counts edge crossings along a horizontal ray from (x,y) to +∞.
+    // Odd count = inside.
     private static bool IsPointInPolygon(float x, float y, AreaPolygonDto polygon)
     {
         var inside = false;
@@ -8414,6 +8524,8 @@
         return inside;
     }
 
+    // Shoelace formula for the true weighted centroid; falls back to arithmetic mean
+    // if area ≈ 0 (degenerate or self-intersecting polygon).
     private static MapPointDto GetPolygonCentroid(IReadOnlyList<MapPointDto> points)
     {
         if (points is null || points.Count == 0)
@@ -8453,6 +8565,8 @@
         return new MapPointDto { X = cx * factor, Y = cy * factor };
     }
 
+    // Assembles the full snapshot passed to the JS canvas renderer on every visual update.
+    // For export, the caller zeroes the ViewState and strips edit/preview overlays.
     private MapRenderStateDto BuildRenderState()
     {
         var pointFeatures = new List<MapPointFeatureDto>();
@@ -8650,6 +8764,8 @@
         Edit
     }
 
+    // Baseline state captured after every save; ComputeDiff diffs the live lists against this.
+    // Not the same as UndoState — LiveMapSnapshot includes characters and map settings.
     private sealed class LiveMapSnapshot
     {
         public List<TreeFeatureDto> Trees { get; init; } = new();
@@ -8665,6 +8781,8 @@
         public float MapHeight { get; init; } = 1200f;
     }
 
+    // Characters are intentionally absent — their field edits commit in-place and are not
+    // reversible mid-session via undo.
     private sealed class UndoState
     {
         public List<TreeFeatureDto> Trees { get; init; } = new();
@@ -8694,6 +8812,7 @@
         public bool IsStaged { get; init; }
     }
 
+    // MapX/MapY = position on the actual map (used to seed layout); X/Y = position in the tree SVG.
     private sealed class RelationshipTreeNode
     {
         public int FeatureId { get; init; }
@@ -8715,6 +8834,8 @@
         public string Description { get; init; } = string.Empty;
     }
 
+    // Multiple directed edges between the same pair of nodes are merged into one here.
+    // AToB and BToA may each have multiple relationship types if there were multiple relationships.
     private sealed class RelationshipTreeMergedEdge
     {
         public int NodeAId { get; init; }
@@ -8748,6 +8869,8 @@
     }
 
     // ── Dialog helpers ────────────────────────────────────────
+    // Both dialogs use a TaskCompletionSource so callers can await the result directly
+    // without callback indirection. The TCS is resolved by the confirm/cancel buttons.
     private Task<bool> ShowConfirmDialogAsync(string title, string message)
     {
         _confirmDialog.Title = title;

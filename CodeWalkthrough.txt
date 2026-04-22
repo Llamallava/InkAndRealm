@@ -51,9 +51,23 @@ Files covered in our explanation sessions, in order.
       - Landing page: Create/Explore buttons, inline login modal
 
 [DEL] InkAndRealm.Client/Pages/Login.razor  (deleted — orphaned, nothing navigated to /login)
-[ ] InkAndRealm.Client/Pages/MyMaps.razor
-[ ] InkAndRealm.Client/Pages/MapEditor.razor
-[ ] InkAndRealm.Client/Pages/MapViewer.razor
-[ ] InkAndRealm.Client/Pages/Explore.razor
-[ ] InkAndRealm.Client/Pages/NotFound.razor
-[ ] InkAndRealm.Client/Components/AccountPanel.razor
+[x] InkAndRealm.Client/Pages/MyMaps.razor
+      - Auth-gated, IDisposable, thumbnail system (Task.WhenAll), three-dot menu
+      - Rename/delete modals, optimistic list update
+[x] InkAndRealm.Client/Pages/MapEditor.razor
+      - Full editor: all tools (Point/Brush/Polygon/Eraser/Edit/Duplicate/Pointer)
+      - Undo/redo stack, autosave timer, ComputeDiff batch save
+      - Area layer management (add/rename/delete, cascade cleanup)
+      - Relationship tree (force-directed physics, node dragging, position persistence)
+      - Character editor with relationship staging, edit/delete/update
+      - Chaotic land edges, starter land mass, brush stamps, polygon fill
+      - Hit detection (tree/house/character visual center offsets)
+      - BuildRenderState for JS canvas, dialog system (confirm + prompt TCS pattern)
+[x] InkAndRealm.Client/Pages/MapViewer.razor
+      - Read-only viewer, SupplyParameterFromQuery, pan/zoom, character tree
+[x] InkAndRealm.Client/Pages/Explore.razor
+      - Public map gallery, like system (optimistic + localStorage), share code modal
+[x] InkAndRealm.Client/Pages/NotFound.razor
+      - Explicit @layout MainLayout, placeholder text
+[x] InkAndRealm.Client/Components/AccountPanel.razor
+      - Compact/full modes, three-state UI (logged-in/register/login), EventCallback
