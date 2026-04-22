@@ -538,6 +538,82 @@ article:has(.map-editor-page) {
     gap: 0.75rem;
 }
 
+.relationship-add-form {
+    background: #f8f9fb;
+    border: 1px solid #e1e6ee;
+    border-radius: 0.5rem;
+    padding: 0.65rem 0.75rem;
+}
+
+.relationship-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.relationship-item {
+    background: #ffffff;
+    border: 1px solid #e1e6ee;
+    border-left: 3px solid #d1d5db;
+    border-radius: 0.4rem;
+    padding: 0.45rem 0.6rem;
+}
+
+.relationship-item.rel-edited {
+    border-left-color: #f59e0b;
+}
+
+.relationship-item.rel-new {
+    border-left-color: #22c55e;
+}
+
+.relationship-item-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.relationship-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.relationship-item-actions {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    opacity: 0.4;
+    transition: opacity 0.15s;
+}
+
+.relationship-item:hover .relationship-item-actions {
+    opacity: 1;
+}
+
+.relationship-type-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-top: 0.2rem;
+}
+
+.relationship-item-desc {
+    margin-top: 0.2rem;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.relationship-edit-inline {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e1e6ee;
+}
+
 .relationship-tree-overlay {
     position: fixed;
     inset: 0;

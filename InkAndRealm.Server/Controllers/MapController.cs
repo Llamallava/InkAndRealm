@@ -9,8 +9,8 @@ using System.Text.Json;
 namespace InkAndRealm.Server.Controllers;
 
 [ApiController]
-[Route("api/demo-map")]
-public sealed class DemoMapController : ControllerBase
+[Route("api/map")]
+public sealed class MapController : ControllerBase
 {
     private const string DefaultMapName = "Untitled Map";
     private const int TitleNameMaxLength = 128;
@@ -22,7 +22,7 @@ public sealed class DemoMapController : ControllerBase
     private static readonly char[] ShareCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
     private readonly AppDbContext _context;
 
-    public DemoMapController(AppDbContext context)
+    public MapController(AppDbContext context)
     {
         _context = context;
     }

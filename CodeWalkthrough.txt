@@ -24,9 +24,16 @@ Files covered in our explanation sessions, in order.
       - All relationship/cascade rules
       - Enum-to-string conversions
 
-[ ] InkAndRealm.Server/Program.cs
-[ ] InkAndRealm.Server/Controllers/AuthController.cs
-[ ] InkAndRealm.Server/Controllers/DemoMapController.cs
+[x] InkAndRealm.Server/Program.cs
+      - Service registration, DB context, CORS, auto-migration at startup
+
+[x] InkAndRealm.Server/Controllers/AuthController.cs
+      - Register, Login, ValidateSession endpoints
+      - BCrypt password hashing, opaque session tokens, username normalization
+
+[x] InkAndRealm.Server/Controllers/MapController.cs  (renamed from DemoMapController, route api/demo-map -> api/map)
+      - All map CRUD, share, publish, explore, engagement endpoints
+      - ApplyEdits batch save, ToDto mapping, centroid calculation, relationship serialization
 [ ] InkAndRealm.Client/Program.cs
 [ ] InkAndRealm.Client/State/UserState.cs
 [ ] InkAndRealm.Client/App.razor

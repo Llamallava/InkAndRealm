@@ -314,7 +314,7 @@
             _isLoading = true;
             try
             {
-                using var response = await Http.GetAsync($"api/demo-map/published/{PublishedMapId}");
+                using var response = await Http.GetAsync($"api/map/published/{PublishedMapId}");
                 if (response.IsSuccessStatusCode)
                 {
                     var map = await response.Content.ReadFromJsonAsync<MapDto>();
@@ -336,7 +336,7 @@
             _isLoading = true;
             try
             {
-                using var response = await Http.GetAsync($"api/demo-map/shared?code={Uri.EscapeDataString(ShareCode)}");
+                using var response = await Http.GetAsync($"api/map/shared?code={Uri.EscapeDataString(ShareCode)}");
                 if (response.IsSuccessStatusCode)
                 {
                     var map = await response.Content.ReadFromJsonAsync<MapDto>();

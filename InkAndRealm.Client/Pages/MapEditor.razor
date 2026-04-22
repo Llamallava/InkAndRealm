@@ -200,6 +200,15 @@
                                 </button>
                             </div>
                         }
+                        @if (_isSelectingRelationshipTarget)
+                        {
+                            <div class="map-editor-reposition-overlay">
+                                <div class="small text-white-50">Pick a relationship target</div>
+                                <button class="btn btn-outline-light btn-sm" @onclick="CancelRelationshipTargetSelection">
+                                    Cancel
+                                </button>
+                            </div>
+                        }
                     </div>
 
                     @if (_isPointFeatureEditorOpen && _editingPointFeature is not null)
@@ -216,20 +225,24 @@
                             @if (_editingPointFeature.Character is not null)
                             {
                                 <div class="point-feature-editor-tab-bar">
-                                    <button class="point-feature-editor-tab @(_characterEditorShowingDetails ? "point-feature-editor-tab--active" : "")"
-                                            @onclick="() => _characterEditorShowingDetails = true">
-                                        Details
+                                    <button class="point-feature-editor-tab @(_characterEditorActiveTab == CharacterEditorTab.Character ? "point-feature-editor-tab--active" : "")"
+                                            @onclick="() => _characterEditorActiveTab = CharacterEditorTab.Character">
+                                        Character
                                     </button>
-                                    <button class="point-feature-editor-tab @(!_characterEditorShowingDetails ? "point-feature-editor-tab--active" : "")"
-                                            @onclick="() => _characterEditorShowingDetails = false">
+                                    <button class="point-feature-editor-tab @(_characterEditorActiveTab == CharacterEditorTab.Relationships ? "point-feature-editor-tab--active" : "")"
+                                            @onclick="() => _characterEditorActiveTab = CharacterEditorTab.Relationships">
+                                        Relationships
+                                    </button>
+                                    <button class="point-feature-editor-tab @(_characterEditorActiveTab == CharacterEditorTab.Style ? "point-feature-editor-tab--active" : "")"
+                                            @onclick="() => _characterEditorActiveTab = CharacterEditorTab.Style">
                                         Style
                                     </button>
                                 </div>
                             }
                             <div class="point-feature-editor-body">
-                                @if (_editingPointFeature.Character is not null && _characterEditorShowingDetails && _editingCharacter is not null)
+                                @if (_editingPointFeature.Character is not null && _characterEditorActiveTab == CharacterEditorTab.Character && _editingCharacter is not null)
                                 {
-                                    @* ── Character Details Tab ─────────────────────────────────── *@
+                                    @* ── Character Tab ─────────────────────────────────────────── *@
                                     <div class="point-feature-editor-section">
                                         <label class="form-label">Name</label>
                                         <input class="form-control"
@@ -265,175 +278,141 @@
                                                   @bind:event="oninput"
                                                   readonly="@IsCharacterEditorReadOnly"></textarea>
                                     </div>
+                                }
+                                else if (_editingPointFeature.Character is not null && _characterEditorActiveTab == CharacterEditorTab.Relationships && _editingCharacter is not null)
+                                {
+                                    @* ── Relationships Tab ──────────────────────────────────────── *@
                                     <div class="point-feature-editor-section">
-                                        <label class="form-label">Relationships</label>
-                                        @foreach (var relationship in _editingCharacter!.Relationships?.Where(r => r.Id > 0) ?? Enumerable.Empty<CharacterRelationshipDto>())
+                                        @if (!IsCharacterEditorReadOnly)
                                         {
-                                            <div class="mb-2">
-                                                <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType)</div>
-                                                <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
-                                                @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                            @if (_editingCharacter!.Id <= 0)
+                                            {
+                                                <div class="small text-warning mb-2">Save this character before adding relationships.</div>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-outline-primary btn-sm w-100 mb-3"
+                                                        type="button"
+                                                        @onclick="BeginAddNewRelationship">
+                                                    Add New Relationship
+                                                </button>
+                                            }
+                                        }
+                                        @{
+                                            var pfeSaved = _editingCharacter!.Relationships?.Where(r => r.Id > 0).ToList() ?? new();
+                                            var pfePending = GetPendingRelationshipsForCharacter(_editingCharacter!.Id);
+                                        }
+                                        @if (pfeSaved.Count == 0 && pfePending.Count == 0)
+                                        {
+                                            <div class="small text-muted">No relationships yet.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="relationship-list">
+                                                @foreach (var rel in pfeSaved)
                                                 {
-                                                    <div class="text-muted small">@relationship.Description</div>
+                                                    var isEditing = _editingRelationshipId == rel.Id;
+                                                    var hasPendingUpdate = IsRelationshipUpdateStaged(rel.Id);
+                                                    <div class="relationship-item @(hasPendingUpdate ? "rel-edited" : "")">
+                                                        <div class="relationship-item-header">
+                                                            <div class="relationship-item-info">
+                                                                <span class="small fw-semibold">@GetRelationshipTargetLabel(rel.TargetFeatureId, rel.TargetFeatureType)</span>
+                                                                <div class="relationship-type-tags">
+                                                                    @foreach (var t in (rel.RelationshipTypes ?? new()))
+                                                                    {
+                                                                        <span class="badge bg-secondary">@t</span>
+                                                                    }
+                                                                    @if (hasPendingUpdate)
+                                                                    {
+                                                                        <span class="badge bg-warning text-dark">Edited</span>
+                                                                    }
+                                                                </div>
+                                                                @if (!string.IsNullOrWhiteSpace(rel.Description))
+                                                                {
+                                                                    <div class="small text-muted relationship-item-desc">@rel.Description</div>
+                                                                }
+                                                            </div>
+                                                            @if (!IsCharacterEditorReadOnly)
+                                                            {
+                                                                <div class="relationship-item-actions">
+                                                                    <button class="btn btn-link btn-sm p-0 text-secondary"
+                                                                            type="button"
+                                                                            title="Edit"
+                                                                            @onclick="() => BeginRelationshipEdit(rel)">
+                                                                        ✏
+                                                                    </button>
+                                                                    <button class="btn btn-link btn-sm p-0 text-danger"
+                                                                            type="button"
+                                                                            title="Delete"
+                                                                            @onclick="async () => await DeleteExistingRelationship(rel)">
+                                                                        ✕
+                                                                    </button>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                        @if (isEditing && !IsCharacterEditorReadOnly)
+                                                        {
+                                                            <div class="relationship-edit-inline">
+                                                                <input class="form-control form-control-sm mb-2"
+                                                                       placeholder="Types (comma-separated)"
+                                                                       @bind="_relationshipEditTypesInput"
+                                                                       @bind:event="oninput" />
+                                                                <textarea class="form-control form-control-sm mb-2"
+                                                                          rows="2"
+                                                                          placeholder="Description (optional)"
+                                                                          @bind="_relationshipEditDescription"
+                                                                          @bind:event="oninput"></textarea>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm"
+                                                                            type="button"
+                                                                            @onclick="ApplyRelationshipEdit">
+                                                                        Save
+                                                                    </button>
+                                                                    <button class="btn btn-outline-secondary btn-sm"
+                                                                            type="button"
+                                                                            @onclick="CancelRelationshipEdit">
+                                                                        Cancel
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    </div>
                                                 }
-                                                @if (IsRelationshipUpdateStaged(relationship.Id))
+                                                @foreach (var rel in pfePending)
                                                 {
-                                                    <div class="text-muted small">Pending update (unsaved)</div>
-                                                }
-                                                @if (!IsCharacterEditorReadOnly)
-                                                {
-                                                    <div class="d-flex gap-2 mt-1">
-                                                        <button class="btn btn-outline-secondary btn-sm"
-                                                                type="button"
-                                                                @onclick="() => BeginRelationshipEdit(relationship)">
-                                                            Edit
-                                                        </button>
-                                                        <button class="btn btn-outline-danger btn-sm"
-                                                                type="button"
-                                                                @onclick="() => DeleteExistingRelationship(relationship)">
-                                                            Delete
-                                                        </button>
+                                                    <div class="relationship-item rel-new">
+                                                        <div class="relationship-item-header">
+                                                            <div class="relationship-item-info">
+                                                                <span class="small fw-semibold">@GetRelationshipTargetLabel(rel.TargetFeatureId, "New")</span>
+                                                                <div class="relationship-type-tags">
+                                                                    @foreach (var t in (rel.RelationshipTypes ?? new()))
+                                                                    {
+                                                                        <span class="badge bg-secondary">@t</span>
+                                                                    }
+                                                                    <span class="badge bg-success">New</span>
+                                                                </div>
+                                                                @if (!string.IsNullOrWhiteSpace(rel.Description))
+                                                                {
+                                                                    <div class="small text-muted relationship-item-desc">@rel.Description</div>
+                                                                }
+                                                            </div>
+                                                            @if (!IsCharacterEditorReadOnly)
+                                                            {
+                                                                <div class="relationship-item-actions">
+                                                                    <button class="btn btn-link btn-sm p-0 text-danger"
+                                                                            type="button"
+                                                                            title="Remove"
+                                                                            @onclick="() => RemovePendingRelationship(rel)">
+                                                                        ✕
+                                                                    </button>
+                                                                </div>
+                                                            }
+                                                        </div>
                                                     </div>
                                                 }
                                             </div>
                                         }
-                                        @if (!(_editingCharacter!.Relationships?.Any(r => r.Id > 0) ?? false)
-                                             && GetPendingRelationshipsForCharacter(_editingCharacter!.Id).Count == 0)
-                                        {
-                                            <div class="small text-muted">No relationships yet.</div>
-                                        }
-                                        @if (GetPendingRelationshipsForCharacter(_editingCharacter!.Id).Count > 0)
-                                        {
-                                            <div class="small text-muted mt-2">Pending (unsaved)</div>
-                                            @foreach (var relationship in GetPendingRelationshipsForCharacter(_editingCharacter!.Id))
-                                            {
-                                                <div class="mb-2">
-                                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending")</div>
-                                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
-                                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
-                                                    {
-                                                        <div class="text-muted small">@relationship.Description</div>
-                                                    }
-                                                    @if (!IsCharacterEditorReadOnly)
-                                                    {
-                                                        <button class="btn btn-outline-danger btn-sm mt-1"
-                                                                type="button"
-                                                                @onclick="() => RemovePendingRelationship(relationship)">
-                                                            Delete
-                                                        </button>
-                                                    }
-                                                </div>
-                                            }
-                                        }
-                                        @if (GetPendingRelationshipUpdatesForCharacter(_editingCharacter!.Id).Count > 0)
-                                        {
-                                            <div class="small text-muted mt-2">Pending updates (unsaved)</div>
-                                            @foreach (var relationship in GetPendingRelationshipUpdatesForCharacter(_editingCharacter!.Id))
-                                            {
-                                                <div class="mb-2">
-                                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending Update")</div>
-                                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
-                                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
-                                                    {
-                                                        <div class="text-muted small">@relationship.Description</div>
-                                                    }
-                                                    @if (!IsCharacterEditorReadOnly)
-                                                    {
-                                                        <button class="btn btn-outline-danger btn-sm mt-1"
-                                                                type="button"
-                                                                @onclick="() => DeletePendingRelationshipUpdate(relationship)">
-                                                            Delete
-                                                        </button>
-                                                    }
-                                                </div>
-                                            }
-                                        }
                                     </div>
-                                    @if (!IsCharacterEditorReadOnly)
-                                    {
-                                        @if (_editingRelationshipId is not null)
-                                        {
-                                            <div class="point-feature-editor-section">
-                                                <label class="form-label">Edit Relationship</label>
-                                                <div class="small text-muted mb-2">
-                                                    @GetRelationshipTargetLabel(_editingRelationshipTargetFeatureId, _editingRelationshipTargetFeatureType)
-                                                </div>
-                                                <input class="form-control mb-2"
-                                                       placeholder="Relationship types (comma separated)"
-                                                       @bind="_relationshipEditTypesInput"
-                                                       @bind:event="oninput" />
-                                                <textarea class="form-control mb-2"
-                                                          rows="2"
-                                                          placeholder="Description (optional)"
-                                                          @bind="_relationshipEditDescription"
-                                                          @bind:event="oninput"></textarea>
-                                                <div class="d-flex gap-2">
-                                                    <button class="btn btn-outline-primary btn-sm" type="button" @onclick="ApplyRelationshipEdit">
-                                                        Update Relationship
-                                                    </button>
-                                                    <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="CancelRelationshipEdit">
-                                                        Cancel
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        }
-                                        <div class="point-feature-editor-section">
-                                            <label class="form-label">Add Relationship</label>
-                                            @if (_selectedRelationshipTarget is null)
-                                            {
-                                                <button class="btn btn-outline-primary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
-                                                    Select Relationship Target
-                                                </button>
-                                                <div class="small text-muted mt-2">Pick a saved feature on the map before entering relationship details.</div>
-                                            }
-                                            else
-                                            {
-                                                <div class="small text-muted mb-2">Target</div>
-                                                <div class="fw-semibold mb-2">@GetRelationshipTargetLabel(_selectedRelationshipTarget.TargetId, _selectedRelationshipTarget.IsCharacter ? "Character" : "Feature")</div>
-                                                <div class="d-flex gap-2 mb-2">
-                                                    <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
-                                                        Change Target
-                                                    </button>
-                                                    <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="ClearSelectedRelationshipTarget">
-                                                        Clear Target
-                                                    </button>
-                                                </div>
-                                                <input class="form-control mb-2"
-                                                       placeholder="Relationship types (comma separated)"
-                                                       @bind="_relationshipTypesInput"
-                                                       @bind:event="oninput" />
-                                                <textarea class="form-control mb-2"
-                                                          rows="2"
-                                                          placeholder="Description (optional)"
-                                                          @bind="_relationshipDescription"
-                                                          @bind:event="oninput"></textarea>
-                                                <div class="form-check mb-2">
-                                                    <input class="form-check-input"
-                                                           type="checkbox"
-                                                           id="relationship-reciprocal-toggle"
-                                                           @bind="_relationshipCreateReciprocal" />
-                                                    <label class="form-check-label" for="relationship-reciprocal-toggle">
-                                                        Make reciprocal (character targets only)
-                                                    </label>
-                                                </div>
-                                                @if (_relationshipCreateReciprocal)
-                                                {
-                                                    <input class="form-control mb-2"
-                                                           placeholder="Reciprocal types (comma separated, optional)"
-                                                           @bind="_relationshipReciprocalTypesInput"
-                                                           @bind:event="oninput" />
-                                                    <textarea class="form-control mb-2"
-                                                              rows="2"
-                                                              placeholder="Reciprocal description (optional)"
-                                                              @bind="_relationshipReciprocalDescription"
-                                                              @bind:event="oninput"></textarea>
-                                                }
-                                                <button class="btn btn-outline-primary btn-sm" type="button" @onclick="AddSelectedRelationship">
-                                                    Add Relationship
-                                                </button>
-                                            }
-                                        </div>
-                                    }
                                 }
                                 else
                                 {
@@ -855,6 +834,81 @@
     }
 </div>
 
+@if (_isRelationshipDetailModalOpen && _selectedRelationshipTarget is not null && _relationshipSourceCharacter is not null)
+{
+    <div class="map-settings-modal-backdrop" @onclick="CancelRelationshipDetail"></div>
+    <div class="map-settings-modal">
+        <div class="map-settings-modal-header">
+            <span class="map-settings-modal-title">Add Relationship</span>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="CancelRelationshipDetail" aria-label="Close">&times;</button>
+        </div>
+        <div class="map-settings-modal-body">
+            <div class="mb-2">
+                @{
+                    var sourceName = string.IsNullOrWhiteSpace(_relationshipSourceCharacter!.Name)
+                        ? GetCharacterMapLabel(_relationshipSourceCharacter)
+                        : _relationshipSourceCharacter.Name;
+                    var targetName = GetRelationshipTargetLabel(_selectedRelationshipTarget!.TargetId, _selectedRelationshipTarget.IsCharacter ? "Character" : "Feature");
+                }
+                <label class="map-settings-modal-label">What is @sourceName's relationship with @targetName? <span class="text-danger">*</span></label>
+                <input class="form-control form-control-sm"
+                       @bind="_relationshipTypesInput"
+                       @bind:event="oninput" />
+            </div>
+            <div class="mb-3">
+                <label class="map-settings-modal-label">Description (optional)</label>
+                <textarea class="form-control form-control-sm"
+                          rows="2"
+                          placeholder="Describe the relationship..."
+                          @bind="_relationshipDescription"
+                          @bind:event="oninput"></textarea>
+            </div>
+            @if (_selectedRelationshipTarget.IsCharacter)
+            {
+                <div class="form-check mb-2">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="rel-detail-reciprocal"
+                           @bind="_relationshipCreateReciprocal" />
+                    <label class="form-check-label small" for="rel-detail-reciprocal">
+                        Also add reverse relationship
+                    </label>
+                </div>
+                @if (_relationshipCreateReciprocal)
+                {
+                    <div class="mb-3">
+                        <input class="form-control form-control-sm mb-2"
+                               placeholder="Reverse types (optional)"
+                               @bind="_relationshipReciprocalTypesInput"
+                               @bind:event="oninput" />
+                        <textarea class="form-control form-control-sm"
+                                  rows="2"
+                                  placeholder="Reverse description (optional)"
+                                  @bind="_relationshipReciprocalDescription"
+                                  @bind:event="oninput"></textarea>
+                    </div>
+                }
+            }
+            @if (!string.IsNullOrWhiteSpace(_relationshipStatusMessage))
+            {
+                <div class="small text-warning mb-2">@_relationshipStatusMessage</div>
+            }
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm flex-grow-1"
+                        type="button"
+                        @onclick="ConfirmRelationshipDetail">
+                    Confirm
+                </button>
+                <button class="btn btn-outline-secondary btn-sm"
+                        type="button"
+                        @onclick="CancelRelationshipDetail">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_isCharacterEditorOpen && _editingCharacter is not null && !_isPointFeatureEditorOpen)
 {
     <div class="character-editor-overlay">
@@ -946,186 +1000,135 @@
                 @{
                     var editingCharacter = _editingCharacter!;
                     var pendingRelationships = GetPendingRelationshipsForCharacter(editingCharacter.Id);
-                    var pendingRelationshipUpdates = GetPendingRelationshipUpdatesForCharacter(editingCharacter.Id);
                 }
                 <div class="character-editor-row">
-                    <label class="form-label">Relationships</label>
-                    @{ var savedRelationships = editingCharacter.Relationships?.Where(r => r.Id > 0).ToList() ?? new(); }
-                    @if (savedRelationships.Count > 0)
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label mb-0">Relationships</label>
+                        @if (!IsCharacterEditorReadOnly && editingCharacter.Id > 0)
+                        {
+                            <button class="btn btn-outline-primary btn-sm"
+                                    type="button"
+                                    @onclick="BeginAddNewRelationship">
+                                + Add
+                            </button>
+                        }
+                    </div>
+                    @if (!IsCharacterEditorReadOnly && editingCharacter.Id <= 0)
                     {
-                        <div class="small">
-                            @foreach (var relationship in savedRelationships)
+                        <div class="small text-warning mb-2">Save this character before adding relationships.</div>
+                    }
+                    @{ var savedRelationships = editingCharacter.Relationships?.Where(r => r.Id > 0).ToList() ?? new(); }
+                    @if (savedRelationships.Count == 0 && pendingRelationships.Count == 0)
+                    {
+                        <div class="small text-muted">No relationships yet.</div>
+                    }
+                    else
+                    {
+                        <div class="relationship-list">
+                            @foreach (var rel in savedRelationships)
                             {
-                                <div class="mb-2">
-                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType)</div>
-                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
-                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
+                                var isEditing = _editingRelationshipId == rel.Id;
+                                var hasPendingUpdate = IsRelationshipUpdateStaged(rel.Id);
+                                <div class="relationship-item @(hasPendingUpdate ? "rel-edited" : "")">
+                                    <div class="relationship-item-header">
+                                        <div class="relationship-item-info">
+                                            <span class="small fw-semibold">@GetRelationshipTargetLabel(rel.TargetFeatureId, rel.TargetFeatureType)</span>
+                                            <div class="relationship-type-tags">
+                                                @foreach (var t in (rel.RelationshipTypes ?? new()))
+                                                {
+                                                    <span class="badge bg-secondary">@t</span>
+                                                }
+                                                @if (hasPendingUpdate)
+                                                {
+                                                    <span class="badge bg-warning text-dark">Edited</span>
+                                                }
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(rel.Description))
+                                            {
+                                                <div class="small text-muted relationship-item-desc">@rel.Description</div>
+                                            }
+                                        </div>
+                                        @if (!IsCharacterEditorReadOnly)
+                                        {
+                                            <div class="relationship-item-actions">
+                                                <button class="btn btn-link btn-sm p-0 text-secondary"
+                                                        type="button"
+                                                        title="Edit"
+                                                        @onclick="() => BeginRelationshipEdit(rel)">
+                                                    ✏
+                                                </button>
+                                                <button class="btn btn-link btn-sm p-0 text-danger"
+                                                        type="button"
+                                                        title="Delete"
+                                                        @onclick="() => DeleteExistingRelationship(rel)">
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (isEditing && !IsCharacterEditorReadOnly)
                                     {
-                                        <div class="text-muted small">@relationship.Description</div>
-                                    }
-                                    @if (IsRelationshipUpdateStaged(relationship.Id))
-                                    {
-                                        <div class="text-muted small">Pending update (unsaved)</div>
-                                    }
-                                    @if (!IsCharacterEditorReadOnly)
-                                    {
-                                        <div class="d-flex gap-2 mt-1">
-                                            <button class="btn btn-outline-secondary btn-sm"
-                                                    type="button"
-                                                    @onclick="() => BeginRelationshipEdit(relationship)">
-                                                Edit
-                                            </button>
-                                            <button class="btn btn-outline-danger btn-sm"
-                                                    type="button"
-                                                    @onclick="() => DeleteExistingRelationship(relationship)">
-                                                Delete
-                                            </button>
+                                        <div class="relationship-edit-inline">
+                                            <input class="form-control form-control-sm mb-2"
+                                                   placeholder="Types (comma-separated)"
+                                                   @bind="_relationshipEditTypesInput"
+                                                   @bind:event="oninput" />
+                                            <textarea class="form-control form-control-sm mb-2"
+                                                      rows="2"
+                                                      placeholder="Description (optional)"
+                                                      @bind="_relationshipEditDescription"
+                                                      @bind:event="oninput"></textarea>
+                                            <div class="d-flex gap-2">
+                                                <button class="btn btn-primary btn-sm"
+                                                        type="button"
+                                                        @onclick="ApplyRelationshipEdit">
+                                                    Save
+                                                </button>
+                                                <button class="btn btn-outline-secondary btn-sm"
+                                                        type="button"
+                                                        @onclick="CancelRelationshipEdit">
+                                                    Cancel
+                                                </button>
+                                            </div>
                                         </div>
                                     }
                                 </div>
                             }
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="small text-muted">No relationships yet.</div>
-                    }
-                    @if (pendingRelationships.Count > 0)
-                    {
-                        <div class="small text-muted mt-2">Pending (unsaved)</div>
-                        <div class="small">
-                            @foreach (var relationship in pendingRelationships)
+                            @foreach (var rel in pendingRelationships)
                             {
-                                <div class="mb-2">
-                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending")</div>
-                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
-                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
-                                    {
-                                        <div class="text-muted small">@relationship.Description</div>
-                                    }
-                                    @if (!IsCharacterEditorReadOnly)
-                                    {
-                                        <button class="btn btn-outline-danger btn-sm mt-1"
-                                                type="button"
-                                                @onclick="() => RemovePendingRelationship(relationship)">
-                                            Delete
-                                        </button>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    }
-                    @if (pendingRelationshipUpdates.Count > 0)
-                    {
-                        <div class="small text-muted mt-2">Pending updates (unsaved)</div>
-                        <div class="small">
-                            @foreach (var relationship in pendingRelationshipUpdates)
-                            {
-                                <div class="mb-2">
-                                    <div class="fw-semibold">@GetRelationshipTargetLabel(relationship.TargetFeatureId, "Pending Update")</div>
-                                    <div>@FormatRelationshipTypes(relationship.RelationshipTypes)</div>
-                                    @if (!string.IsNullOrWhiteSpace(relationship.Description))
-                                    {
-                                        <div class="text-muted small">@relationship.Description</div>
-                                    }
-                                    @if (!IsCharacterEditorReadOnly)
-                                    {
-                                        <button class="btn btn-outline-danger btn-sm mt-1"
-                                                type="button"
-                                                @onclick="() => DeletePendingRelationshipUpdate(relationship)">
-                                            Delete
-                                        </button>
-                                    }
+                                <div class="relationship-item rel-new">
+                                    <div class="relationship-item-header">
+                                        <div class="relationship-item-info">
+                                            <span class="small fw-semibold">@GetRelationshipTargetLabel(rel.TargetFeatureId, "New")</span>
+                                            <div class="relationship-type-tags">
+                                                @foreach (var t in (rel.RelationshipTypes ?? new()))
+                                                {
+                                                    <span class="badge bg-secondary">@t</span>
+                                                }
+                                                <span class="badge bg-success">New</span>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(rel.Description))
+                                            {
+                                                <div class="small text-muted relationship-item-desc">@rel.Description</div>
+                                            }
+                                        </div>
+                                        @if (!IsCharacterEditorReadOnly)
+                                        {
+                                            <div class="relationship-item-actions">
+                                                <button class="btn btn-link btn-sm p-0 text-danger"
+                                                        type="button"
+                                                        title="Remove"
+                                                        @onclick="() => RemovePendingRelationship(rel)">
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
                             }
                         </div>
                     }
                 </div>
-                @if (!IsCharacterEditorReadOnly)
-                {
-                    @if (_editingRelationshipId is not null)
-                    {
-                        <div class="character-editor-row">
-                            <label class="form-label">Edit Relationship</label>
-                            <div class="small text-muted mb-2">
-                                @GetRelationshipTargetLabel(_editingRelationshipTargetFeatureId, _editingRelationshipTargetFeatureType)
-                            </div>
-                            <input class="form-control mb-2"
-                                   placeholder="Relationship types (comma separated)"
-                                   @bind="_relationshipEditTypesInput"
-                                   @bind:event="oninput" />
-                            <textarea class="form-control mb-2"
-                                      rows="2"
-                                      placeholder="Description (optional)"
-                                      @bind="_relationshipEditDescription"
-                                      @bind:event="oninput"></textarea>
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-outline-primary btn-sm" type="button" @onclick="ApplyRelationshipEdit">
-                                    Update Relationship
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="CancelRelationshipEdit">
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                    }
-                    <div class="character-editor-row">
-                        <label class="form-label">Add Relationship</label>
-                        @if (_selectedRelationshipTarget is null)
-                        {
-                            <button class="btn btn-outline-primary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
-                                Select Relationship Target
-                            </button>
-                            <div class="small text-muted mt-2">Pick a saved feature on the map before entering relationship details.</div>
-                        }
-                        else
-                        {
-                            <div class="small text-muted mb-2">Target</div>
-                            <div class="fw-semibold mb-2">@GetRelationshipTargetLabel(_selectedRelationshipTarget.TargetId, _selectedRelationshipTarget.IsCharacter ? "Character" : "Feature")</div>
-                            <div class="d-flex gap-2 mb-2">
-                                <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="BeginRelationshipTargetSelection">
-                                    Change Target
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="ClearSelectedRelationshipTarget">
-                                    Clear Target
-                                </button>
-                            </div>
-                            <input class="form-control mb-2"
-                                   placeholder="Relationship types (comma separated)"
-                                   @bind="_relationshipTypesInput"
-                                   @bind:event="oninput" />
-                            <textarea class="form-control mb-2"
-                                      rows="2"
-                                      placeholder="Description (optional)"
-                                      @bind="_relationshipDescription"
-                                      @bind:event="oninput"></textarea>
-                            <div class="form-check mb-2">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       id="relationship-reciprocal-toggle"
-                                       @bind="_relationshipCreateReciprocal" />
-                                <label class="form-check-label" for="relationship-reciprocal-toggle">
-                                    Make reciprocal (character targets only)
-                                </label>
-                            </div>
-                            @if (_relationshipCreateReciprocal)
-                            {
-                                <input class="form-control mb-2"
-                                       placeholder="Reciprocal types (comma separated, optional)"
-                                       @bind="_relationshipReciprocalTypesInput"
-                                       @bind:event="oninput" />
-                                <textarea class="form-control mb-2"
-                                          rows="2"
-                                          placeholder="Reciprocal description (optional)"
-                                          @bind="_relationshipReciprocalDescription"
-                                          @bind:event="oninput"></textarea>
-                            }
-                            <button class="btn btn-outline-primary btn-sm" type="button" @onclick="AddSelectedRelationship">
-                                Add Relationship
-                            </button>
-                        }
-                    </div>
-                }
             </div>
         </div>
     </div>
@@ -1439,7 +1442,9 @@
     private CharacterFeatureDto? _editingCharacter;
     private bool _isCharacterEditorOpen;
     private bool _isCharacterEditorReadOnly;
-    private bool _characterEditorShowingDetails = true;
+    private enum CharacterEditorTab { Character, Relationships, Style }
+    private CharacterEditorTab _characterEditorActiveTab = CharacterEditorTab.Character;
+    private bool _isRelationshipDetailModalOpen;
     private bool _relationshipReturnPointEditorOpen;
     private string _relationshipTypesInput = string.Empty;
     private string _relationshipDescription = string.Empty;
@@ -1453,6 +1458,7 @@
     private string _relationshipEditTypesInput = string.Empty;
     private string _relationshipEditDescription = string.Empty;
     private bool _isSelectingRelationshipTarget;
+    private bool _isAddRelationshipOpen;
     private CharacterFeatureDto? _relationshipSourceCharacter;
     private RelationshipTargetSelection? _selectedRelationshipTarget;
     private MapToolType _relationshipReturnTool;
@@ -1808,8 +1814,8 @@
 
         // Load map summary for IsPublished
         string summaryUrl = !string.IsNullOrWhiteSpace(sessionToken)
-            ? $"api/demo-map?sessionToken={Uri.EscapeDataString(sessionToken)}"
-            : userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+            ? $"api/map?sessionToken={Uri.EscapeDataString(sessionToken)}"
+            : userId is null ? "api/map" : $"api/map?userId={userId.Value}";
 
         try
         {
@@ -1820,8 +1826,8 @@
 
         // Load share status
         string shareUrl = !string.IsNullOrWhiteSpace(sessionToken)
-            ? $"api/demo-map/share?sessionToken={Uri.EscapeDataString(sessionToken)}"
-            : userId is null ? "api/demo-map/share" : $"api/demo-map/share?userId={userId.Value}";
+            ? $"api/map/share?sessionToken={Uri.EscapeDataString(sessionToken)}"
+            : userId is null ? "api/map/share" : $"api/map/share?userId={userId.Value}";
 
         try
         {
@@ -1832,8 +1838,8 @@
 
         // Load engagement (views + likes)
         string engagementUrl = !string.IsNullOrWhiteSpace(sessionToken)
-            ? $"api/demo-map/engagement/{MapId}?sessionToken={Uri.EscapeDataString(sessionToken)}"
-            : userId is null ? $"api/demo-map/engagement/{MapId}" : $"api/demo-map/engagement/{MapId}?userId={userId.Value}";
+            ? $"api/map/engagement/{MapId}?sessionToken={Uri.EscapeDataString(sessionToken)}"
+            : userId is null ? $"api/map/engagement/{MapId}" : $"api/map/engagement/{MapId}?userId={userId.Value}";
 
         try
         {
@@ -1850,7 +1856,7 @@
         _postPublishBusy = true;
         _postStatusMessage = null;
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/publish", new PublishMapRequest
+        var response = await Http.PostAsJsonAsync("api/map/publish", new PublishMapRequest
         {
             UserId = UserState.CurrentUser?.UserId,
             SessionToken = UserState.CurrentUser?.SessionToken,
@@ -1883,7 +1889,7 @@
         _postPublishBusy = true;
         _postStatusMessage = null;
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/unpublish", new PublishMapRequest
+        var response = await Http.PostAsJsonAsync("api/map/unpublish", new PublishMapRequest
         {
             UserId = UserState.CurrentUser?.UserId,
             SessionToken = UserState.CurrentUser?.SessionToken,
@@ -1937,7 +1943,7 @@
             MapId = MapId
         };
 
-        var endpoint = open ? "api/demo-map/share/open" : "api/demo-map/share/close";
+        var endpoint = open ? "api/map/share/open" : "api/map/share/close";
         using var response = await Http.PostAsJsonAsync(endpoint, payload);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
@@ -2294,7 +2300,7 @@
                 if (pointFeature.Character is not null)
                 {
                     OpenCharacterEditor(pointFeature.Character, readOnly: false, resetRelationshipForm: true);
-                    _characterEditorShowingDetails = true;
+                    _characterEditorActiveTab = CharacterEditorTab.Character;
                     _statusMessage = "Character selected. Edit details in the panel.";
                     BeginUndoBatch(UndoBatchKind.Edit);
                     await OpenPointFeatureEditorAsync();
@@ -3216,7 +3222,7 @@
 
         var request = ComputeDiff(_lastSavedSnapshot!);
 
-        using var response = await Http.PostAsJsonAsync("api/demo-map/edits", request);
+        using var response = await Http.PostAsJsonAsync("api/map/edits", request);
 
         if (response.IsSuccessStatusCode)
         {
@@ -3823,11 +3829,11 @@
         var sessionToken = UserState.CurrentUser?.SessionToken;
         if (!string.IsNullOrWhiteSpace(sessionToken))
         {
-            return $"api/demo-map/{MapId}?sessionToken={Uri.EscapeDataString(sessionToken)}";
+            return $"api/map/{MapId}?sessionToken={Uri.EscapeDataString(sessionToken)}";
         }
 
         var userId = UserState.CurrentUser?.UserId;
-        return userId is null ? $"api/demo-map/{MapId}" : $"api/demo-map/{MapId}?userId={userId.Value}";
+        return userId is null ? $"api/map/{MapId}" : $"api/map/{MapId}?userId={userId.Value}";
     }
 
     private string RelationshipTreeViewBox => FormattableString.Invariant(
@@ -4223,7 +4229,13 @@
         };
     }
 
-    private static string BuildRelationshipTreeCharacterLabel(CharacterFeatureDto character)
+    private string GetCharacterMapLabel(CharacterFeatureDto character)
+    {
+        var index = _liveCharacters.FindIndex(c => c.Id == character.Id);
+        return index >= 0 ? $"Character #{index + 1}" : "Character";
+    }
+
+    private string BuildRelationshipTreeCharacterLabel(CharacterFeatureDto character)
     {
         if (character is null)
         {
@@ -4231,11 +4243,11 @@
         }
 
         return string.IsNullOrWhiteSpace(character.Name)
-            ? $"Character #{character.Id}"
+            ? GetCharacterMapLabel(character)
             : character.Name;
     }
 
-    private static bool TryResolveRelationshipTreeTargetNode(
+    private bool TryResolveRelationshipTreeTargetNode(
         CharacterRelationshipDto relationship,
         IReadOnlyDictionary<int, CharacterFeatureDto> characterById,
         IReadOnlySet<int> treeIds,
@@ -4928,7 +4940,7 @@
         _editingPointOriginalPosition = GetPointFeaturePosition(_editingPointFeature);
 
         OpenCharacterEditor(liveCharacter, readOnly: false, resetRelationshipForm: true);
-        _characterEditorShowingDetails = true;
+        _characterEditorActiveTab = CharacterEditorTab.Character;
         BeginUndoBatch(UndoBatchKind.Edit);
 
         _statusMessage = "Editing character from Character Tree. Press Done to return.";
@@ -5841,6 +5853,70 @@
         _relationshipStatusMessage = string.Empty;
         _relationshipSourceCharacter = null;
         _selectedRelationshipTarget = null;
+        _isAddRelationshipOpen = false;
+    }
+
+    private void ToggleAddRelationshipForm()
+    {
+        _isAddRelationshipOpen = !_isAddRelationshipOpen;
+        if (!_isAddRelationshipOpen)
+        {
+            ClearSelectedRelationshipTarget();
+        }
+    }
+
+    private void BeginAddNewRelationship()
+    {
+        if (_editingCharacter is null || _isCharacterEditorReadOnly || _editingCharacter.Id <= 0)
+        {
+            return;
+        }
+
+        BeginRelationshipTargetSelection();
+    }
+
+    private void ConfirmRelationshipDetail()
+    {
+        if (_relationshipSourceCharacter is null || _selectedRelationshipTarget is null)
+        {
+            return;
+        }
+
+        var request = BuildRelationshipRequest(_selectedRelationshipTarget.TargetId, _selectedRelationshipTarget.IsCharacter);
+        if (request is null)
+        {
+            _relationshipStatusMessage = "Enter at least one relationship type.";
+            return;
+        }
+
+        StageRelationship(request);
+        _isRelationshipDetailModalOpen = false;
+        _selectedRelationshipTarget = null;
+        _relationshipTypesInput = string.Empty;
+        _relationshipDescription = string.Empty;
+        _relationshipCreateReciprocal = false;
+        _relationshipReciprocalTypesInput = string.Empty;
+        _relationshipReciprocalDescription = string.Empty;
+        _relationshipStatusMessage = string.Empty;
+        _statusMessage = "Relationship staged (unsaved).";
+
+        RestoreRelationshipReturnState();
+        OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
+        _characterEditorActiveTab = CharacterEditorTab.Relationships;
+    }
+
+    private void CancelRelationshipDetail()
+    {
+        _isRelationshipDetailModalOpen = false;
+        ClearSelectedRelationshipTarget();
+        _statusMessage = "Relationship canceled.";
+
+        RestoreRelationshipReturnState();
+        if (_relationshipSourceCharacter is not null)
+        {
+            OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
+            _characterEditorActiveTab = CharacterEditorTab.Relationships;
+        }
     }
 
     private void TrackEditedCharacter(CharacterFeatureDto character, bool redraw)
@@ -6032,12 +6108,13 @@
 
         _isSelectingRelationshipTarget = false;
         _statusMessage = "Relationship target selection canceled.";
-        _relationshipStatusMessage = "Relationship target selection canceled.";
+        _relationshipStatusMessage = string.Empty;
         RestoreRelationshipReturnState();
 
         if (_relationshipSourceCharacter is not null)
         {
             OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
+            _characterEditorActiveTab = CharacterEditorTab.Relationships;
         }
     }
 
@@ -6062,10 +6139,14 @@
 
         _isSelectingRelationshipTarget = false;
         _selectedRelationshipTarget = selection;
-        RestoreRelationshipReturnState();
-        OpenCharacterEditor(_relationshipSourceCharacter, _relationshipReturnReadOnly, resetRelationshipForm: false);
-        _relationshipStatusMessage = "Target selected. Enter relationship details.";
-        _statusMessage = "Relationship target selected. Enter relationship details and add the relationship.";
+        _relationshipTypesInput = string.Empty;
+        _relationshipDescription = string.Empty;
+        _relationshipCreateReciprocal = false;
+        _relationshipReciprocalTypesInput = string.Empty;
+        _relationshipReciprocalDescription = string.Empty;
+        _relationshipStatusMessage = string.Empty;
+        _isRelationshipDetailModalOpen = true;
+        _statusMessage = "Fill in relationship details.";
     }
 
     private void ClearSelectedRelationshipTarget()
@@ -6113,6 +6194,7 @@
         _relationshipReciprocalTypesInput = string.Empty;
         _relationshipReciprocalDescription = string.Empty;
         _relationshipCreateReciprocal = false;
+        _isAddRelationshipOpen = false;
         _relationshipStatusMessage = "Relationship staged.";
         _statusMessage = "Relationship staged (unsaved).";
     }
@@ -6315,9 +6397,18 @@
         }
     }
 
-    private void DeleteExistingRelationship(CharacterRelationshipDto relationship)
+    private async Task DeleteExistingRelationship(CharacterRelationshipDto relationship)
     {
         if (_editingCharacter is null || _isCharacterEditorReadOnly || relationship is null || relationship.Id <= 0)
+        {
+            return;
+        }
+
+        var targetLabel = GetRelationshipTargetLabel(relationship.TargetFeatureId, relationship.TargetFeatureType);
+        var confirmed = await ShowConfirmDialogAsync(
+            "Remove Relationship",
+            $"Remove the relationship with {targetLabel}?");
+        if (!confirmed)
         {
             return;
         }
@@ -6351,7 +6442,7 @@
         _statusMessage = "Pending relationship removed.";
     }
 
-    private void DeletePendingRelationshipUpdate(UpdateCharacterRelationshipDto relationship)
+    private async Task DeletePendingRelationshipUpdate(UpdateCharacterRelationshipDto relationship)
     {
         if (_editingCharacter is null || _isCharacterEditorReadOnly || relationship is null || relationship.Id <= 0)
         {
@@ -6362,7 +6453,7 @@
             .FirstOrDefault(item => item.Id == relationship.Id);
         if (existing is not null)
         {
-            DeleteExistingRelationship(existing);
+            await DeleteExistingRelationship(existing);
             return;
         }
 
@@ -6560,9 +6651,10 @@
         var character = _liveCharacters.FirstOrDefault(item => item.Id == targetId);
         if (character is not null)
         {
+            var charLabel = GetCharacterMapLabel(character);
             return string.IsNullOrWhiteSpace(character.Name)
-                ? $"Character #{character.Id}"
-                : $"{character.Name} (Character #{character.Id})";
+                ? charLabel
+                : $"{character.Name} ({charLabel})";
         }
 
         if (_liveTrees.Any(item => item.Id == targetId))

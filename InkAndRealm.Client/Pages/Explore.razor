@@ -98,7 +98,7 @@
     {
         try
         {
-            var maps = await Http.GetFromJsonAsync<List<PublishedMapSummaryDto>>("api/demo-map/explore");
+            var maps = await Http.GetFromJsonAsync<List<PublishedMapSummaryDto>>("api/map/explore");
             _maps = maps ?? new();
         }
         catch { /* non-critical */ }
@@ -160,7 +160,7 @@
 
         try
         {
-            var result = await Http.PostAsJsonAsync("api/demo-map/like", new LikeMapRequest { MapId = mapId });
+            var result = await Http.PostAsJsonAsync("api/map/like", new LikeMapRequest { MapId = mapId });
             if (result.IsSuccessStatusCode)
             {
                 var engagement = await result.Content.ReadFromJsonAsync<MapEngagementDto>();
@@ -173,7 +173,7 @@
 
     private async Task ViewMap(int mapId)
     {
-        try { await Http.PostAsJsonAsync("api/demo-map/view", new LikeMapRequest { MapId = mapId }); }
+        try { await Http.PostAsJsonAsync("api/map/view", new LikeMapRequest { MapId = mapId }); }
         catch { /* non-critical */ }
         Navigation.NavigateTo($"/map-viewer?published={mapId}");
     }
@@ -184,7 +184,7 @@
         {
             try
             {
-                var dto = await Http.GetFromJsonAsync<MapDto>($"api/demo-map/published/{map.Id}");
+                var dto = await Http.GetFromJsonAsync<MapDto>($"api/map/published/{map.Id}");
                 if (dto is not null)
                 {
                     var renderState = BuildThumbnailRenderState(dto);

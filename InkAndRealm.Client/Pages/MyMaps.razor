@@ -253,7 +253,7 @@
         _isCreating = true;
         _statusMessage = "Creating a new map…";
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/new", new CreateMapRequest
+        var response = await Http.PostAsJsonAsync("api/map/new", new CreateMapRequest
         {
             UserId = UserState.CurrentUser?.UserId,
             SessionToken = UserState.CurrentUser?.SessionToken,
@@ -372,7 +372,7 @@
         var newName = _renameValue.Trim();
         CloseModals();
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/rename", new RenameMapRequest
+        var response = await Http.PostAsJsonAsync("api/map/rename", new RenameMapRequest
         {
             UserId = UserState.CurrentUser?.UserId,
             SessionToken = UserState.CurrentUser?.SessionToken,
@@ -411,7 +411,7 @@
         var confirmName = _deleteConfirmValue;
         CloseModals();
 
-        var response = await Http.PostAsJsonAsync("api/demo-map/delete", new DeleteMapRequest
+        var response = await Http.PostAsJsonAsync("api/map/delete", new DeleteMapRequest
         {
             UserId = UserState.CurrentUser?.UserId,
             SessionToken = UserState.CurrentUser?.SessionToken,
@@ -441,20 +441,20 @@
     {
         var sessionToken = UserState.CurrentUser?.SessionToken;
         if (!string.IsNullOrWhiteSpace(sessionToken))
-            return $"api/demo-map?sessionToken={Uri.EscapeDataString(sessionToken)}";
+            return $"api/map?sessionToken={Uri.EscapeDataString(sessionToken)}";
 
         var userId = UserState.CurrentUser?.UserId;
-        return userId is null ? "api/demo-map" : $"api/demo-map?userId={userId.Value}";
+        return userId is null ? "api/map" : $"api/map?userId={userId.Value}";
     }
 
     private string GetMapUrl(int mapId)
     {
         var sessionToken = UserState.CurrentUser?.SessionToken;
         if (!string.IsNullOrWhiteSpace(sessionToken))
-            return $"api/demo-map/{mapId}?sessionToken={Uri.EscapeDataString(sessionToken)}";
+            return $"api/map/{mapId}?sessionToken={Uri.EscapeDataString(sessionToken)}";
 
         var userId = UserState.CurrentUser?.UserId;
-        return userId is null ? $"api/demo-map/{mapId}" : $"api/demo-map/{mapId}?userId={userId.Value}";
+        return userId is null ? $"api/map/{mapId}" : $"api/map/{mapId}?userId={userId.Value}";
     }
 
     private void OnUserChanged()
