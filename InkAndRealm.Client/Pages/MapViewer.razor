@@ -11,27 +11,46 @@
 
 <PageTitle>Ink & Realm Map Viewer</PageTitle>
 
+<SectionContent SectionName="top-bar-left">
+    <div class="map-ribbon">
+        <div class="map-ribbon-top-row">
+            <button class="map-ribbon-back" @onclick="GoHome" aria-label="Back" title="Back">
+                &#8592;
+            </button>
+            <div class="map-ribbon-tabs">
+                <button class="map-ribbon-tab @(_isRelationshipTreeOpen ? "map-ribbon-tab--active" : "")"
+                        @onclick="OpenRelationshipTree"
+                        disabled="@(_map is null || _isLoading)">Character Tree</button>
+                <div class="map-ribbon-tab-wrapper">
+                    <button class="map-ribbon-tab @(_isExportMenuOpen ? "map-ribbon-tab--active" : "")"
+                            @onclick="ToggleExportMenu"
+                            disabled="@(_map is null || _isLoading)">Export</button>
+                    @if (_isExportMenuOpen)
+                    {
+                        <div class="map-export-dropdown">
+                            <div class="map-export-dropdown-header">
+                                <span class="map-export-dropdown-title">Export Map</span>
+                                <button class="map-export-dropdown-close" @onclick="ToggleExportMenu">&times;</button>
+                            </div>
+                            <div class="map-export-dropdown-body">
+                                <label class="map-export-label">Suggested name</label>
+                                <div class="map-export-filename-row">
+                                    <input class="map-export-input" type="text" @bind="_exportFileName" @bind:event="oninput" placeholder="my-map" />
+                                    <span class="map-export-ext">.png</span>
+                                </div>
+                                <button class="map-export-btn" @onclick="PerformExportAsync">Export PNG</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</SectionContent>
+
 <div class="container-fluid map-editor-page">
     <div class="map-editor-layout">
         <aside class="map-editor-sidebar">
-            <div class="map-editor-sidebar-header">
-                <div class="map-editor-sidebar-title">Viewer</div>
-                <button class="btn btn-outline-secondary btn-sm map-editor-sidebar-back"
-                        @onclick="GoHome"
-                        aria-label="Back"
-                        title="Back">
-                    <span aria-hidden="true">&#8592;</span>
-                </button>
-            </div>
-
-            <div class="map-editor-sidebar-section">
-                <button class="btn btn-outline-primary btn-sm w-100"
-                        disabled="@(_map is null || _isLoading)"
-                        @onclick="OpenRelationshipTree">
-                    Character Tree
-                </button>
-            </div>
-
             @if (_selectedCharacter is not null)
             {
                 <div class="map-editor-sidebar-section">
@@ -123,22 +142,18 @@
     <div class="relationship-tree-overlay">
         <div class="relationship-tree-card">
             <div class="relationship-tree-header">
-                <div>
-                    <div class="fw-semibold">Character Tree</div>
-                    <div class="small text-muted">Relationship data for this map.</div>
-                </div>
+                <div class="fw-semibold">Character Tree</div>
                 <div class="relationship-tree-header-actions">
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Character Tree zoom">
-                        <button class="btn btn-outline-secondary" type="button" @onclick="ZoomOutRelationshipTree">-</button>
-                        <button class="btn btn-outline-secondary" type="button" @onclick="ResetRelationshipTreeZoom">Reset</button>
-                        <button class="btn btn-outline-secondary" type="button" @onclick="ZoomInRelationshipTree">+</button>
-                    </div>
-                    <div class="small text-muted">@($"{_relationshipTreeZoom * 100:0}%")</div>
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="CloseRelationshipTree">Close</button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="CloseRelationshipTree">
+                        Close
+                    </button>
                 </div>
             </div>
             <div class="relationship-tree-body">
-                @if (_relationshipTreeNodes.Count == 0)
+                @if (_isRelationshipTreeLoading)
+                {
+                }
+                else if (_relationshipTreeNodes.Count == 0)
                 {
                     <div class="text-muted">No characters found for this map.</div>
                 }
@@ -146,14 +161,15 @@
                 {
                     <div class="@RelationshipTreeCanvasShellClass"
                          @onmousedown="BeginRelationshipTreePan"
-                         @onmousemove="UpdateRelationshipTreePan"
-                         @onmouseup="EndRelationshipTreePan"
-                         @onmouseleave="EndRelationshipTreePan"
+                         @onmousemove="(args) => UpdateRelationshipTreeMouse(args)"
+                         @onmouseup="(args) => EndRelationshipTreeMouse(args)"
+                         @onmouseleave="(args) => EndRelationshipTreeMouse(args)"
                          @onmousedown:preventDefault="true"
                          @onwheel="HandleRelationshipTreeWheel"
                          @onwheel:preventDefault="true"
                          @onwheel:stopPropagation="true">
-                        <svg class="relationship-tree-canvas"
+                        <svg id="relationship-tree-svg"
+                             class="relationship-tree-canvas"
                              viewBox="@RelationshipTreeViewBox"
                              preserveAspectRatio="xMidYMid meet">
                             <defs>
@@ -191,10 +207,10 @@
                                     var labelText = GetRelationshipTreeEdgeLabel(edge.AToB);
                                     if (!string.IsNullOrWhiteSpace(labelText))
                                     {
-                                        <foreignObject x="@(labelPosition.X - 62f)"
-                                                       y="@(labelPosition.Y - 10f)"
-                                                       width="124"
-                                                       height="20">
+                                        <foreignObject x="@(labelPosition.X - 100f)"
+                                                       y="@(labelPosition.Y - 11f)"
+                                                       width="200"
+                                                       height="22">
                                             <div xmlns="http://www.w3.org/1999/xhtml"
                                                  class="relationship-tree-edge-label">@labelText</div>
                                         </foreignObject>
@@ -207,10 +223,10 @@
                                     var labelText = GetRelationshipTreeEdgeLabel(edge.BToA);
                                     if (!string.IsNullOrWhiteSpace(labelText))
                                     {
-                                        <foreignObject x="@(labelPosition.X - 62f)"
-                                                       y="@(labelPosition.Y - 10f)"
-                                                       width="124"
-                                                       height="20">
+                                        <foreignObject x="@(labelPosition.X - 100f)"
+                                                       y="@(labelPosition.Y - 11f)"
+                                                       width="200"
+                                                       height="22">
                                             <div xmlns="http://www.w3.org/1999/xhtml"
                                                  class="relationship-tree-edge-label">@labelText</div>
                                         </foreignObject>
@@ -237,9 +253,6 @@
                                 </g>
                             }
                         </svg>
-                    </div>
-                    <div class="small text-muted mt-2">
-                        Use mouse wheel over this graph to zoom. Click a character node to view details in the sidebar.
                     </div>
                 }
             </div>
@@ -292,8 +305,14 @@
     private float _panOriginX;
     private float _panOriginY;
 
+    // Export state
+    private bool _isExportMenuOpen;
+    private string _exportFileName = "map";
+
     // Relationship tree state
     private bool _isRelationshipTreeOpen;
+    private bool _isRelationshipTreeLoading;
+    private string _relationshipTreeStatusMessage = string.Empty;
     private float _relationshipTreeZoom = 1f;
     private float _relationshipTreeViewX;
     private float _relationshipTreeViewY;
@@ -322,6 +341,7 @@
                     {
                         _map = map;
                         _mapJustLoaded = true;
+                        _exportFileName = string.IsNullOrWhiteSpace(map.Name) ? $"map-{PublishedMapId}" : map.Name;
                         ResetView();
                     }
                 }
@@ -344,6 +364,7 @@
                     {
                         _map = map;
                         _mapJustLoaded = true;
+                        _exportFileName = string.IsNullOrWhiteSpace(map.Name) ? "map" : map.Name;
                         ResetView();
                     }
                 }
@@ -728,7 +749,7 @@
         _relationshipTreePanOriginY = _relationshipTreeViewY;
     }
 
-    private void UpdateRelationshipTreePan(MouseEventArgs args)
+    private void UpdateRelationshipTreeMouse(MouseEventArgs args)
     {
         if (!_isRelationshipTreePanning)
         {
@@ -747,14 +768,14 @@
         ClampRelationshipTreeViewport();
     }
 
-    private void EndRelationshipTreePan(MouseEventArgs _)
+    private void EndRelationshipTreeMouse(MouseEventArgs _)
     {
         _isRelationshipTreePanning = false;
     }
 
     private void HandleRelationshipTreeWheel(WheelEventArgs args)
     {
-        if (_relationshipTreeNodes.Count == 0)
+        if (_isRelationshipTreeLoading || _relationshipTreeNodes.Count == 0)
         {
             return;
         }
@@ -768,10 +789,6 @@
             ZoomRelationshipTree(1f / RelationshipTreeZoomStep);
         }
     }
-
-    private void ZoomInRelationshipTree() => ZoomRelationshipTree(RelationshipTreeZoomStep);
-    private void ZoomOutRelationshipTree() => ZoomRelationshipTree(1f / RelationshipTreeZoomStep);
-    private void ResetRelationshipTreeZoom() => ResetRelationshipTreeViewport();
 
     private void ZoomRelationshipTree(float factor)
     {
@@ -1787,6 +1804,29 @@
 
         var factor = 1f / (6f * area);
         return new MapPointDto { X = cx * factor, Y = cy * factor };
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    private void ToggleExportMenu()
+    {
+        _isExportMenuOpen = !_isExportMenuOpen;
+    }
+
+    private async Task PerformExportAsync()
+    {
+        var fileName = string.IsNullOrWhiteSpace(_exportFileName) ? "map" : _exportFileName.Trim();
+        var renderState = BuildRenderState();
+        renderState.ViewState = new MapViewStateDto
+        {
+            ViewX = 0,
+            ViewY = 0,
+            Zoom = 1,
+            MapWidth = MapWidth,
+            MapHeight = MapHeight
+        };
+        await JS.InvokeVoidAsync("inkAndRealmDemo.exportFullMap", renderState, fileName);
+        _isExportMenuOpen = false;
     }
 
     private void GoHome() => Navigation.NavigateTo("/");
