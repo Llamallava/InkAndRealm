@@ -115,7 +115,7 @@ public partial class MapEditor
     {
         { PlacementType.Tree, "Oak" },
         { PlacementType.House, "Cottage" },
-        { PlacementType.Character, "Commoner" },
+        { PlacementType.Character, "Villager" },
         { PlacementType.Water, "Water" },
         { PlacementType.Land, "Plains" },
         { PlacementType.Title, "Title" }
@@ -263,7 +263,12 @@ public partial class MapEditor
     };
     private static readonly IReadOnlyList<string> CharacterStyles = new List<string>
     {
-        "Commoner"
+        "Villager",
+        "Noble",
+        "Peasant",
+        "Princess",
+        "Worker",
+        "Queen"
     };
     private static readonly IReadOnlyList<string> WaterStyles = new List<string>
     {
@@ -283,7 +288,7 @@ public partial class MapEditor
     {
         new(PlacementType.Tree, "Tree", "/assets/Summer%20Set/tree_1.png"),
         new(PlacementType.House, "House", "/assets/Summer%20Set/building_2.png"),
-        new(PlacementType.Character, "Character", "/assets/character-placeholder.svg"),
+        new(PlacementType.Character, "Character", "/assets/MinifolksVillagers/Outline/MiniVillagerMan.png"),
         new(PlacementType.Title, "Title", "/assets/Summer%20Set/decor_1.png"),
         new(PlacementType.Land, "Land", "/assets/Summer%20Set/land_1.png"),
         new(PlacementType.Water, "Water", "/assets/Summer%20Set/river.png")
@@ -306,7 +311,12 @@ public partial class MapEditor
             },
             [PlacementType.Character] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Commoner"] = "/assets/character-placeholder.svg"
+                ["Villager"]  = "/assets/MinifolksVillagers/Outline/MiniVillagerMan.png",
+                ["Noble"]     = "/assets/MinifolksVillagers/Outline/MiniNobleMan.png",
+                ["Peasant"]   = "/assets/MinifolksVillagers/Outline/MiniPeasant.png",
+                ["Princess"]  = "/assets/MinifolksVillagers/Outline/MiniPrincess.png",
+                ["Worker"]    = "/assets/MinifolksVillagers/Outline/MiniWorker.png",
+                ["Queen"]     = "/assets/MinifolksVillagers/Outline/MiniQueen.png"
             },
             [PlacementType.Title] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -4364,7 +4374,7 @@ public partial class MapEditor
             .FirstOrDefault(definition => definition.PlacementType == placementType)?
             .ImageUrl;
 
-        return placementImage ?? "/assets/character-placeholder.svg";
+        return placementImage ?? "/assets/MinifolksVillagers/Outline/MiniVillagerMan.png";
     }
 
     private float GetPointSizeForPlacement(PlacementType placementType)

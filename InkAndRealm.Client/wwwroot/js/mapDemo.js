@@ -14,6 +14,20 @@ treeImages.Pine.src  = "/assets/Summer%20Set/tree_4.png";
 treeImages.Birch.src = "/assets/Summer%20Set/tree_7.png";
 treeImages.Palm.src  = "/assets/Summer%20Set/tree_14.png";
 
+const characterSpriteNames = ["Villager", "Noble", "Peasant", "Princess", "Worker", "Queen"];
+const characterImages = {};
+const characterImageReady = {};
+characterImages["Villager"]  = new Image(); characterImages["Villager"].src  = "/assets/MinifolksVillagers/Outline/MiniVillagerMan.png";
+characterImages["Noble"]     = new Image(); characterImages["Noble"].src     = "/assets/MinifolksVillagers/Outline/MiniNobleMan.png";
+characterImages["Peasant"]   = new Image(); characterImages["Peasant"].src   = "/assets/MinifolksVillagers/Outline/MiniPeasant.png";
+characterImages["Princess"]  = new Image(); characterImages["Princess"].src  = "/assets/MinifolksVillagers/Outline/MiniPrincess.png";
+characterImages["Worker"]    = new Image(); characterImages["Worker"].src    = "/assets/MinifolksVillagers/Outline/MiniWorker.png";
+characterImages["Queen"]     = new Image(); characterImages["Queen"].src     = "/assets/MinifolksVillagers/Outline/MiniQueen.png";
+characterSpriteNames.forEach(key => {
+    characterImageReady[key] = false;
+    characterImages[key].onload = () => { characterImageReady[key] = true; };
+});
+
 const buildingImage = new Image();
 let buildingImageReady = false;
 buildingImage.onload = () => { buildingImageReady = true; };
@@ -587,39 +601,40 @@ window.inkAndRealmDemo = {
             drawHouse(x, y, "#d7b894", "#7f5a3b", null);
         };
 
-        const drawCharacterAt = (x, y, isStaged) => {
-            const stroke = "#2b3a4a";
-            const fill = "rgba(43, 58, 74, 0.05)";
-            const lineWidth = 2 / zoom;
-            const headCenterY = y - 24;
-            const torsoTopY = y - 16;
-            const torsoBottomY = y - 6;
-            const armY = y - 12;
-            const footY = y;
-
-            ctx.save();
-            ctx.strokeStyle = stroke;
-            ctx.fillStyle = fill;
-            ctx.lineWidth = lineWidth;
-            ctx.lineCap = "round";
-
-            ctx.beginPath();
-            ctx.arc(x, headCenterY, 6, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(x, torsoTopY);
-            ctx.lineTo(x, torsoBottomY);
-            ctx.moveTo(x - 6, armY);
-            ctx.lineTo(x + 6, armY);
-            ctx.moveTo(x, torsoBottomY);
-            ctx.lineTo(x - 6, footY);
-            ctx.moveTo(x, torsoBottomY);
-            ctx.lineTo(x + 6, footY);
-            ctx.stroke();
-
-            ctx.restore();
+        const drawCharacterAt = (x, y, styleKey, isStaged) => {
+            const key = styleKey && characterImages[styleKey] ? styleKey : "Villager";
+            const img = characterImages[key];
+            if (img && characterImageReady[key]) {
+                ctx.save();
+                if (isStaged) ctx.globalAlpha = 0.5;
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0, 32, 32, Math.round(x - 16), Math.round(y - 32), 32, 32);
+                ctx.restore();
+            } else {
+                const stroke = "#2b3a4a";
+                const fill = "rgba(43, 58, 74, 0.05)";
+                const lineWidth = 2 / zoom;
+                ctx.save();
+                ctx.strokeStyle = stroke;
+                ctx.fillStyle = fill;
+                ctx.lineWidth = lineWidth;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.arc(x, y - 24, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y - 16);
+                ctx.lineTo(x, y - 6);
+                ctx.moveTo(x - 6, y - 12);
+                ctx.lineTo(x + 6, y - 12);
+                ctx.moveTo(x, y - 6);
+                ctx.lineTo(x - 6, y);
+                ctx.moveTo(x, y - 6);
+                ctx.lineTo(x + 6, y);
+                ctx.stroke();
+                ctx.restore();
+            }
         };
 
         const pointRenderers = {
@@ -633,7 +648,7 @@ window.inkAndRealmDemo = {
             },
             Character: (feature) => {
                 const isStaged = !!feature.isStaged;
-                drawWithScale(feature, (x, y) => drawCharacterAt(x, y, isStaged));
+                drawWithScale(feature, (x, y) => drawCharacterAt(x, y, feature.styleKey, isStaged));
             }
         };
 

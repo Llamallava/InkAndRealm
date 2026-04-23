@@ -451,7 +451,9 @@
                                                         @if (StylePreviewImagesByPlacement.TryGetValue(PlacementType.Character, out var charStyleImages)
                                                              && charStyleImages.TryGetValue(style, out var charImgUrl))
                                                         {
-                                                            <img src="@charImgUrl" alt="" />
+                                                            <div style="width:32px;height:32px;overflow:hidden;flex-shrink:0;position:relative;">
+                                                                <img src="@charImgUrl" alt="" style="position:absolute;top:0;left:0;width:192px;height:160px;image-rendering:pixelated;" />
+                                                            </div>
                                                         }
                                                         <span>@style</span>
                                                     </button>
@@ -610,7 +612,16 @@
                                                     aria-selected="@isSelectedStyle"
                                                     aria-label="@($"{style} style")"
                                                     @onclick="() => SelectPlacementStyleAndCloseMenu(placement.PlacementType, style)">
-                                                <img src="@GetStyleImageUrl(placement.PlacementType, style)" alt="" />
+                                                @if (placement.PlacementType == PlacementType.Character)
+                                                {
+                                                    <div style="width:32px;height:32px;overflow:hidden;flex-shrink:0;position:relative;">
+                                                        <img src="@GetStyleImageUrl(placement.PlacementType, style)" alt="" style="position:absolute;top:0;left:0;width:192px;height:160px;image-rendering:pixelated;" />
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <img src="@GetStyleImageUrl(placement.PlacementType, style)" alt="" />
+                                                }
                                             </button>
                                         }
                                     </div>
@@ -620,7 +631,16 @@
                                         aria-selected="@isSelected"
                                         aria-label="@placement.Label"
                                         @onclick="() => HandlePlacementButtonClick(placement.PlacementType)">
-                                    <img src="@currentStyleImage" alt="" />
+                                    @if (placement.PlacementType == PlacementType.Character)
+                                    {
+                                        <div style="width:32px;height:32px;overflow:hidden;flex-shrink:0;position:relative;">
+                                            <img src="@currentStyleImage" alt="" style="position:absolute;top:0;left:0;width:192px;height:160px;image-rendering:pixelated;" />
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <img src="@currentStyleImage" alt="" />
+                                    }
                                     <span>@placement.Label</span>
                                 </button>
                             </div>

@@ -409,6 +409,7 @@ article:has(.map-editor-page) {
     image-rendering: pixelated;
 }
 
+
 .map-editor-icon-button {
     display: inline-flex;
     align-items: center;
