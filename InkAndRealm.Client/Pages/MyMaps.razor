@@ -24,14 +24,9 @@
     }
 
     <div class="d-flex gap-2 mb-4 align-items-center">
-        <input class="form-control"
-               style="max-width: 320px;"
-               placeholder="Map name (optional)"
-               disabled="@(_isCreating)"
-               @bind="_newMapName" />
         <button class="btn btn-primary"
                 disabled="@(_isCreating)"
-                @onclick="CreateMapAsync">
+                @onclick="OpenNewMapModal">
             New Map
         </button>
     </div>
@@ -117,6 +112,32 @@
     </div>
 }
 
+@if (_showNewMapModal)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-custom">
+        <div class="modal-custom-header">
+            <span>New Map</span>
+            <button class="modal-close-btn" @onclick="CloseModals">&times;</button>
+        </div>
+        <div class="modal-custom-body">
+            <input class="form-control"
+                   placeholder="Map name (optional)"
+                   @bind="_newMapName"
+                   @bind:event="oninput"
+                   @onkeydown="OnNewMapKeyDown" />
+        </div>
+        <div class="modal-custom-footer">
+            <button class="btn btn-secondary btn-sm" @onclick="CreateMapAsync">Skip</button>
+            <button class="btn btn-primary btn-sm"
+                    disabled="@(string.IsNullOrWhiteSpace(_newMapName))"
+                    @onclick="CreateMapAsync">
+                Create
+            </button>
+        </div>
+    </div>
+}
+
 @if (_deleteMap is not null)
 {
     <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
@@ -154,6 +175,7 @@
     private bool _isLoading;
     private bool _thumbnailsRendered;
     private bool _isRenderingThumbnails;
+    private bool _showNewMapModal;
     private string _statusMessage = string.Empty;
     private string _newMapName = string.Empty;
     private List<MapSummaryDto> _maps = new();
@@ -248,8 +270,23 @@
         };
     }
 
+    private void OpenNewMapModal()
+    {
+        _newMapName = string.Empty;
+        _showNewMapModal = true;
+    }
+
+    private async Task OnNewMapKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await CreateMapAsync();
+        else if (e.Key == "Escape")
+            CloseModals();
+    }
+
     private async Task CreateMapAsync()
     {
+        _showNewMapModal = false;
         _isCreating = true;
         _statusMessage = "Creating a new map…";
 
@@ -342,6 +379,8 @@
 
     private void CloseModals()
     {
+        _showNewMapModal = false;
+        _newMapName = string.Empty;
         _renameMap = null;
         _deleteMap = null;
         _renameValue = string.Empty;
