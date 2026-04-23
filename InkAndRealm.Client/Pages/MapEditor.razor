@@ -1178,7 +1178,8 @@
                          @onwheel="HandleRelationshipTreeWheel"
                          @onwheel:preventDefault="true"
                          @onwheel:stopPropagation="true">
-                        <svg class="relationship-tree-canvas"
+                        <svg id="relationship-tree-svg"
+                             class="relationship-tree-canvas"
                              viewBox="@RelationshipTreeViewBox"
                              preserveAspectRatio="xMidYMid meet">
                             <defs>
@@ -1367,7 +1368,7 @@
     private bool _isRelationshipTreeOpen;
     // Set when navigating to a character editor from the Character Tree; causes DoneEditing to
     // reopen the tree instead of returning to the normal editor state.
-    private bool _returnToCharacterTree;
+    private bool _areYouComingToTheTree;
     private bool _isRelationshipTreeLoading;
     private string _relationshipTreeStatusMessage = string.Empty;
     private float _relationshipTreeZoom = 1f;
@@ -1387,6 +1388,8 @@
     private float _nodeDragStartClientY;
     private float _nodeDragStartNodeX;
     private float _nodeDragStartNodeY;
+    private float _nodeDragClientToSvgScaleX = 1f;
+    private float _nodeDragClientToSvgScaleY = 1f;
     private bool _nodeDragMoved;
     private bool _isSavingTreePositions;
     private bool _isRecalculatePromptOpen;
@@ -3900,7 +3903,7 @@
         _relationshipTreePanOriginY = _relationshipTreeViewY;
     }
 
-    private void BeginNodeDrag(RelationshipTreeNode node, MouseEventArgs args)
+    private async Task BeginNodeDrag(RelationshipTreeNode node, MouseEventArgs args)
     {
         if (args.Button != 0)
         {
@@ -3915,6 +3918,10 @@
         _nodeDragMoved = false;
         _isRelationshipTreePanning = false;
         _relationshipTreeSuppressNodeClick = false;
+
+        var svgScale = await JS.InvokeAsync<SvgScreenScale?>("inkAndRealmDemo.getSvgScreenScale", "relationship-tree-svg");
+        _nodeDragClientToSvgScaleX = svgScale?.ScaleX ?? 1f / _relationshipTreeZoom;
+        _nodeDragClientToSvgScaleY = svgScale?.ScaleY ?? 1f / _relationshipTreeZoom;
     }
 
     private async Task UpdateRelationshipTreeMouse(MouseEventArgs args)
@@ -3937,8 +3944,8 @@
 
             if (_nodeDragMoved)
             {
-                _draggingNode.X = ClampRelationshipTreeX(_nodeDragStartNodeX + (dx / _relationshipTreeZoom));
-                _draggingNode.Y = ClampRelationshipTreeY(_nodeDragStartNodeY + (dy / _relationshipTreeZoom));
+                _draggingNode.X = ClampRelationshipTreeX(_nodeDragStartNodeX + dx * _nodeDragClientToSvgScaleX);
+                _draggingNode.Y = ClampRelationshipTreeY(_nodeDragStartNodeY + dy * _nodeDragClientToSvgScaleY);
             }
 
             return;
@@ -5126,7 +5133,7 @@
 
         CloseRelationshipTree();
         ClearEditSelection(true);
-        _returnToCharacterTree = true;
+        _areYouComingToTheTree = true;
 
         _editingPointFeature = new EditingPointFeature
         {
@@ -5780,7 +5787,7 @@
         _isPointFeatureEditorOpen = false;
         _isRepositioning = false;
         _repositionOriginalPosition = null;
-        _returnToCharacterTree = false;
+        _areYouComingToTheTree = false;
         CloseCharacterEditor();
         _editingTitleFeature = null;
         _editingTitleOriginalPosition = null;
@@ -5903,8 +5910,8 @@
             TrackEditedPointFeature(_editingPointFeature);
         }
 
-        var returnToTree = _returnToCharacterTree;
-        _returnToCharacterTree = false;
+        var returnToTree = _areYouComingToTheTree;
+        _areYouComingToTheTree = false;
         _isPointFeatureEditorOpen = false;
         ClearEditSelection(true);
 
@@ -8850,6 +8857,7 @@
     private sealed record FeatureStyleDefinition(PlacementType PlacementType, string MenuLabel, IReadOnlyList<string> Styles);
     private sealed record RelationshipTargetSelection(int TargetId, bool IsCharacter);
     private sealed record CanvasClientSize(float Width, float Height);
+    private sealed record SvgScreenScale(float ScaleX, float ScaleY);
 
     // ── Dialog state classes ──────────────────────────────────
     private sealed class ConfirmDialogState

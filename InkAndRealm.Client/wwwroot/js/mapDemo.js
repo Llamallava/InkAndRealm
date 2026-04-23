@@ -1002,6 +1002,20 @@ window.inkAndRealmDemo = {
             height: rect.height
         };
     },
+    getSvgScreenScale: (svgId) => {
+        const svg = document.getElementById(svgId);
+        if (!svg) {
+            return null;
+        }
+
+        const ctm = svg.getScreenCTM();
+        if (!ctm || ctm.a === 0) {
+            return null;
+        }
+
+        // ctm.a is CSS pixels per SVG unit; inverse is SVG units per CSS pixel
+        return { scaleX: 1 / ctm.a, scaleY: 1 / ctm.d };
+    },
     registerUndoShortcut: (key, dotNetRef) => {
         if (!key || !dotNetRef) {
             return;
