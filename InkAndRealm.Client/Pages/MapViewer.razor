@@ -50,72 +50,6 @@
 
 <div class="container-fluid map-editor-page">
     <div class="map-editor-layout">
-        <aside class="map-editor-sidebar">
-            @if (_selectedCharacter is not null)
-            {
-                <div class="map-editor-sidebar-section">
-                    <div class="small text-muted">Name</div>
-                    <div class="map-viewer-sidebar-value">@GetCharacterLabel(_selectedCharacter)</div>
-                </div>
-                <div class="map-editor-sidebar-section">
-                    <div class="small text-muted">Type</div>
-                    <div class="map-viewer-sidebar-value">@_selectedCharacter.CharacterType</div>
-                </div>
-                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Background))
-                {
-                    <div class="map-editor-sidebar-section">
-                        <div class="small text-muted">Background</div>
-                        <div class="map-viewer-sidebar-value">@_selectedCharacter.Background</div>
-                    </div>
-                }
-                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Occupation))
-                {
-                    <div class="map-editor-sidebar-section">
-                        <div class="small text-muted">Occupation</div>
-                        <div class="map-viewer-sidebar-value">@_selectedCharacter.Occupation</div>
-                    </div>
-                }
-                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Personality))
-                {
-                    <div class="map-editor-sidebar-section">
-                        <div class="small text-muted">Personality</div>
-                        <div class="map-viewer-sidebar-value">@_selectedCharacter.Personality</div>
-                    </div>
-                }
-                @if (_selectedCharacter.Relationships is { Count: > 0 })
-                {
-                    <div class="map-editor-sidebar-section">
-                        <div class="small text-muted">Relationships</div>
-                        @foreach (var rel in _selectedCharacter.Relationships.OrderBy(r => r.TargetFeatureId))
-                        {
-                            <div class="map-viewer-sidebar-relationship">
-                                <div class="fw-semibold map-viewer-sidebar-value">
-                                    @GetRelationshipTargetLabel(rel.TargetFeatureId, rel.TargetFeatureType)
-                                </div>
-                                <div class="map-viewer-sidebar-value">@FormatRelationshipTypes(rel.RelationshipTypes)</div>
-                                @if (!string.IsNullOrWhiteSpace(rel.Description))
-                                {
-                                    <div class="text-muted map-viewer-sidebar-value">@rel.Description</div>
-                                }
-                            </div>
-                        }
-                    </div>
-                }
-            }
-            else if (_map is not null)
-            {
-                <div class="map-editor-sidebar-section">
-                    <div class="small text-muted">Click a character on the map to view details.</div>
-                </div>
-            }
-            else if (_isLoading)
-            {
-                <div class="map-editor-sidebar-section">
-                    <div class="small text-muted">Loading...</div>
-                </div>
-            }
-        </aside>
-
         <section class="map-editor-main">
             <div class="map-editor-canvas-card">
                 <div class="map-editor-canvas-shell">
@@ -132,6 +66,94 @@
                             @onwheel:preventDefault="true">
                     </canvas>
                 </div>
+
+                @if (_selectedCharacter is not null)
+                {
+                    <div class="point-feature-editor-panel">
+                        <div class="point-feature-editor-header">
+                            <div class="fw-semibold">@GetCharacterLabel(_selectedCharacter)</div>
+                            <button class="btn btn-primary btn-sm" @onclick="() => _selectedCharacter = null">
+                                Close
+                            </button>
+                        </div>
+                        <div class="point-feature-editor-tab-bar">
+                            <button class="point-feature-editor-tab @(_viewerActiveTab == ViewerCharacterTab.Character ? "point-feature-editor-tab--active" : "")"
+                                    @onclick="() => _viewerActiveTab = ViewerCharacterTab.Character">
+                                Character
+                            </button>
+                            <button class="point-feature-editor-tab @(_viewerActiveTab == ViewerCharacterTab.Relationships ? "point-feature-editor-tab--active" : "")"
+                                    @onclick="() => _viewerActiveTab = ViewerCharacterTab.Relationships">
+                                Relationships
+                            </button>
+                        </div>
+                        <div class="point-feature-editor-body">
+                            @if (_viewerActiveTab == ViewerCharacterTab.Character)
+                            {
+                                <div class="point-feature-editor-section">
+                                    <label class="form-label">Name</label>
+                                    <input class="form-control" value="@GetCharacterLabel(_selectedCharacter)" readonly />
+                                </div>
+                                <div class="point-feature-editor-section">
+                                    <label class="form-label">Type</label>
+                                    <input class="form-control" value="@_selectedCharacter.CharacterType" readonly />
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Background))
+                                {
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Background</label>
+                                        <textarea class="form-control" rows="3" readonly>@_selectedCharacter.Background</textarea>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Occupation))
+                                {
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Occupation</label>
+                                        <textarea class="form-control" rows="2" readonly>@_selectedCharacter.Occupation</textarea>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(_selectedCharacter.Personality))
+                                {
+                                    <div class="point-feature-editor-section">
+                                        <label class="form-label">Personality</label>
+                                        <textarea class="form-control" rows="2" readonly>@_selectedCharacter.Personality</textarea>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                @if (_selectedCharacter.Relationships is not { Count: > 0 })
+                                {
+                                    <div class="small text-muted">No relationships yet.</div>
+                                }
+                                else
+                                {
+                                    <div class="relationship-list">
+                                        @foreach (var rel in _selectedCharacter.Relationships.OrderBy(r => r.TargetFeatureId))
+                                        {
+                                            <div class="relationship-item">
+                                                <div class="relationship-item-header">
+                                                    <div class="relationship-item-info">
+                                                        <span class="small fw-semibold">@GetRelationshipTargetLabel(rel.TargetFeatureId, rel.TargetFeatureType)</span>
+                                                        <div class="relationship-type-tags">
+                                                            @foreach (var t in (rel.RelationshipTypes ?? new()))
+                                                            {
+                                                                <span class="badge bg-secondary">@t</span>
+                                                            }
+                                                        </div>
+                                                        @if (!string.IsNullOrWhiteSpace(rel.Description))
+                                                        {
+                                                            <div class="small text-muted relationship-item-desc">@rel.Description</div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </section>
     </div>
@@ -150,10 +172,7 @@
                 </div>
             </div>
             <div class="relationship-tree-body">
-                @if (_isRelationshipTreeLoading)
-                {
-                }
-                else if (_relationshipTreeNodes.Count == 0)
+                @if (_relationshipTreeNodes.Count == 0)
                 {
                     <div class="text-muted">No characters found for this map.</div>
                 }
@@ -261,6 +280,8 @@
 }
 
 @code {
+    private enum ViewerCharacterTab { Character, Relationships }
+
     private const string CanvasId = "map-viewer-canvas";
     private const float CanvasWidth = 1000f;
     private const float CanvasHeight = 600f;
@@ -285,6 +306,7 @@
     private bool _mapJustLoaded;
     private MapDto? _map;
     private CharacterFeatureDto? _selectedCharacter;
+    private ViewerCharacterTab _viewerActiveTab = ViewerCharacterTab.Character;
 
     // View state
     private float _zoom = 1f;
@@ -311,7 +333,7 @@
 
     // Relationship tree state
     private bool _isRelationshipTreeOpen;
-    private bool _isRelationshipTreeLoading;
+
     private string _relationshipTreeStatusMessage = string.Empty;
     private float _relationshipTreeZoom = 1f;
     private float _relationshipTreeViewX;
@@ -478,6 +500,7 @@
         if (character is not null)
         {
             _selectedCharacter = character;
+            _viewerActiveTab = ViewerCharacterTab.Character;
             await DrawAsync();
         }
     }
@@ -775,7 +798,7 @@
 
     private void HandleRelationshipTreeWheel(WheelEventArgs args)
     {
-        if (_isRelationshipTreeLoading || _relationshipTreeNodes.Count == 0)
+        if (_relationshipTreeNodes.Count == 0)
         {
             return;
         }
@@ -1829,7 +1852,13 @@
         _isExportMenuOpen = false;
     }
 
-    private void GoHome() => Navigation.NavigateTo("/");
+    private void GoHome()
+    {
+        if (PublishedMapId != 0 || !string.IsNullOrWhiteSpace(ShareCode))
+            Navigation.NavigateTo("/explore");
+        else
+            Navigation.NavigateTo("/");
+    }
 
     // ── Private types ─────────────────────────────────────────────────────────
 

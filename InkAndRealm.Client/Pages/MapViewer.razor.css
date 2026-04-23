@@ -5,22 +5,3 @@
 .map-viewer-grabbing {
     cursor: grabbing;
 }
-
-.map-viewer-sidebar-value {
-    font-size: 0.78rem;
-    line-height: 1.35;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-}
-
-.map-viewer-sidebar-relationship {
-    margin-top: 0.4rem;
-    padding-top: 0.3rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.07);
-}
-
-.map-viewer-sidebar-relationship:first-of-type {
-    border-top: none;
-    padding-top: 0;
-    margin-top: 0.2rem;
-}

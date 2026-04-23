@@ -39,47 +39,110 @@
         </div>
     }
 
-    @if (_isLoading)
-    {
-        <p class="text-muted">Loading maps…</p>
-    }
-    else if (_maps.Count == 0)
-    {
-        <p class="text-muted">No maps have been published yet.</p>
-    }
-    else
-    {
-        <div class="row row-cols-1 row-cols-md-3 row-cols-xl-4 g-3">
-            @foreach (var map in _maps)
+    <div class="explore-tab-bar mb-4">
+        <button class="explore-tab-btn @(_activeTab == ExploreTab.All ? "explore-tab-btn--active" : "")"
+                @onclick="() => _activeTab = ExploreTab.All">
+            All Maps
+        </button>
+        <button class="explore-tab-btn @(_activeTab == ExploreTab.Liked ? "explore-tab-btn--active" : "")"
+                @onclick="() => _activeTab = ExploreTab.Liked">
+            Liked
+        </button>
+    </div>
+
+    @* All Maps tab — always in DOM so canvas content is preserved on tab switch *@
+    <div style="@(_activeTab != ExploreTab.All ? "display:none" : "")">
+        @if (_isLoading)
+        {
+            <p class="text-muted">Loading maps…</p>
+        }
+        else if (_maps.Count == 0)
+        {
+            <p class="text-muted">No maps have been published yet.</p>
+        }
+        else
+        {
+            @if (_isRenderingThumbnails)
             {
-                var liked = _likedMapIds.Contains(map.Id);
-                var liveLikes = _liveLikeCounts.TryGetValue(map.Id, out var ll) ? ll : map.LikeCount;
-                <div class="col">
-                    <div class="card explore-card">
-                        <div class="explore-card-title-row">
-                            <span class="explore-card-name">@map.Name</span>
-                        </div>
-                        <div class="explore-card-clickable" @onclick="() => ViewMap(map.Id)" title="View @map.Name">
-                            <canvas id="explore-thumb-@map.Id" class="explore-thumb-canvas" width="500" height="300"></canvas>
-                        </div>
-                        <div class="explore-card-footer">
-                            <span class="explore-author-label">by</span>
-                            <span class="explore-author-name">@map.AuthorName</span>
-                            <div class="explore-engagement">
-                                <span class="explore-stat" title="Views">&#128065; @map.ViewCount</span>
-                                <button class="explore-like-btn @(liked ? "explore-like-btn--liked" : "")"
-                                        title="@(liked ? "Liked" : "Like")"
-                                        @onclick="() => ToggleLikeAsync(map.Id)"
-                                        @onclick:stopPropagation="true">
-                                    @(liked ? "&#9829;" : "&#9825;") @liveLikes
-                                </button>
-                            </div>
-                        </div>
+                <div class="d-flex justify-content-center py-5">
+                    <div class="spinner-border text-secondary" role="status">
+                        <span class="visually-hidden">Loading previews…</span>
                     </div>
                 </div>
             }
-        </div>
-    }
+            <div style="@(_isRenderingThumbnails ? "display:none" : "")">
+                <div class="row row-cols-1 row-cols-md-3 row-cols-xl-4 g-3">
+                    @foreach (var map in _maps)
+                    {
+                        var liked = _likedMapIds.Contains(map.Id);
+                        var liveLikes = _liveLikeCounts.TryGetValue(map.Id, out var ll) ? ll : map.LikeCount;
+                        <div class="col" @key="map.Id">
+                            <div class="card explore-card">
+                                <div class="explore-card-title-row">
+                                    <span class="explore-card-name">@map.Name</span>
+                                </div>
+                                <div class="explore-card-clickable" @onclick="() => ViewMap(map.Id)" title="View @map.Name">
+                                    <canvas id="explore-thumb-@map.Id" class="explore-thumb-canvas" width="500" height="300"></canvas>
+                                </div>
+                                <div class="explore-card-footer">
+                                    <span class="explore-author-label">by</span>
+                                    <span class="explore-author-name">@map.AuthorName</span>
+                                    <div class="explore-engagement">
+                                        <span class="explore-stat" title="Views">&#128065; @map.ViewCount</span>
+                                        <button class="explore-like-btn @(liked ? "explore-like-btn--liked" : "")"
+                                                title="@(liked ? "Liked" : "Like")"
+                                                @onclick="() => ToggleLikeAsync(map.Id)"
+                                                @onclick:stopPropagation="true">
+                                            @(liked ? "❤️" : "🤍") @liveLikes
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @* Liked tab — always in DOM so canvas content is preserved on tab switch *@
+    <div style="@(_activeTab != ExploreTab.Liked ? "display:none" : "")">
+        @if (LikedMaps.Count == 0 && _likedThumbnailsRendered)
+        {
+            <p class="text-muted">You haven't liked any maps yet.</p>
+        }
+        else if (LikedMaps.Count > 0)
+        {
+            <div class="row row-cols-1 row-cols-md-3 row-cols-xl-4 g-3">
+                @foreach (var map in LikedMaps)
+                {
+                    var liveLikes = _liveLikeCounts.TryGetValue(map.Id, out var ll) ? ll : map.LikeCount;
+                    <div class="col" @key="map.Id">
+                        <div class="card explore-card">
+                            <div class="explore-card-title-row">
+                                <span class="explore-card-name">@map.Name</span>
+                            </div>
+                            <div class="explore-card-clickable" @onclick="() => ViewMap(map.Id)" title="View @map.Name">
+                                <canvas id="liked-thumb-@map.Id" class="explore-thumb-canvas" width="500" height="300"></canvas>
+                            </div>
+                            <div class="explore-card-footer">
+                                <span class="explore-author-label">by</span>
+                                <span class="explore-author-name">@map.AuthorName</span>
+                                <div class="explore-engagement">
+                                    <span class="explore-stat" title="Views">&#128065; @map.ViewCount</span>
+                                    <button class="explore-like-btn explore-like-btn--liked"
+                                            title="Liked"
+                                            @onclick:stopPropagation="true">
+                                        ❤️ @liveLikes
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
 </div>
 
 @code {
@@ -88,11 +151,20 @@
     private const float MapHeight = 1200f;
     private const string LikedMapsKey = "ink_liked_maps";
 
+    private enum ExploreTab { All, Liked }
+    private ExploreTab _activeTab = ExploreTab.All;
+
+    private List<PublishedMapSummaryDto> LikedMaps =>
+        _maps.Where(m => _likedMapIds.Contains(m.Id)).ToList();
+
     private bool _isLoading = true;
     private bool _thumbnailsRendered;
+    private bool _isRenderingThumbnails;
+    private bool _likedThumbnailsRendered;
     private List<PublishedMapSummaryDto> _maps = new();
     private HashSet<int> _likedMapIds = new();
     private Dictionary<int, int> _liveLikeCounts = new();
+    private Dictionary<int, MapDto> _fetchedMapDtos = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,6 +172,8 @@
         {
             var maps = await Http.GetFromJsonAsync<List<PublishedMapSummaryDto>>("api/map/explore");
             _maps = maps ?? new();
+            if (_maps.Count > 0)
+                _isRenderingThumbnails = true;
         }
         catch { /* non-critical */ }
         finally
@@ -120,6 +194,18 @@
         {
             _thumbnailsRendered = true;
             await RenderThumbnailsAsync();
+            _isRenderingThumbnails = false;
+            StateHasChanged();
+        }
+
+        // Render liked thumbnails eagerly after all-tab thumbnails are done.
+        // Both panels are always in the DOM, so canvases are available.
+        if (_thumbnailsRendered && !_likedThumbnailsRendered)
+        {
+            var likedMaps = LikedMaps;
+            _likedThumbnailsRendered = true;
+            if (likedMaps.Count > 0)
+                await RenderLikedThumbnailsAsync(likedMaps);
         }
     }
 
@@ -150,11 +236,12 @@
 
     private async Task ToggleLikeAsync(int mapId)
     {
-        if (_likedMapIds.Contains(mapId)) return; // already liked, no unlike
+        if (_likedMapIds.Contains(mapId)) return;
 
         _likedMapIds.Add(mapId);
         var currentCount = _liveLikeCounts.TryGetValue(mapId, out var c) ? c : (_maps.FirstOrDefault(m => m.Id == mapId)?.LikeCount ?? 0);
         _liveLikeCounts[mapId] = currentCount + 1;
+        _likedThumbnailsRendered = false; // new canvas will appear; trigger re-render of liked thumbnails
 
         await SaveLikedMapIdsAsync();
 
@@ -187,8 +274,33 @@
                 var dto = await Http.GetFromJsonAsync<MapDto>($"api/map/published/{map.Id}");
                 if (dto is not null)
                 {
+                    _fetchedMapDtos[map.Id] = dto;
                     var renderState = BuildThumbnailRenderState(dto);
                     await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", $"explore-thumb-{map.Id}", renderState);
+                }
+            }
+            catch { /* thumbnail failure is non-critical */ }
+        }).ToList();
+
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task RenderLikedThumbnailsAsync(List<PublishedMapSummaryDto> likedMaps)
+    {
+        var tasks = likedMaps.Select(async map =>
+        {
+            try
+            {
+                if (!_fetchedMapDtos.TryGetValue(map.Id, out var dto))
+                {
+                    dto = await Http.GetFromJsonAsync<MapDto>($"api/map/published/{map.Id}");
+                    if (dto is not null)
+                        _fetchedMapDtos[map.Id] = dto;
+                }
+                if (dto is not null)
+                {
+                    var renderState = BuildThumbnailRenderState(dto);
+                    await JS.InvokeVoidAsync("inkAndRealmDemo.drawMap", $"liked-thumb-{map.Id}", renderState);
                 }
             }
             catch { /* thumbnail failure is non-critical */ }
@@ -226,7 +338,7 @@
             AreaLayers = map.AreaLayers,
             AreaPolygons = map.AreaPolygons,
             BackgroundColor = map.BackgroundColor,
-            ShowGrid = map.ShowGrid,
+            ShowGrid = false,
             MapStyle = map.MapStyle,
             ViewState = new MapViewStateDto
             {

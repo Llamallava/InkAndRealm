@@ -75,7 +75,7 @@
 
 .explore-stat {
     font-size: 0.73rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: #444;
     white-space: nowrap;
 }
 
@@ -105,6 +105,36 @@
     color: #dc3545;
     border-color: #dc3545;
     background: rgba(220, 53, 69, 0.07);
+}
+
+/* Tab bar */
+.explore-tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--bs-border-color, #dee2e6);
+}
+
+.explore-tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.4rem 1.1rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #555;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+}
+
+.explore-tab-btn:hover {
+    color: #111;
+}
+
+.explore-tab-btn--active {
+    color: #111;
+    border-bottom-color: #0d6efd;
+    font-weight: 600;
 }
 
 /* Map code modal */
