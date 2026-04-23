@@ -1,4 +1,4 @@
-﻿@page "/map-demo/{MapId:int}"
+@page "/map-demo/{MapId:int}"
 @using System
 @using System.Net
 @using System.Net.Http.Json
@@ -15,7 +15,7 @@
 
 <PageTitle>Ink & Realm Map Editor</PageTitle>
 
-@* ── Ribbon (Top Bar) ─────────────────────────────────────────────────────────
+@* -- Ribbon (Top Bar) ---------------------------------------------------------
    Contains: back button, tab buttons (Map/Style/Tree/Post/Export),
    and tool-context controls that change based on the active tool.
 *@
@@ -52,7 +52,7 @@
                 </div>
             </div>
         </div>
-        @* Tool-context controls — rendered below the tab row; content changes based on _activeTool *@
+        @* Tool-context controls -- rendered below the tab row; content changes based on _activeTool *@
         <div class="map-ribbon-tool-row">
             <button class="map-ribbon-action-btn"
                     disabled="@(!CanUndo)"
@@ -162,7 +162,7 @@
     </div>
 </SectionContent>
 
-@* ── Editor Layout ────────────────────────────────────────────────────────────
+@* -- Editor Layout ------------------------------------------------------------
    Three-column layout: [sidebar tools] | [canvas + panels] (fills remaining space).
    Modals rendered inline at the bottom of this container.
 *@
@@ -223,7 +223,7 @@
                         }
                     </div>
 
-                    @* ── Point Feature Editor ─────────────────────────────────────────────────
+                    @* -- Point Feature Editor -------------------------------------------------
                        Shown when a tree, house, or character is selected in Edit/Duplicate mode.
                        Tabs: Character | Relationships | Style
                     *@
@@ -258,7 +258,7 @@
                             <div class="point-feature-editor-body">
                                 @if (_editingPointFeature.Character is not null && _characterEditorActiveTab == CharacterEditorTab.Character && _editingCharacter is not null)
                                 {
-                                    @* â”€â”€ Character Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+                                    @* -- Character Tab ------------------------------------------- *@
                                     <div class="point-feature-editor-section">
                                         <label class="form-label">Name</label>
                                         <input class="form-control"
@@ -297,7 +297,7 @@
                                 }
                                 else if (_editingPointFeature.Character is not null && _characterEditorActiveTab == CharacterEditorTab.Relationships && _editingCharacter is not null)
                                 {
-                                    @* â”€â”€ Relationships Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+                                    @* -- Relationships Tab ---------------------------------------- *@
                                     <div class="point-feature-editor-section">
                                         @if (!IsCharacterEditorReadOnly)
                                         {
@@ -355,13 +355,13 @@
                                                                             type="button"
                                                                             title="Edit"
                                                                             @onclick="() => BeginRelationshipEdit(rel)">
-                                                                        âœ
+                                                                        &#9999;
                                                                     </button>
                                                                     <button class="btn btn-link btn-sm p-0 text-danger"
                                                                             type="button"
                                                                             title="Delete"
                                                                             @onclick="async () => await DeleteExistingRelationship(rel)">
-                                                                        âœ•
+                                                                        &#10005;
                                                                     </button>
                                                                 </div>
                                                             }
@@ -419,7 +419,7 @@
                                                                             type="button"
                                                                             title="Remove"
                                                                             @onclick="() => RemovePendingRelationship(rel)">
-                                                                        âœ•
+                                                                        &#10005;
                                                                     </button>
                                                                 </div>
                                                             }
@@ -432,7 +432,7 @@
                                 }
                                 else
                                 {
-                                    @* â”€â”€ Style Tab (common) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+                                    @* -- Style Tab (common) --------------------------------------- *@
                                     @if (_editingPointFeature.Character is not null && _editingCharacter is not null)
                                     {
                                         @* Character: show type buttons *@
@@ -540,7 +540,7 @@
                         </div>
                     }
 
-                    @* â”€â”€ Layers Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+                    @* -- Layers Panel -------------------------------------------- *@
                     @if (_hasMap)
                     {
                         <div class="layer-panel">
@@ -572,13 +572,13 @@
                                                 <button class="layer-panel-action-btn layer-panel-rename-btn"
                                                         title="Rename"
                                                         @onclick:stopPropagation="true"
-                                                        @onclick="() => StartRenameLayer(layer)">âœŽ</button>
+                                                        @onclick="() => StartRenameLayer(layer)">&#9998;</button>
                                                 @if (_areaLayers.Count > 1)
                                                 {
                                                     <button class="layer-panel-action-btn layer-panel-delete-btn"
                                                             title="Delete layer"
                                                             @onclick:stopPropagation="true"
-                                                            @onclick="() => PromptDeleteLayerAsync(layer)">âœ•</button>
+                                                            @onclick="() => PromptDeleteLayerAsync(layer)">&#10005;</button>
                                                 }
                                             </div>
                                         }
@@ -589,7 +589,7 @@
                     }
                 </div>
 
-                @* ── Bottom Bar: placement type & style tabs *@
+                @* -- Bottom Bar: placement type & style tabs *@
                 <div class="map-editor-bottombar @(_isPointFeatureEditorOpen ? "map-editor-bottombar--inactive" : "")">
                     <div class="map-editor-item-tabs" role="tablist" aria-label="Map item tabs">
                         @foreach (var placement in PlacementDefinitions)
@@ -635,7 +635,7 @@
         </section>
     </div>
 
-    @* ── Modals (inside container-fluid) ──────────────────────────────────────────
+    @* -- Modals (inside container-fluid) ------------------------------------------
        These modals are rendered as siblings to the editor layout div above.
     *@
 
@@ -858,7 +858,7 @@
     }
 </div>
 
-@* ── Add Relationship Modal ────────────────────────────────────────────────────
+@* -- Add Relationship Modal ----------------------------------------------------
    Rendered outside the editor layout div; shown when adding a new character relationship.
 *@
 @if (_isRelationshipDetailModalOpen && _selectedRelationshipTarget is not null && _relationshipSourceCharacter is not null)
@@ -936,7 +936,7 @@
     </div>
 }
 
-@* ── Character Editor Overlay ─────────────────────────────────────────────────
+@* -- Character Editor Overlay -------------------------------------------------
    Full-screen overlay for editing a character's details.
    Shown when a character is selected via the Pointer tool (not through the Point Feature Editor).
 *@
@@ -1086,13 +1086,13 @@
                                                         type="button"
                                                         title="Edit"
                                                         @onclick="() => BeginRelationshipEdit(rel)">
-                                                    âœ
+                                                    &#9999;
                                                 </button>
                                                 <button class="btn btn-link btn-sm p-0 text-danger"
                                                         type="button"
                                                         title="Delete"
                                                         @onclick="() => DeleteExistingRelationship(rel)">
-                                                    âœ•
+                                                    &#10005;
                                                 </button>
                                             </div>
                                         }
@@ -1150,7 +1150,7 @@
                                                         type="button"
                                                         title="Remove"
                                                         @onclick="() => RemovePendingRelationship(rel)">
-                                                    âœ•
+                                                    &#10005;
                                                 </button>
                                             </div>
                                         }
@@ -1165,7 +1165,7 @@
     </div>
 }
 
-@* ── Character Tree Overlay ───────────────────────────────────────────────────
+@* -- Character Tree Overlay ---------------------------------------------------
    SVG-based graph showing all characters and their relationships.
    Nodes are draggable; positions are saved to the server.
 *@
@@ -1308,7 +1308,7 @@
     </div>
 }
 
-@* â”€â”€ Confirm Dialog (e.g. Delete Layer) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+@* -- Confirm Dialog (e.g. Delete Layer) ----------------------- *@
 @if (_confirmDialog.IsOpen)
 {
     <div class="map-settings-modal-backdrop" @onclick="ConfirmDialogCancel"></div>
@@ -1326,7 +1326,7 @@
     </div>
 }
 
-@* â”€â”€ Prompt Dialog (Title Name) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+@* -- Prompt Dialog (Title Name) -------------------------------- *@
 @if (_promptDialog.IsOpen)
 {
     <div class="map-settings-modal-backdrop" @onclick="PromptDialogCancel"></div>
@@ -1341,7 +1341,7 @@
                    @oninput="e => _promptDialog.Value = e.Value?.ToString() ?? string.Empty"
                    @onkeydown="PromptDialogKeyDown"
                    @ref="_promptDialogInputRef"
-                   placeholder="Enter nameâ€¦" />
+                   placeholder="Enter name..." />
             <div class="native-dialog-actions">
                 <button class="native-dialog-btn native-dialog-btn--cancel" @onclick="PromptDialogCancel">Cancel</button>
                 <button class="native-dialog-btn native-dialog-btn--confirm" @onclick="PromptDialogConfirm">OK</button>
