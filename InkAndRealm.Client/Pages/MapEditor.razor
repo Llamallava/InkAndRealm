@@ -22,7 +22,7 @@
 <SectionContent SectionName="top-bar-left">
     <div class="map-ribbon">
         <div class="map-ribbon-top-row">
-            <button class="map-ribbon-back" @onclick="GoHome" aria-label="Back" title="Back">
+            <button class="map-ribbon-back" @onclick='() => Navigation.NavigateTo("/my-maps")' aria-label="Back" title="Back">
                 &#8592;
             </button>
             <div class="map-ribbon-tabs">
